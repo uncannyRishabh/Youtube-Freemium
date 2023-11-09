@@ -1,0 +1,108 @@
+body {
+	height: 440px;
+	width: 380px;
+	margin: 0;
+	padding: 0;
+}
+
+.container {
+	width: 100vw;
+	height: 100vh;
+	display: flex;
+	align-items: center;
+	background-color: grey;
+}
+
+#view {
+	display: flex;
+	flex-direction: column;
+	width: calc(100vw);
+	height: 90vh;
+	overflow-y: scroll;
+	scroll-snap-type: y proximity;
+}
+
+.sizeS {
+	font-size: 1rem;
+	line-height: 1em;
+}
+
+.sizeM {
+	font-size: 1.2rem;
+	line-height: 1.2em;
+}
+
+.sizeL {
+	font-size: 1.5rem;
+	line-height: 1.5em;
+}
+
+.lyric {
+	/* min-height: calc(87vh/7); */
+	font-weight: 700;
+	text-align: center;
+	overflow-wrap: break-word;
+	scroll-snap-align: center;
+	padding: 10px 0px;
+	animation-name: custom;
+	animation-duration: 1ms; /* Firefox requires this to apply the animation */
+	animation-direction: alternate;
+	animation-timeline: --squareTimeline;
+  
+	/* animation: custom linear both;
+	animation-timeline: view();
+	animation-range: entry 50% cover 50%; */
+}
+
+@keyframes textGrow {
+	0% { font-size: 12px; }
+	50% { font-size: 18px; }
+	100% { font-size: 12px; }
+  }
+
+.lyricContainer {
+	border-radius: 12px;
+	min-height: 0;
+	max-height: var(--ytd-watch-flexy-panel-max-height);
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--yt-spec-10-percent-layer);
+	margin-bottom: 24px;
+	padding: 24px;
+	overflow-y: scroll;
+	color: lightgray;
+	font-size: 1.8rem;
+	scroll-timeline-name: --squareTimeline;
+}
+
+
+@keyframes custom {
+	0% {
+		font-size: 12px;
+	}
+
+	50% {
+		font-size: 18px;
+	}
+
+	100% {
+		font-size: 12px;
+	}
+}
+
+
+var {
+	--yt-lightsource-section2-color: rgba(40, 40, 40, 0.949);
+	--yt-lightsource-section4-color: rgba(12, 12, 12, 0.949);
+	--yt-lightsource-primary-title-color: rgba(255, 255, 255, 1.000);
+	--yt-lightsource-secondary-title-color: rgba(204, 204, 204, 1.000);
+}
+
+.insert {
+	border-radius: 12px;
+	min-height: 0;
+	max-height: var(--ytd-watch-flexy-panel-max-height);
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--yt-spec-10-percent-layer);
+}

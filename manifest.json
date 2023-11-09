@@ -1,18 +1,21 @@
 {
 	"manifest_version": 3,
-	"name": "Lyrics for Youtube",
-	"version": "0.1",
-	"description": "Display lyrics for youtube and youtube music by @uncannyRishabh",
+	"name": "YT Freemium",
+	"version": "0.5",
+	"description": "Display lyrics for youtube by @uncannyRishabh",
 	"host_permissions": [
-		
+		"https://www.google.com/*",
+		"https://www.youtube.com/*"
 	],
 	"permissions": [
+		"tabs",
 		"activeTab",
 		"scripting",
-		"storage"
+		"storage",
+		"webNavigation"
 	],
 	"action": {
-		"default_title": "Youtube Lyrics",
+		"default_title": "Youtube Freemium",
 		"default_popup": "popup.html"
 	},
 	"background": {
@@ -27,6 +30,9 @@
 			],
 			"js": [
 				"content.js"
+			],
+			"css":[
+				"global.css"
 			]
 		}
 	]
