@@ -27,7 +27,8 @@ const messageHandler = (type, val, meta) => {
 				else {
 					vc = val + '' + channel
 					console.log(val + " - " + channel)
-					res({ 'name': val, 'channel': channel })
+					if(val && channel)
+						res({ 'name': val, 'channel': channel })
 				}
 
 				break;

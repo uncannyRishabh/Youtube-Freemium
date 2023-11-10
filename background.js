@@ -2,6 +2,7 @@
 	var reqUrl = ''
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+		console.log(changeInfo)
 		if (changeInfo.url && changeInfo.url.includes("youtube.com/watch")) {
 			chrome.tabs.sendMessage(tabId, {
 				type: "NEW_SEARCH",
@@ -39,7 +40,7 @@
 
 		let { val, channel } = JSON.parse(result[0]?.result)
 		console.log(val, channel);
-		var resp = await (await getLyrics(val, '')).text();
+		var resp = await (await getLyrics(val, channel)).text();
 
 		result = await chrome.scripting.executeScript({
 			target: { tabId },
@@ -137,16 +138,21 @@
 	}
 
 	function queryMaker(q, n) {
-		q = q.trim()
-		q = q.replace(/\[[^\]]*\]/g, '') //(contents)
-		q = q.replace(/\([^)]*\)/, '')	 //[contents]
-		var v = q?.replace(/[\s\t\n]/g, '+') //newline tabs spaces
+		q = q.trim();
+		q = q.replace(/\[[^\]]*\]/g, ''); // remove [contents]
+		q = q.replace(/\([^)]*\)/g, ''); // remove (contents)
+		q = q.replace(/\s+/g, ' '); // replace multiple spaces with a single space
+		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
+		// q = q?.replace(/[\s\t\n]/g, '+') //newline tabs spaces
 
+		if(q.split(' ').length <2){
+			q += ' '+n
+		}
 		//TODO:Append verified creator channel name only if one letter title
-		return v + "+lyrics"
+		return q + " lyrics"
 	}
 
-	async function getLyrics(name, meta) {
+	async function getLyrics(name, channel) {
 		var myHeaders = {
 			"authority": "www.google.com",
 			"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -169,7 +175,7 @@
 			redirect: 'follow'
 		};
 
-		var mq = queryMaker(name, meta)
+		var mq = queryMaker(name, channel)
 		var url = `https://www.google.com/search?q=${mq}`
 		console.log('searching : ', mq)
 		var response = fetch(url, requestOptions)

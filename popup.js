@@ -233,3 +233,4 @@ SWISH`
 //delete > 15 day data
 //add diagnostics
 //url encode search
+//move to bing

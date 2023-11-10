@@ -11,9 +11,9 @@
 - Explicit lyric
 - Donate
 
-<h3>Caveat</h3>
-- cannot auto search when player is minimized
-
+<h3>Limitation</h3>
+- not working with miniplayer (yet)
+- not working in fullscreen (yet)
 
 <h3>WP<h3>
 
