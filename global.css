@@ -44,12 +44,12 @@ body {
 	overflow-wrap: break-word;
 	scroll-snap-align: center;
 	padding: 10px 0px;
-	animation-name: custom;
-	animation-duration: 1ms; /* Firefox requires this to apply the animation */
+	/* animation-name: custom;
+	animation-duration: 1ms; 
 	animation-direction: alternate;
-	/* animation-timeline: --squareTimeline; */
+	animation-timeline: --squareTimeline;
     animation-timeline: scroll(block nearest);
-	animation-range: entry 25% cover 50%;
+	animation-range: entry 25% cover 50%; */
 
 	/* animation: custom linear both;
 	animation-timeline: view();
@@ -74,7 +74,8 @@ body {
 	overflow-y: scroll;
 	color: lightgray;
 	font-size: 1.8rem;
-	scroll-timeline-name: --squareTimeline;
+	scroll-behavior: smooth;
+	/* scroll-timeline-name: --squareTimeline; */
 }
 
 

@@ -1,32 +1,58 @@
 (() => {
 	var reqUrl = ''
+	var shouldSendCb = false
+	//storage api
+	var tabs = []
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
-		console.log(changeInfo)
-		if (changeInfo.url && changeInfo.url.includes("youtube.com/watch")) {
-			chrome.tabs.sendMessage(tabId, {
-				type: "NEW_SEARCH",
-			}, (response) => {
-				if (chrome.runtime.lastError)
-					console.log('Error getting');
-				if (response) {
-					if (response.name && response.channel) {
-						// console.log(response)
-						runInContext(tabId, changeInfo.url)
-					}
-				}
-			});
+		// console.log(changeInfo)
 
+		if (changeInfo.url) {
+			if (changeInfo.url.includes("youtube.com/watch")) {
+				shouldSendCb = true
+				reqUrl = changeInfo.url
+				if (!tabs.includes(tabId)) {
+					tabs.push(tabId)
+					console.log('Added.. ' + tabId + ' from  :' + tabs)
+				}
+			}
+			else if (tabs.includes(tabId)) {
+				tabs = tabs.filter(item => item !== tabId);
+				console.log('Navigated.. ' + tabId + ' from  :' + tabs)
+			}
+		}
+
+		if (tabs.includes(tabId) && shouldSendCb && changeInfo.title) {
+			if (changeInfo.title.split(' ').length > 1) {
+				shouldSendCb = false
+				console.log('COMPLETE.......')
+				chrome.tabs.sendMessage(tabId, {
+					type: "NEW_SEARCH",
+				}, (response) => {
+					if (chrome.runtime.lastError)
+						console.log('Error getting');
+					if (response) {
+						if (response.name && response.channel) {
+							console.log(response)
+							runInContext(tabId, reqUrl)
+						}
+					}
+				});
+			}
+		}
+
+	});
+
+	chrome.tabs.onDetached.addListener(function (tabId, changeInfo) {
+		if (tabs.includes(tabId)) {
+			tabs = tabs.filter(item => item !== tabId);
+			console.log('Detached.. ' + tabId + ' from  :' + tabs)
 		}
 
 	});
 
 	const runInContext = async (tabId, updatedURL) => {
-		//check for tabId aswell
-		if (getVideoID(reqUrl) === getVideoID(updatedURL)) {
-			return
-		}
-		reqUrl = updatedURL
+		//check for tabId 
 		console.log('runInContext Called')
 
 		let result = await chrome.scripting.executeScript({
@@ -145,8 +171,8 @@
 		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
 		// q = q?.replace(/[\s\t\n]/g, '+') //newline tabs spaces
 
-		if(q.split(' ').length <2){
-			q += ' '+n
+		if (q.split(' ').length < 2) {
+			q += ' ' + n
 		}
 		//TODO:Append verified creator channel name only if one letter title
 		return q + " lyrics"

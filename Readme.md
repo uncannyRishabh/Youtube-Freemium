@@ -1,6 +1,7 @@
 <h1>Youtube Freemium</h1>
 
 <h3>Features<h3>
+
 - Find and display lyrics in popup or in floating manner.
 - mute ads (preserve state)
 - skip upcoming ad
@@ -11,19 +12,12 @@
 - Explicit lyric
 - Donate
 
-<h3>Limitation</h3>
-- not working with miniplayer (yet)
-- not working in fullscreen (yet)
-
 <h3>WP<h3>
 
-cjs[valid page? || music changed] -> bjs[find(locally ? -> online), validate and save] -> popjs[query and display lyrics]
-
-bjs[valid page? || music changed] -> cjs[find, validate, save, display] -> popjs[query and display lyrics]
+bjs[valid page? && music changed]  -> cjs[title and channel] -> bjs[find, validate, save, display] -> popjs[query and display lyrics]
 
 Happy Scenarios - 
 Current tab opened - Music Playing
-				   - cjs[find, save lyrics], display
 
 Edge case scnarios
 Different tab open - Music Changed -

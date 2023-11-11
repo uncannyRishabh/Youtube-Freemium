@@ -8,7 +8,6 @@ const messageHandler = (type, val, meta) => {
 
 (async () => {
 	console.log('Script Injected')
-	var vc = ""
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		//NEW_SEARCH
@@ -20,20 +19,16 @@ const messageHandler = (type, val, meta) => {
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
 				console.log(val + " - " + channel)
 
-				if (vc === val + '' + channel) {
-					res({ 'name': '', 'channel': '' })
-					return;
+				if (val && channel) {
+					res({ 'name': val, 'channel': channel })
 				}
 				else {
-					vc = val + '' + channel
-					console.log(val + " - " + channel)
-					if(val && channel)
-						res({ 'name': val, 'channel': channel })
+					res({ 'name': '', 'channel': '' })
 				}
 
 				break;
 			}
-			case 'DISPLAY_LYRICS':{
+			case 'DISPLAY_LYRICS': {
 				// if(currentTab.isActive){
 
 				// }
