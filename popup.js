@@ -221,7 +221,7 @@ SWISH`
 //✅Fix runInContext calling
 //✅move to bing
 //✅Handle non music content
-//✅add new line parser
+//add new line parser
 //add header view
 //Create menu
 //Add progressbar 
