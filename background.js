@@ -144,9 +144,11 @@
 			chrome.scripting.executeScript({
 				target: { tabId },
 				function: () => {
+					console.log('Removing..')
+					var lcc = document.querySelector('#secondary > #secondary-inner')
 					var lc = document.querySelector('#lyricContainer')
 					if (lc) {
-						lc.removeChild(lc.firstChild)
+						lcc.removeChild(lcc.firstChild)
 					}
 				},
 				args: []
