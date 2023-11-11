@@ -86,9 +86,11 @@
 					// 	lyrics.push(span.textContent.trim());
 					// });
 
-					lyrics = lContainer.textContent.split('\n').map(line => line.trim()).filter(Boolean);
+					var raw = lContainer.innerHTML
+					var wd = raw.replace(/<\/?div[^>]*>/g, '');
+					lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
 
-					console.log(lyrics);
+					// console.log(lyrics);
 				}
 				else {
 					message = 'NOK'
