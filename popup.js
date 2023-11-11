@@ -221,6 +221,7 @@ SWISH`
 //✅Fix runInContext calling
 //✅move to bing
 //✅Handle non music content
+//✅add new line parser
 //add header view
 //Create menu
 //Add progressbar 
@@ -231,3 +232,4 @@ SWISH`
 //wrap console.logs inside debugMode
 //Add dynamic user agent
 //add diagnostics
+//Restrict search for non music content
