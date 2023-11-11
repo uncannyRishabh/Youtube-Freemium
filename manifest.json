@@ -4,7 +4,7 @@
 	"version": "0.5",
 	"description": "Display lyrics for youtube by @uncannyRishabh",
 	"host_permissions": [
-		"https://www.google.com/*",
+		"https://www.bing.com/*",
 		"https://www.youtube.com/*"
 	],
 	"permissions": [

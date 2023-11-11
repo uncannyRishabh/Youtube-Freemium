@@ -74,15 +74,20 @@
 				// console.log(resp)
 				const parser = new DOMParser();
 				const doc = parser.parseFromString(resp, 'text/html');
-				const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
+				// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
+				const lContainer = doc.querySelector('#lyric_body > .lyrics')
 
 				var message = 'OK'
 				var lyrics = []
 				if (lContainer) {
+					console.log(lContainer.textContent)
 					message = 'OK'
-					lContainer.querySelectorAll('span').forEach(span => {
-						lyrics.push(span.textContent.trim());
-					});
+					// lContainer.querySelectorAll('span').forEach(span => {
+					// 	lyrics.push(span.textContent.trim());
+					// });
+
+					lyrics = lContainer.textContent.split('\n').map(line => line.trim()).filter(Boolean);
+
 					console.log(lyrics);
 				}
 				else {
@@ -134,10 +139,16 @@
 
 		}
 		else {
-			// var lc = document.querySelector('#lyricContainer')
-			// if (lc) {
-			// 	lcc.removeChild(lcc.firstChild)
-			// }
+			chrome.scripting.executeScript({
+				target: { tabId },
+				function: () => {
+					var lc = document.querySelector('#lyricContainer')
+					if (lc) {
+						lc.removeChild(lc.firstChild)
+					}
+				},
+				args: []
+			});
 		}
 	}
 
@@ -169,30 +180,47 @@
 		q = q.replace(/\([^)]*\)/g, ''); // remove (contents)
 		q = q.replace(/\s+/g, ' '); // replace multiple spaces with a single space
 		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
-		// q = q?.replace(/[\s\t\n]/g, '+') //newline tabs spaces
+		// q = q?.replace(/[\s\t\n]/g, '+') //+
 
 		if (q.split(' ').length < 2) {
 			q += ' ' + n
 		}
 		//TODO:Append verified creator channel name only if one letter title
 		return q + " lyrics"
+		// return encodeURIComponent(q + "+lyrics")
 	}
 
 	async function getLyrics(name, channel) {
+		// var myHeaders = {
+		// 	"authority": "www.google.com",
+		// 	"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+		// 	"accept-language": "en-US,en;q=0.9",
+		// 	"cache-control": "max-age=0",
+		// 	"dnt": "1",
+		// 	"referer": "https://www.google.com/",
+		// 	"sec-fetch-dest": "document",
+		// 	"sec-fetch-mode": "navigate",
+		// 	"sec-fetch-site": "same-origin",
+		// 	"sec-fetch-user": "?1",
+		// 	"upgrade-insecure-requests": "1",
+		// 	//rotation / dynamic
+		// 	"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1"
+		// }
+
 		var myHeaders = {
-			"authority": "www.google.com",
+			"authority": "www.bing.com",
 			"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-			"accept-language": "en-US,en;q=0.9",
-			"cache-control": "max-age=0",
+			"accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
 			"dnt": "1",
-			"referer": "https://www.google.com/",
+			"sec-ch-ua": "\"Google Chrome\";v=\"119\", \"Chromium\";v=\"119\", \"Not?A_Brand\";v=\"24\"",
+			"sec-ch-ua-full-version": "\"119.0.6045.123\"",
+			"sec-ch-ua-full-version-list": "\"Google Chrome\";v=\"119.0.6045.123\", \"Chromium\";v=\"119.0.6045.123\", \"Not?A_Brand\";v=\"24.0.0.0\"",
+			"sec-ch-ua-mobile": "?1",
 			"sec-fetch-dest": "document",
 			"sec-fetch-mode": "navigate",
 			"sec-fetch-site": "same-origin",
 			"sec-fetch-user": "?1",
-			"upgrade-insecure-requests": "1",
-			//rotation / dynamic
-			"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1"
+			"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
 		}
 
 		var requestOptions = {
@@ -202,7 +230,8 @@
 		};
 
 		var mq = queryMaker(name, channel)
-		var url = `https://www.google.com/search?q=${mq}`
+		// var url = `https://www.google.com/search?q=${mq}`
+		var url = `https://www.bing.com/search?q=${mq}`
 		console.log('searching : ', mq)
 		var response = fetch(url, requestOptions)
 		return response;

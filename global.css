@@ -23,23 +23,25 @@ body {
 }
 
 .sizeS {
-	font-size: 1rem;
-	line-height: 1em;
+	font-size: 1.25rem;
+	line-height: 1.3em;
 }
 
 .sizeM {
-	font-size: 1.2rem;
-	line-height: 1.2em;
+	font-size: 1.4rem;
+	line-height: 1.45em;
 }
 
 .sizeL {
-	font-size: 1.5rem;
-	line-height: 1.5em;
+	font-size: 1.6rem;
+	line-height: 1.65em;
 }
 
 .lyric {
 	/* min-height: calc(87vh/7); */
 	font-weight: 700;
+	font-family: "Roboto","Arial",sans-serif;
+    line-height: 1.5em;
 	text-align: center;
 	overflow-wrap: break-word;
 	scroll-snap-align: center;
@@ -78,6 +80,16 @@ body {
 	/* scroll-timeline-name: --squareTimeline; */
 }
 
+.lyricContainer::-webkit-scrollbar-thumb {
+    height: 56px;
+    border-radius: 8px;
+    border: 4px solid transparent;
+    background-clip: content-box;
+}
+
+.lyricContainer::-webkit-scrollbar {
+    width: 16px;
+}
 
 @keyframes custom {
 	0% {

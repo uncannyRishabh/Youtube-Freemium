@@ -213,24 +213,21 @@ SWISH`
 })
 
 //********************TODO********************
-//poc
-//Add comms
-//Save state
-//Create popup layout
+//✅poc
+//✅Add comms
+//✅Create popup layout
+//✅Create lyrics view (On both extension and on youtube page (fullscreen & desktop version))
+//✅Handle music change
+//✅Fix runInContext calling
+//✅move to bing
+//✅Handle non music content
+//add header view
 //Create menu
-//Create lyrics view (On both extension and on youtube page (fullscreen & desktop version))
-//Handle music change
-//Handle non music
-//add search
-//Save frequently played lyrics (upto 25 for 2 month)
+//Add progressbar 
 //Add manual search
+//Add source
+//Save state
+//Save frequently played lyrics (upto 50 for 2 month)
 //wrap console.logs inside debugMode
 //Add dynamic user agent
-//Fix runInContext calling
-//Add loader for occassional misses
-//Without Me - Edge Case - Not Found
-//remove lyrics view when non music video plays
-//delete > 15 day data
 //add diagnostics
-//url encode search
-//move to bing
