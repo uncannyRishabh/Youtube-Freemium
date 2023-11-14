@@ -11,10 +11,19 @@ const messageHandler = (type, val, meta) => {
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		//NEW_SEARCH
-		const { type } = obj;
+		const { type, uid } = obj;
+		// console.log(obj)
 
 		switch (type) {
 			case 'NEW_SEARCH': {
+				var ytc = document.querySelector('#secondary > #secondary-inner')
+				var lyricContainer = ytc.querySelector('#lyricContainer')
+				
+				if(lyricContainer && lyricContainer.getAttribute('data-uid')===uid){
+					res({ 'name': '', 'channel': '' })
+					break;
+				}
+
 				let val = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
 				console.log(val + " - " + channel)

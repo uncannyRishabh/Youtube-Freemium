@@ -64,7 +64,7 @@ body {
 	100% { font-size: 12px; }
   }
 
-.lyricContainer {
+.yf-container {
 	border-radius: 12px;
 	min-height: 0;
 	max-height: var(--ytd-watch-flexy-panel-max-height);
@@ -72,7 +72,24 @@ body {
 	flex-direction: column;
 	border: 1px solid var(--yt-spec-10-percent-layer);
 	margin-bottom: 24px;
-	padding: 24px;
+    box-sizing: border-box;
+
+}
+
+.header {
+	display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+	padding: 12px 6px 0 16px;
+	border-radius: 12px 12px 0px 0px;
+	background-color: var(--yt-spec-brand-background-primary);
+
+}
+
+.lyricContainer {
+	display: flex;
+	flex-direction: column;
+	padding: 14px 0px 120px 18px;
 	overflow-y: scroll;
 	color: lightgray;
 	font-size: 1.8rem;

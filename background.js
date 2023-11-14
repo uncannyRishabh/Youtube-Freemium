@@ -28,13 +28,16 @@
 				console.log('COMPLETE.......')
 				chrome.tabs.sendMessage(tabId, {
 					type: "NEW_SEARCH",
+					'uid':getVideoID(reqUrl)
 				}, (response) => {
-					if (chrome.runtime.lastError)
+					if (chrome.runtime.lastError) {
 						console.log('Error getting');
+						removeView(tabId)
+					}
 					if (response) {
 						if (response.name && response.channel) {
 							console.log(response)
-							runInContext(tabId, reqUrl)
+							runInContext(tabId)
 						}
 					}
 				});
@@ -51,7 +54,7 @@
 
 	});
 
-	const runInContext = async (tabId, updatedURL) => {
+	const runInContext = async (tabId) => {
 		//check for tabId 
 		console.log('runInContext Called')
 
@@ -80,7 +83,7 @@
 				var message = 'OK'
 				var lyrics = []
 				if (lContainer) {
-					console.log(lContainer.textContent)
+					// console.log(lContainer.textContent)
 					message = 'OK'
 					// lContainer.querySelectorAll('span').forEach(span => {
 					// 	lyrics.push(span.textContent.trim());
@@ -98,7 +101,7 @@
 
 				//VALIDATE HERE
 				var r = { lyrics, message }
-				console.log(r)
+				// console.log(r)
 				return JSON.stringify(r)
 			},
 			args: [resp]
@@ -115,12 +118,33 @@
 
 			chrome.scripting.executeScript({
 				target: { tabId },
-				function: (lyrics) => {
-					var lcc = document.querySelector('#secondary > #secondary-inner')
-					var lyricContainer = document.createElement('div')
+				function: (lyrics, uid) => {
+					var ytc = document.querySelector('#secondary > #secondary-inner')
+					var container = ytc.querySelector('.yf-container')
+					var lyricContainer = ytc.querySelector('#lyricContainer')
+
+					if (container && lyricContainer) {
+						container.removeChild(container.lastChild)
+						
+					} else {
+						var header = document.createElement('div')
+						container = document.createElement('div')
+
+						header.id = 'header'
+						header.className = 'header'
+
+						container.id = 'yf-contaier'
+						container.className = 'yf-container'
+
+						container.appendChild(header);
+						ytc.insertBefore(container, ytc.firstChild)
+					}
+
+					lyricContainer = document.createElement('div')
 
 					lyricContainer.id = 'lyricContainer'
 					lyricContainer.className = 'lyricContainer'
+					lyricContainer.setAttribute('data-uid', uid)
 
 					lyrics.forEach(l => {
 						var d = document.createElement('span');
@@ -129,31 +153,31 @@
 						lyricContainer.appendChild(d)
 					})
 
-					var lc = document.querySelector('#lyricContainer')
-					if (lc) {
-						lcc.removeChild(lcc.firstChild)
-					}
-					lcc.insertBefore(lyricContainer, lcc.firstChild);
-
+					container.appendChild(lyricContainer);
 				},
-				args: [lyrics]
+				args: [lyrics, uid]
 			});
 
 		}
 		else {
-			chrome.scripting.executeScript({
-				target: { tabId },
-				function: () => {
-					console.log('Removing..')
-					var lcc = document.querySelector('#secondary > #secondary-inner')
-					var lc = document.querySelector('#lyricContainer')
-					if (lc) {
-						lcc.removeChild(lcc.firstChild)
-					}
-				},
-				args: []
-			});
+			removeView(tabId)
 		}
+	}
+
+	function removeView(tabId) {
+		chrome.scripting.executeScript({
+			target: { tabId },
+			function: () => {
+				console.log('Removing..')
+				var ytc = document.querySelector('#secondary > #secondary-inner')
+				var c = ytc.querySelector('.yf-container')
+				var lc = ytc.querySelector('#lyricContainer')
+				if (lc) {
+					c.removeChild(c.lastChild)
+				}
+			},
+			args: []
+		});
 	}
 
 	function saveObject(uid, obj) {
@@ -164,6 +188,16 @@
 				reject(chrome.runtime.lastError);
 
 			// console.log(eldoLog('I') + "Stored worker status : " + status);
+		});
+	}
+
+	function getObject(uid) {
+		return new Promise((resolve) => {
+			chrome.storage.local.get(uid, (result) => {
+				if (chrome.runtime.lastError)
+					console.error('Error getting');
+				resolve(result ? result : []);
+			});
 		});
 	}
 

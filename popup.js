@@ -222,6 +222,8 @@ SWISH`
 //✅move to bing
 //✅Handle non music content
 //✅add new line parser
+//prevent popup view toggle research
+//handle yt -> other site navigation
 //add header view
 //Create menu
 //Add progressbar 
