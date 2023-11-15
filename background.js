@@ -123,12 +123,14 @@
 					var container = ytc.querySelector('.yf-container')
 					var lyricContainer = ytc.querySelector('#lyricContainer')
 
-					if (container && lyricContainer) {
-						container.removeChild(container.lastChild)
-						
+					if (container) {
+						if(lyricContainer){
+							container.removeChild(container.lastChild)
+						}
 					} else {
 						var header = document.createElement('div')
 						container = document.createElement('div')
+
 
 						header.id = 'header'
 						header.className = 'header'
