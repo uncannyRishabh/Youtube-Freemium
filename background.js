@@ -28,7 +28,7 @@
 				console.log('COMPLETE.......')
 				chrome.tabs.sendMessage(tabId, {
 					type: "NEW_SEARCH",
-					'uid':getVideoID(reqUrl)
+					'uid': getVideoID(reqUrl)
 				}, (response) => {
 					if (chrome.runtime.lastError) {
 						console.log('Error getting');
@@ -118,19 +118,18 @@
 
 			chrome.scripting.executeScript({
 				target: { tabId },
-				function: (lyrics, uid) => {
+				function: (lyrics, uid, title) => {
 					var ytc = document.querySelector('#secondary > #secondary-inner')
 					var container = ytc.querySelector('.yf-container')
 					var lyricContainer = ytc.querySelector('#lyricContainer')
 
 					if (container) {
-						if(lyricContainer){
+						if (lyricContainer) {
 							container.removeChild(container.lastChild)
 						}
 					} else {
 						var header = document.createElement('div')
 						container = document.createElement('div')
-
 
 						header.id = 'header'
 						header.className = 'header'
@@ -138,12 +137,60 @@
 						container.id = 'yf-contaier'
 						container.className = 'yf-container'
 
+						var logoContainerDiv = document.createElement("div");
+						logoContainerDiv.className = "yf-logo-container";
+
+						var youtubeDiv = document.createElement("div");
+						youtubeDiv.className = "youtube";
+
+						var fSpan = document.createElement("span");
+						fSpan.className = "yf-f";
+						fSpan.textContent = "F";
+
+						youtubeDiv.appendChild(fSpan);
+
+						var freemiumSpan = document.createElement("span");
+						freemiumSpan.className = "freemium";
+						freemiumSpan.textContent = "Free Mium";
+
+						logoContainerDiv.appendChild(youtubeDiv);
+						logoContainerDiv.appendChild(freemiumSpan);
+
+						var nowPlayingDiv = document.createElement("div");
+						nowPlayingDiv.className = "now-playing-div";
+
+						var nowPlayingSpan = document.createElement("span");
+						nowPlayingSpan.className = "now-playing";
+						nowPlayingSpan.textContent = "Now Playing -";
+
+						var spaceElement = document.createElement("span");
+						spaceElement.innerHTML = "&nbsp;";
+
+						var nowPlayingText = document.createElement("span");
+						nowPlayingText.className = "now-playing now-playing-text";
+						nowPlayingText.textContent = title;
+
+						nowPlayingDiv.appendChild(nowPlayingSpan);
+						nowPlayingDiv.appendChild(spaceElement)
+						nowPlayingDiv.appendChild(nowPlayingText);
+
+						var menuSpan = document.createElement("span");
+						menuSpan.className = "menu";
+						menuSpan.textContent = "...";
+
+						header.appendChild(logoContainerDiv);
+						header.appendChild(nowPlayingDiv);
+						header.appendChild(menuSpan);
+
 						container.appendChild(header);
 						ytc.insertBefore(container, ytc.firstChild)
 					}
 
-					lyricContainer = document.createElement('div')
 
+					var npt = container.querySelector('.now-playing.now-playing-text')
+					if(npt) npt.textContent = title
+
+					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
 					lyricContainer.className = 'lyricContainer'
 					lyricContainer.setAttribute('data-uid', uid)
@@ -157,7 +204,7 @@
 
 					container.appendChild(lyricContainer);
 				},
-				args: [lyrics, uid]
+				args: [lyrics, uid, title]
 			});
 
 		}

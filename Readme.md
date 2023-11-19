@@ -7,9 +7,10 @@
 - skip upcoming ad
 - display time saved
 - Manual search if unable to find lyrics
-- Lyrics Source: Google
-- multi tab support (upcoming)
-- Explicit lyric
+- Lyrics Source: Bing
+- Text Size
+- multi tab support
+- Explicit lyric filter
 - Donate
 
 <h3>WP<h3>
