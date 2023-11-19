@@ -113,82 +113,90 @@
 		var scroll = 0
 		var timestamp = Date.now()
 		var title = val
+
 		if (lyrics && message === 'OK') {
 			saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
+		}
 
-			chrome.scripting.executeScript({
-				target: { tabId },
-				function: (lyrics, uid, title) => {
-					var ytc = document.querySelector('#secondary > #secondary-inner')
-					var container = ytc.querySelector('.yf-container')
-					var lyricContainer = ytc.querySelector('#lyricContainer')
+		chrome.scripting.executeScript({
+			target: { tabId },
+			function: (lyrics, message, uid, title) => {
+				var ytc = document.querySelector('#secondary > #secondary-inner')
+				var container = ytc.querySelector('.yf-container')
+				var lyricContainer = ytc.querySelector('#lyricContainer')
 
-					if (container) {
-						if (lyricContainer) {
-							container.removeChild(container.lastChild)
-						}
-					} else {
-						var header = document.createElement('div')
-						container = document.createElement('div')
-
-						header.id = 'header'
-						header.className = 'header'
-
-						container.id = 'yf-contaier'
-						container.className = 'yf-container'
-
-						var logoContainerDiv = document.createElement("div");
-						logoContainerDiv.className = "yf-logo-container";
-
-						var youtubeDiv = document.createElement("div");
-						youtubeDiv.className = "youtube";
-
-						var fSpan = document.createElement("span");
-						fSpan.className = "yf-f";
-						fSpan.textContent = "F";
-
-						youtubeDiv.appendChild(fSpan);
-
-						var freemiumSpan = document.createElement("span");
-						freemiumSpan.className = "freemium";
-						freemiumSpan.textContent = "Free Mium";
-
-						logoContainerDiv.appendChild(youtubeDiv);
-						logoContainerDiv.appendChild(freemiumSpan);
-
-						var nowPlayingDiv = document.createElement("div");
-						nowPlayingDiv.className = "now-playing-div";
-
-						var nowPlayingSpan = document.createElement("span");
-						nowPlayingSpan.className = "now-playing";
-						nowPlayingSpan.textContent = "Now Playing -";
-
-						var spaceElement = document.createElement("span");
-						spaceElement.innerHTML = "&nbsp;";
-
-						var nowPlayingText = document.createElement("span");
-						nowPlayingText.className = "now-playing now-playing-text";
-						nowPlayingText.textContent = title;
-
-						nowPlayingDiv.appendChild(nowPlayingSpan);
-						nowPlayingDiv.appendChild(spaceElement)
-						nowPlayingDiv.appendChild(nowPlayingText);
-
-						var menuSpan = document.createElement("span");
-						menuSpan.className = "menu";
-						menuSpan.textContent = "...";
-
-						header.appendChild(logoContainerDiv);
-						header.appendChild(nowPlayingDiv);
-						header.appendChild(menuSpan);
-
-						container.appendChild(header);
-						ytc.insertBefore(container, ytc.firstChild)
+				if (container) {
+					if (lyricContainer) {
+						container.removeChild(container.lastChild)
 					}
+				} else {
+					var header = document.createElement('div')
+					container = document.createElement('div')
 
+					header.id = 'header'
+					header.className = 'header'
 
-					var npt = container.querySelector('.now-playing.now-playing-text')
-					if(npt) npt.textContent = title
+					container.id = 'yf-contaier'
+					container.className = 'yf-container'
+
+					var logoContainerDiv = document.createElement("div");
+					logoContainerDiv.className = "yf-logo-container";
+
+					var youtubeDiv = document.createElement("div");
+					youtubeDiv.className = "youtube";
+
+					var fSpan = document.createElement("span");
+					fSpan.className = "yf-f";
+					fSpan.textContent = "F";
+
+					youtubeDiv.appendChild(fSpan);
+
+					var freemiumSpan = document.createElement("span");
+					freemiumSpan.className = "freemium";
+					freemiumSpan.textContent = "Free Mium";
+
+					logoContainerDiv.appendChild(youtubeDiv);
+					logoContainerDiv.appendChild(freemiumSpan);
+
+					var nowPlayingDiv = document.createElement("div");
+					nowPlayingDiv.className = "now-playing-div";
+
+					var nowPlayingSpan = document.createElement("span");
+					nowPlayingSpan.className = "now-playing";
+					nowPlayingSpan.textContent = "Now Playing -";
+
+					var spaceElement = document.createElement("span");
+					spaceElement.innerHTML = "&nbsp;";
+
+					var tooltip = document.createElement("span");
+					tooltip.className = "tooltiptext";
+					tooltip.textContent = title;
+
+					var nowPlayingText = document.createElement("div");
+					nowPlayingText.className = "now-playing now-playing-text tooltip";
+					nowPlayingText.textContent = title;
+
+					nowPlayingText.appendChild(tooltip);
+
+					nowPlayingDiv.appendChild(nowPlayingSpan);
+					nowPlayingDiv.appendChild(spaceElement);
+					nowPlayingDiv.appendChild(nowPlayingText);
+
+					var menuSpan = document.createElement("span");
+					menuSpan.className = "menu";
+					menuSpan.textContent = "...";
+
+					header.appendChild(logoContainerDiv);
+					header.appendChild(nowPlayingDiv);
+					header.appendChild(menuSpan);
+
+					container.appendChild(header);
+					ytc.insertBefore(container, ytc.firstChild)
+				}
+
+				var npt = container.querySelector('.now-playing.now-playing-text')
+				if (message === 'OK') {
+					if (npt) npt.textContent = title
 
 					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
@@ -202,15 +210,47 @@
 						lyricContainer.appendChild(d)
 					})
 
-					container.appendChild(lyricContainer);
-				},
-				args: [lyrics, uid, title]
-			});
+					// var replacement = lyricContainer.children[0].parentNode
+					if (ytc.querySelector('#notFound')) {
+						container.replaceChild(lyricContainer, container.lastChild);
+					}
+					else {
+						container.appendChild(lyricContainer);
+					}
+				}
+				else if (message === 'NOK') {
+					var notFoundDiv = document.createElement('div');
+					notFoundDiv.id = 'notFound'
+					notFoundDiv.className = 'not-found'
 
-		}
-		else {
-			removeView(tabId)
-		}
+					var notFoundText = document.createElement('span');
+					notFoundText.className = 'not-found-text sizeM'
+					notFoundText.textContent = 'Not Found'
+
+					notFoundDiv.appendChild(notFoundText);
+					if (ytc.querySelector('#lyricContainer')) {
+						container.replaceChild(notFoundDiv, container.lastChild);
+					}
+					else {
+						container.appendChild(notFoundDiv);
+					}
+				}
+				else {
+					console.log('Removing..')
+					var ytc = document.querySelector('#secondary > #secondary-inner')
+					var c = ytc.querySelector('.yf-container')
+					var lc = ytc.querySelector('#lyricContainer')
+					if (lc) {
+						c.removeChild(c.lastChild)
+					}
+				}
+
+
+			},
+			args: [lyrics, message, uid, title]
+		});
+
+
 	}
 
 	function removeView(tabId) {

@@ -89,7 +89,7 @@ body {
 	flex-direction: column;
 	position: relative;
 	box-sizing: border-box;
-	padding: 12px 6px 0 16px;
+	padding: 12px 16px 0 16px;
 	border-radius: 12px 12px 0px 0px;
 	background-color: var(--yt-spec-brand-background-primary);
 }
@@ -129,59 +129,116 @@ body {
 	width: var(--width);
 	color: #fff;
 	text-align: center;
-	font-family: "YouTube Sans","Roboto","Arial";
+	font-family: "YouTube Sans", "Roboto", "Arial";
 	font-weight: 600;
 	font-size: 1.4rem;
 	z-index: 1;
 }
 
 .freemium {
-	font-family: "YouTube Sans","Roboto",sans-serif;
-    line-height: 2.8rem;
-    font-weight: 700;
-    overflow: hidden;
-    display: block;
-    max-height: 2.8rem;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    text-overflow: ellipsis;
-    white-space: normal;
+	font-family: "YouTube Sans", "Roboto", sans-serif;
+	line-height: 2.8rem;
+	font-weight: 700;
+	overflow: hidden;
+	display: block;
+	max-height: 2.8rem;
+	-webkit-line-clamp: 1;
+	-webkit-box-orient: vertical;
+	text-overflow: ellipsis;
+	white-space: normal;
 	color: var(--yt-spec-text-primary);
-    font-size: 2rem;
-    transform: scaleX(.9);
-    word-spacing: -5px;
+	font-size: 2rem;
+	transform: scaleX(.9);
+	word-spacing: -5px;
 	padding: 2px;
+}
+
+.now-playing-div {
+	display: flex;
 }
 
 .now-playing {
 	color: var(--yt-spec-text-secondary);
-	font-family: "YouTube Sans","Roboto","Arial";
+	font-family: "YouTube Sans", "Roboto", "Arial";
 	font-size: 1.4rem;
-    font-weight: 400;
-    line-height: 1.5rem;
+	font-weight: 400;
+	line-height: 1.5rem;
 	padding-top: 6px;
 	padding-bottom: 10px;
-}
-
-.now-playing-div{
-	display: flex;
-	overflow: hidden;
-}
-
-.now-playing-text{
 	white-space: nowrap;
-    overflow: hidden;
-    /* animation: scroll 5s linear infinite; */
+}
+
+.now-playing-text {
+	text-overflow: ellipsis;
+	padding-right: 14x;
+	white-space: nowrap;
+	overflow: hidden;
+	/* animation: scroll 5s linear infinite; */
 }
 
 @keyframes scroll {
-    from {
-      transform: translateX(100%);
-    }
-    to {
-      transform: translateX(-100%);
-    }
-  }
+	from {
+		transform: translateX(100%);
+	}
+
+	to {
+		transform: translateX(-100%);
+	}
+}
+
+.tooltip {
+	position: relative;
+	display: inline-block;
+	border-bottom: 1px dotted black;
+}
+
+.tooltip .tooltiptext {
+	visibility: hidden;
+	width: 120px;
+	background-color: #555;
+	color: #fff;
+	text-align: center;
+	border-radius: 6px;
+	padding: 5px 0;
+	position: absolute;
+	z-index: 1;
+	bottom: 125%;
+	left: 50%;
+	margin-left: -60px;
+	opacity: 0;
+	transition: opacity 0.3s;
+}
+
+
+.tooltip .tooltiptext::after {
+	content: "";
+	position: absolute;
+	top: 100%;
+	left: 50%;
+	margin-left: -5px;
+	border-width: 5px;
+	border-style: solid;
+	border-color: #555 transparent transparent transparent;
+}
+
+.tooltip:hover .tooltiptext {
+	visibility: visible;
+	opacity: 1;
+}
+
+.not-found {
+	display: flex;
+	align-content: center;
+	justify-content: center;
+	color: var(--yt-spec-text-primary);
+}
+
+.not-found-text {
+	padding: 18px 6px;
+	font-weight: 700;
+	font-family: "Roboto", "Arial", sans-serif;
+	line-height: 1.5em;
+}
 
 .menu {
 	top: 50%;

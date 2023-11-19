@@ -20,6 +20,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 //Add linear progressbar 
 //Add manual search
 //✅Display Header all times
+//add tooltip
+//:visited
 //handle yt -> other site navigation
 //Add source
 //Save state
