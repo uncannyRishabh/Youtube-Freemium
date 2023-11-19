@@ -131,6 +131,7 @@
 					}
 				} else {
 					var header = document.createElement('div')
+					var progressbar = document.createElement("progress");
 					container = document.createElement('div')
 
 					header.id = 'header'
@@ -191,10 +192,16 @@
 					header.appendChild(menuSpan);
 
 					container.appendChild(header);
+
+					progressbar.id = 'ytf-progressbar'
+					progressbar.className = "pure-material-progress-linear";
+					container.appendChild(progressbar);
+
 					ytc.insertBefore(container, ytc.firstChild)
 				}
-
+				
 				var npt = container.querySelector('.now-playing.now-playing-text')
+				
 				if (message === 'OK') {
 					if (npt) npt.textContent = title
 
@@ -215,10 +222,17 @@
 						container.replaceChild(lyricContainer, container.lastChild);
 					}
 					else {
-						container.appendChild(lyricContainer);
+						if(ytc.querySelector('#notFound')){
+							container.replaceChild(lyricContainer,ytc.querySelector('#lyricContainer'))
+						}
+						else{
+							container.appendChild(lyricContainer);
+						}
 					}
 				}
 				else if (message === 'NOK') {
+					if (npt) npt.textContent = title
+
 					var notFoundDiv = document.createElement('div');
 					notFoundDiv.id = 'notFound'
 					notFoundDiv.className = 'not-found'
@@ -232,10 +246,16 @@
 						container.replaceChild(notFoundDiv, container.lastChild);
 					}
 					else {
-						container.appendChild(notFoundDiv);
+						if(ytc.querySelector('#notFound')){
+							container.replaceChild(notFoundDiv,ytc.querySelector('#notFound'))
+						}
+						else{
+							container.appendChild(notFoundDiv);
+						}
 					}
 				}
 				else {
+					if (npt) npt.textContent = title
 					console.log('Removing..')
 					var ytc = document.querySelector('#secondary > #secondary-inner')
 					var c = ytc.querySelector('.yf-container')
@@ -245,6 +265,8 @@
 					}
 				}
 
+				var progressbar = container.querySelector('#ytf-progressbar')
+				if(progressbar) progressbar.style.visibility = 'hidden'
 
 			},
 			args: [lyrics, message, uid, title]
@@ -285,7 +307,7 @@
 			chrome.storage.local.get(uid, (result) => {
 				if (chrome.runtime.lastError)
 					console.error('Error getting');
-				resolve(result ? result : []);
+				resolve(result ? result : {});
 			});
 		});
 	}

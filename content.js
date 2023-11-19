@@ -18,7 +18,9 @@ const messageHandler = (type, val, meta) => {
 			case 'NEW_SEARCH': {
 				var ytc = document.querySelector('#secondary > #secondary-inner')
 				var lyricContainer = ytc.querySelector('#lyricContainer')
-				
+				var progressbar = ytc.querySelector('#ytf-progressbar')
+				if(progressbar) progressbar.style.visibility = 'visible'
+
 				if(lyricContainer && lyricContainer.getAttribute('data-uid')===uid){
 					res({ 'name': '', 'channel': '' })
 					break;
