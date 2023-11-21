@@ -73,60 +73,63 @@
 		var uid = getVideoID(reqUrl)
 		var obj = await getObject(uid)
 		console.log(obj)
+		let lyrics, message, title
 		const isEmpty = obj => Object.keys(obj).length === 0;
 
-		if(isEmpty(obj)){
+		if (isEmpty(obj)) {
+			var resp = await (await getLyrics(val, channel)).text();
 
+			result = await chrome.scripting.executeScript({
+				target: { tabId },
+				function: (resp) => {
+					// console.log(resp)
+					const parser = new DOMParser();
+					const doc = parser.parseFromString(resp, 'text/html');
+					// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
+					const lContainer = doc.querySelector('#lyric_body > .lyrics')
+
+					var message = 'OK'
+					var lyrics = []
+					if (lContainer) {
+						// console.log(lContainer.textContent)
+						message = 'OK'
+						// lContainer.querySelectorAll('span').forEach(span => {
+						// 	lyrics.push(span.textContent.trim());
+						// });
+
+						var raw = lContainer.innerHTML
+						var wd = raw.replace(/<\/?div[^>]*>/g, '');
+						lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
+
+						// console.log(lyrics);
+					}
+					else {
+						message = 'NOK'
+					}
+
+					//VALIDATE HERE
+					var r = { lyrics, message }
+					// console.log(r)
+					return JSON.stringify(r)
+				},
+				args: [resp]
+			});
+
+			let resultObject = JSON.parse(result[0]?.result);
+			lyrics = resultObject.lyrics;
+			message = resultObject.message;
+			var scroll = 0
+			var timestamp = Date.now()
+			title = val
+
+			if (message === 'OK' && lyrics && lyrics.length > 0) {
+				saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
+			}
 		}
-
-		var resp = await (await getLyrics(val, channel)).text();
-
-		result = await chrome.scripting.executeScript({
-			target: { tabId },
-			function: (resp) => {
-				// console.log(resp)
-				const parser = new DOMParser();
-				const doc = parser.parseFromString(resp, 'text/html');
-				// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-				const lContainer = doc.querySelector('#lyric_body > .lyrics')
-
-				var message = 'OK'
-				var lyrics = []
-				if (lContainer) {
-					// console.log(lContainer.textContent)
-					message = 'OK'
-					// lContainer.querySelectorAll('span').forEach(span => {
-					// 	lyrics.push(span.textContent.trim());
-					// });
-
-					var raw = lContainer.innerHTML
-					var wd = raw.replace(/<\/?div[^>]*>/g, '');
-					lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
-
-					// console.log(lyrics);
-				}
-				else {
-					message = 'NOK'
-				}
-
-				//VALIDATE HERE
-				var r = { lyrics, message }
-				// console.log(r)
-				return JSON.stringify(r)
-			},
-			args: [resp]
-		});
-
-		let resultObject = JSON.parse(result[0]?.result);
-		let lyrics = resultObject.lyrics;
-		let message = resultObject.message;
-
-		var scroll = 0
-		var timestamp = Date.now()
-		var title = val
-
-		if(message === 'OK' && lyrics && lyrics.length>0) {
-			saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
+		else {
+			lyrics = obj[uid]?.lyrics
+			message = obj[uid]?.message
+			title = obj[uid]?.title
 		}
 
 		chrome.scripting.executeScript({
@@ -198,8 +201,8 @@
 					menuSpan.className = "menu";
 					menuSpan.textContent = "...";
 
-					menuSpan.addEventListener('onClick',() =>{
-						
+					menuSpan.addEventListener('onClick', () => {
+
 					})
 
 					header.appendChild(logoContainerDiv);
@@ -214,9 +217,9 @@
 
 					ytc.insertBefore(container, ytc.firstChild)
 				}
-				
+
 				var npt = container.querySelector('.now-playing.now-playing-text')
-				
+
 				if (message === 'OK') {
 					if (npt) npt.textContent = title
 					container.setAttribute('data-uid', uid)
@@ -237,10 +240,10 @@
 						container.replaceChild(lyricContainer, container.lastChild);
 					}
 					else {
-						if(ytc.querySelector('#notFound')){
-							container.replaceChild(lyricContainer,ytc.querySelector('#lyricContainer'))
+						if (ytc.querySelector('#notFound')) {
+							container.replaceChild(lyricContainer, ytc.querySelector('#lyricContainer'))
 						}
-						else{
+						else {
 							container.appendChild(lyricContainer);
 						}
 					}
@@ -262,10 +265,10 @@
 						container.replaceChild(notFoundDiv, container.lastChild);
 					}
 					else {
-						if(ytc.querySelector('#notFound')){
-							container.replaceChild(notFoundDiv,ytc.querySelector('#notFound'))
+						if (ytc.querySelector('#notFound')) {
+							container.replaceChild(notFoundDiv, ytc.querySelector('#notFound'))
 						}
-						else{
+						else {
 							container.appendChild(notFoundDiv);
 						}
 					}
@@ -284,7 +287,7 @@
 				}
 
 				var progressbar = container.querySelector('#ytf-progressbar')
-				if(progressbar) progressbar.style.visibility = 'hidden'
+				if (progressbar) progressbar.style.visibility = 'hidden'
 
 			},
 			args: [lyrics, message, uid, title]

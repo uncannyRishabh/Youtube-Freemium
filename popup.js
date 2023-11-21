@@ -17,7 +17,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅add header view
 //✅Add linear progressbar 
 //✅Display Header all times
-//Save frequently played lyrics (upto 50 for 2 month)
+//✅Save frequently played lyrics
+// (upto 50 for 2 month)
 //Add manual search
 //Create menu
 //reset data attribute
