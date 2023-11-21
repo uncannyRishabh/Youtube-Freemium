@@ -22,6 +22,17 @@ body {
 	scroll-snap-type: y proximity;
 }
 
+.lyricContainer {
+	display: flex;
+	flex-direction: column;
+	padding: 14px 0px 120px 18px;
+	overflow-y: scroll;
+	color: var(--yt-spec-text-primary);
+	scroll-behavior: smooth;
+	gap: 2rem;
+	/* scroll-timeline-name: --squareTimeline; */
+}
+
 .sizeS {
 	font-size: 1.25rem;
 	line-height: 1.3em;
@@ -38,14 +49,11 @@ body {
 }
 
 .lyric {
-	/* min-height: calc(87vh/7); */
-	font-weight: 700;
+	font-weight: 400;
 	font-family: "Roboto", "Arial", sans-serif;
-	line-height: 1.5em;
 	text-align: center;
 	overflow-wrap: break-word;
 	scroll-snap-align: center;
-	padding: 10px 0px;
 	/* animation-name: custom;
 	animation-duration: 1ms; 
 	animation-direction: alternate;
@@ -94,7 +102,6 @@ body {
 	background-color: var(--yt-spec-brand-background-primary);
 }
 
-
 .yf-logo-container {
 	display: flex;
 	align-items: center;
@@ -129,16 +136,16 @@ body {
 	width: var(--width);
 	color: #fff;
 	text-align: center;
-	font-family: "YouTube Sans", "Roboto", "Arial";
+	font-family: "Roboto", "Arial";
 	font-weight: 600;
 	font-size: 1.4rem;
 	z-index: 1;
 }
 
 .freemium {
-	font-family: "YouTube Sans", "Roboto", sans-serif;
+	font-family: "Roboto", sans-serif;
 	line-height: 2.8rem;
-	font-weight: 700;
+	font-weight: 600;
 	overflow: hidden;
 	display: block;
 	max-height: 2.8rem;
@@ -147,8 +154,8 @@ body {
 	text-overflow: ellipsis;
 	white-space: normal;
 	color: var(--yt-spec-text-primary);
-	font-size: 2rem;
-	transform: scaleX(.9);
+	font-size: 1.75rem;
+	transform: scaleX(.9) scaleY(1.1);
 	word-spacing: -5px;
 	padding: 2px;
 }
@@ -189,7 +196,7 @@ body {
 .tooltip {
 	position: relative;
 	display: inline-block;
-	border-bottom: 1px dotted black;
+	/* border-bottom: 1px dotted black; */
 }
 
 .tooltip .tooltiptext {
@@ -208,7 +215,6 @@ body {
 	opacity: 0;
 	transition: opacity 0.3s;
 }
-
 
 .tooltip .tooltiptext::after {
 	content: "";
@@ -241,26 +247,14 @@ body {
 }
 
 .menu {
-	top: 50%;
+	top: calc(50% - 2px);
 	right: 4%;
 	font-size: 26px;
-	font-weight: 700;
+	font-weight: 400;
 	position: absolute;
 	color: var(--yt-spec-text-secondary);
 	transform: rotate(90deg) translate(-50%, -50%);
 	user-select: none;
-}
-
-
-.lyricContainer {
-	display: flex;
-	flex-direction: column;
-	padding: 14px 0px 120px 18px;
-	overflow-y: scroll;
-	color: var(--yt-spec-text-primary);
-	font-size: 1.8rem;
-	scroll-behavior: smooth;
-	/* scroll-timeline-name: --squareTimeline; */
 }
 
 .lyricContainer::-webkit-scrollbar-thumb {
@@ -297,7 +291,7 @@ body {
     min-height: 2px;
 	height: 2px;
 	width: 100%;
-    color: rgb(var(--pure-material-primary-rgb, 33, 150, 243));
+    color: #e21;
     background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12);
     font-size: 16px;
 }

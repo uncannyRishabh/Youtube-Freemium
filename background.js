@@ -69,6 +69,16 @@
 
 		let { val, channel } = JSON.parse(result[0]?.result)
 		console.log(val, channel);
+
+		var uid = getVideoID(reqUrl)
+		var obj = await getObject(uid)
+		console.log(obj)
+		const isEmpty = obj => Object.keys(obj).length === 0;
+
+		if(isEmpty(obj)){
+
+		}
+
 		var resp = await (await getLyrics(val, channel)).text();
 
 		result = await chrome.scripting.executeScript({
@@ -107,14 +117,15 @@
 			args: [resp]
 		});
 
-		let { lyrics, message } = JSON.parse(result[0]?.result)
-		var uid = getVideoID(reqUrl)
+		let resultObject = JSON.parse(result[0]?.result);
+		let lyrics = resultObject.lyrics;
+		let message = resultObject.message;
 
 		var scroll = 0
 		var timestamp = Date.now()
 		var title = val
 
-		if (lyrics && message === 'OK') {
+		if(message === 'OK' && lyrics && lyrics.length>0) {
 			saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
 		}
 
@@ -187,6 +198,10 @@
 					menuSpan.className = "menu";
 					menuSpan.textContent = "...";
 
+					menuSpan.addEventListener('onClick',() =>{
+						
+					})
+
 					header.appendChild(logoContainerDiv);
 					header.appendChild(nowPlayingDiv);
 					header.appendChild(menuSpan);
@@ -204,15 +219,15 @@
 				
 				if (message === 'OK') {
 					if (npt) npt.textContent = title
+					container.setAttribute('data-uid', uid)
 
 					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
-					lyricContainer.className = 'lyricContainer'
-					lyricContainer.setAttribute('data-uid', uid)
+					lyricContainer.className = 'lyricContainer lyric sizeM'
 
 					lyrics.forEach(l => {
 						var d = document.createElement('span');
-						d.className = 'lyric sizeM'
+						// d.className = 'lyric sizeM'
 						d.textContent = l
 						lyricContainer.appendChild(d)
 					})
@@ -232,6 +247,7 @@
 				}
 				else if (message === 'NOK') {
 					if (npt) npt.textContent = title
+					container.setAttribute('data-uid', uid)
 
 					var notFoundDiv = document.createElement('div');
 					notFoundDiv.id = 'notFound'
@@ -256,6 +272,8 @@
 				}
 				else {
 					if (npt) npt.textContent = title
+					container.removeAttribute('data-uid')
+
 					console.log('Removing..')
 					var ytc = document.querySelector('#secondary > #secondary-inner')
 					var c = ytc.querySelector('.yf-container')

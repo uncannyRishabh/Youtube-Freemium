@@ -17,14 +17,15 @@ const messageHandler = (type, val, meta) => {
 		switch (type) {
 			case 'NEW_SEARCH': {
 				var ytc = document.querySelector('#secondary > #secondary-inner')
-				var lyricContainer = ytc.querySelector('#lyricContainer')
+				var container = ytc.querySelector('.yf-container')
 				var progressbar = ytc.querySelector('#ytf-progressbar')
-				if(progressbar) progressbar.style.visibility = 'visible'
-
-				if(lyricContainer && lyricContainer.getAttribute('data-uid')===uid){
+				
+				if(container && container.getAttribute('data-uid')===uid){
 					res({ 'name': '', 'channel': '' })
 					break;
 				}
+
+				if(progressbar) progressbar.style.visibility = 'visible'
 
 				let val = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
@@ -50,18 +51,5 @@ const messageHandler = (type, val, meta) => {
 		}
 
 	})
-	// var meta = {
-	// 	'artist':'',
-	// 	'tabId':'',
-	// 	'timestamp':'',
-	// 	'uidPk':'',
-	// 	'scroll':''
-	// }
-	// messageHandler("NEW_SEARCH","PRIDE.	KENDRICK LAMAR",meta)
-	// console.log("from cjs : ",meta)
-
-	// document.addEventListener('DOMContentLoaded', () => {
-	// 	console.log('FROM CJS : ',window.location.href)
-	// });
 
 })();

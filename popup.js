@@ -20,8 +20,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 //Save frequently played lyrics (upto 50 for 2 month)
 //Add manual search
 //Create menu
+//reset data attribute
+//fix lyrics-uid-mapping (same song multiple videos)
+//add clear storage
+//create popup view
 //Restrict search for non music content
 //Add AZL
+//Make container collapsible
 //add view in section 1 when applicable
 //add tooltip
 //:visited
