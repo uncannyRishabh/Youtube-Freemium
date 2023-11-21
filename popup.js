@@ -26,9 +26,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 //add clear storage
 //create popup view
 //Restrict search for non music content
+//create popup view
 //Add AZL
 //Make container collapsible
 //add view in section 1 when applicable
+// (upto 50 for 2 month)
 //add tooltip
 //:visited
 //handle yt -> other site navigation
