@@ -83,13 +83,19 @@
 				target: { tabId },
 				function: (resp) => {
 					// console.log(resp)
+					var lyrics = []
+					var message = ''
 					const parser = new DOMParser();
 					const doc = parser.parseFromString(resp, 'text/html');
 					// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
 					const lContainer = doc.querySelector('#lyric_body > .lyrics')
+					const b_TopTitle = doc.querySelector('.b_topTitle')
 
-					var message = 'OK'
-					var lyrics = []
+					//Alternate container
+					if(b_TopTitle && b_TopTitle.textContent === "Lyrics"){
+						lContainer = doc.querySelector('.l_tac_facts')
+					}
+
 					if (lContainer) {
 						// console.log(lContainer.textContent)
 						message = 'OK'
@@ -149,7 +155,7 @@
 					container = document.createElement('div')
 
 					header.id = 'header'
-					header.className = 'header'
+					header.className = 'yf-header'
 
 					container.id = 'yf-contaier'
 					container.className = 'yf-container'
@@ -158,7 +164,7 @@
 					logoContainerDiv.className = "yf-logo-container";
 
 					var youtubeDiv = document.createElement("div");
-					youtubeDiv.className = "youtube";
+					youtubeDiv.className = "yf-youtube";
 
 					var fSpan = document.createElement("span");
 					fSpan.className = "yf-f";
@@ -198,7 +204,7 @@
 					nowPlayingDiv.appendChild(nowPlayingText);
 
 					var menuSpan = document.createElement("span");
-					menuSpan.className = "menu";
+					menuSpan.className = "yf-menu";
 					menuSpan.textContent = "...";
 
 					menuSpan.addEventListener('onClick', () => {
@@ -352,7 +358,7 @@
 		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
 		// q = q?.replace(/[\s\t\n]/g, '+') //+
 
-		if (q.split(' ').length < 2) {
+		if (q.split(' ').length < 2 || (q.length < 4 && !q.contins('-'))) {
 			q += ' ' + n
 		}
 		//TODO:Append verified creator channel name only if one letter title

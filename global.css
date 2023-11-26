@@ -5,7 +5,7 @@ body {
 	padding: 0;
 }
 
-.container {
+.yf-pop-container {
 	width: 100vw;
 	height: 100vh;
 	display: flex;
@@ -92,7 +92,7 @@ body {
 
 }
 
-.header {
+.yf-header {
 	display: flex;
 	flex-direction: column;
 	position: relative;
@@ -109,7 +109,7 @@ body {
 	--width: 20px;
 }
 
-.youtube {
+.yf-youtube {
 	display: grid;
 	place-items: center;
 	position: relative;
@@ -121,7 +121,7 @@ body {
 	border-radius: 35% / 11%;
 }
 
-.youtube::before {
+.yf-youtube::before {
 	content: "";
 	position: absolute;
 	background: inherit;
@@ -246,11 +246,11 @@ body {
 	line-height: 1.5em;
 }
 
-.menu {
+.yf-menu {
 	top: calc(50% - 2px);
-	right: 4%;
-	font-size: 26px;
-	font-weight: 400;
+	right: 5%;
+	font-size: 23px;
+	font-weight: 500;
 	position: absolute;
 	color: var(--yt-spec-text-secondary);
 	transform: rotate(90deg) translate(-50%, -50%);
@@ -334,15 +334,7 @@ body {
     }
 }
 
-
-var {
-	--yt-lightsource-section2-color: rgba(40, 40, 40, 0.949);
-	--yt-lightsource-section4-color: rgba(12, 12, 12, 0.949);
-	--yt-lightsource-primary-title-color: rgba(255, 255, 255, 1.000);
-	--yt-lightsource-secondary-title-color: rgba(204, 204, 204, 1.000);
-}
-
-.insert {
+.yf-insert {
 	border-radius: 12px;
 	min-height: 0;
 	max-height: var(--ytd-watch-flexy-panel-max-height);

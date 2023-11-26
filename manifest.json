@@ -25,7 +25,7 @@
 	"content_scripts": [
 		{
 			"matches": [
-				"https://www.youtube.com/*",
+				"https://www.youtube.com/watch*",
 				"https://music.youtube.com/*"
 			],
 			"js": [
