@@ -2,54 +2,46 @@
 	var reqUrl = ''
 	var shouldSendCb = false
 	//storage api
-	var tabs = []
+	var tabList = []
 
-	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo,tabInfo) {
 		// console.log(changeInfo)
+		// console.log(tabInfo)
 
-		if (changeInfo.url) {
-			if (changeInfo.url.includes("youtube.com/watch")) {
-				shouldSendCb = true
-				reqUrl = changeInfo.url
-				if (!tabs.includes(tabId)) {
-					tabs.push(tabId)
-					console.log('Added.. ' + tabId + ' from  :' + tabs)
-				}
+		if(changeInfo.status && changeInfo.status==='complete' && tabInfo.url.includes("youtube.com/watch")){
+			console.log('Detected : '+tabInfo.title)
+			reqUrl = tabInfo.url
+			if (!tabList.includes(tabId)) {
+				tabList.push(tabId)
+				console.log('Added.. ' + tabId + ' from  :' + tabList)
 			}
-			else if (tabs.includes(tabId)) {
-				tabs = tabs.filter(item => item !== tabId);
-				console.log('Navigated.. ' + tabId + ' from  :' + tabs)
-			}
-		}
 
-		if (tabs.includes(tabId) && shouldSendCb && changeInfo.title) {
-			if (changeInfo.title.split(' ').length > 1) {
-				shouldSendCb = false
-				console.log('COMPLETE.......')
+			if (tabList.includes(tabId) && tabInfo.title.split(' ').length > 1) {
 				chrome.tabs.sendMessage(tabId, {
 					type: "NEW_SEARCH",
 					'uid': getVideoID(reqUrl)
 				}, (response) => {
 					if (chrome.runtime.lastError) {
 						console.log('Error getting');
-						removeView(tabId)
 					}
 					if (response) {
 						if (response.name && response.channel) {
 							console.log(response)
-							runInContext(tabId)
 						}
 					}
+					runInContext(tabId)
 				});
 			}
+
 		}
 
 	});
 
-	chrome.tabs.onDetached.addListener(function (tabId, changeInfo) {
-		if (tabs.includes(tabId)) {
-			tabs = tabs.filter(item => item !== tabId);
-			console.log('Detached.. ' + tabId + ' from  :' + tabs)
+	chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
+		console.log(removeInfo)
+		if (tabList.includes(tabId)) {
+			tabList = tabList.filter(item => item !== tabId);
+			console.log('Detached.. ' + tabId + ' from  :' + tabList)
 		}
 
 	});
@@ -63,6 +55,7 @@
 			function: () => {
 				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
+				console.log('Title : '+val+' Channel : '+channel)
 				return JSON.stringify({ val, channel });
 			}
 		});
@@ -71,12 +64,12 @@
 		console.log(val, channel);
 
 		var uid = getVideoID(reqUrl)
-		var obj = await getObject(uid)
+		var obj = await getFromStorage(uid)
 		console.log(obj)
 		let lyrics, message, title
 		const isEmpty = obj => Object.keys(obj).length === 0;
 
-		if (isEmpty(obj)) {
+		if (isEmpty(obj) || obj[uid]?.title && obj[uid]?.title!=val) {
 			var resp = await (await getLyrics(val, channel)).text();
 
 			result = await chrome.scripting.executeScript({
@@ -329,7 +322,7 @@
 		});
 	}
 
-	function getObject(uid) {
+	function getFromStorage(uid) {
 		return new Promise((resolve) => {
 			chrome.storage.local.get(uid, (result) => {
 				if (chrome.runtime.lastError)

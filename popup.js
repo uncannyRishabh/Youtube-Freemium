@@ -18,14 +18,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Add linear progressbar 
 //✅Display Header all times
 //✅Save frequently played lyrics
-// (upto 50 for 2 month)
+//Add delete from local storage button
 //Add manual search
+//Restrict search for non music content
+// (upto 50 for 2 month)
 //Create menu
 //reset data attribute
 //fix lyrics-uid-mapping (same song multiple videos)
 //add clear storage
 //create popup view
-//Restrict search for non music content
 //create popup view
 //Add AZL
 //Make container collapsible
