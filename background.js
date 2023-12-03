@@ -1,21 +1,37 @@
 (() => {
 	var reqUrl = ''
-	var shouldSendCb = false
+	var ready = false
 	//storage api
 	var tabList = []
 
-	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo,tabInfo) {
+	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
 		// console.log(changeInfo)
 		// console.log(tabInfo)
 
-		if(changeInfo.status && changeInfo.status==='complete' && tabInfo.url.includes("youtube.com/watch")){
-			console.log('Detected : '+tabInfo.title)
+		// Reload   => loading , faviconUrl , title , title , title , complete , title
+		// Navigate => loading , complete , faviconUrl , title , 
+		// Search   => 1) Local Storage via uid
+		//if title and channel available and not stored in local || not matching tabTitle?  
+		//			   2) search again
+		//else 
+		//			   2) display existing
+		//			   2) 
+		//			   2) 
+
+		if(changeInfo.status && changeInfo.status === 'complete' && tabInfo.url.includes("youtube.com/watch")){
+			ready = true
+
+		}
+
+		if(changeInfo.title && ready){
+			ready = false
+			console.log('Detected : ' + tabInfo.title)
 			reqUrl = tabInfo.url
 			if (!tabList.includes(tabId)) {
 				tabList.push(tabId)
 				console.log('Added.. ' + tabId + ' from  :' + tabList)
 			}
-
+	
 			if (tabList.includes(tabId) && tabInfo.title.split(' ').length > 1) {
 				chrome.tabs.sendMessage(tabId, {
 					type: "NEW_SEARCH",
@@ -32,8 +48,8 @@
 					runInContext(tabId)
 				});
 			}
-
 		}
+
 
 	});
 
@@ -55,13 +71,23 @@
 			function: () => {
 				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
-				console.log('Title : '+val+' Channel : '+channel)
+				console.log('Title : ' + val + ' Channel : ' + channel)
 				return JSON.stringify({ val, channel });
 			}
 		});
 
-		let { val, channel } = JSON.parse(result[0]?.result)
+		let val, channel;
+
+		if (result[0]?.result) {
+			({ val, channel } = JSON.parse(result[0]?.result));
+			console.log(val, channel);
+		} else {
+			console.log("result is undefined");
+		}
+
+		// Now you can use val and channel outside the if scope
 		console.log(val, channel);
+
 
 		var uid = getVideoID(reqUrl)
 		var obj = await getFromStorage(uid)
@@ -69,7 +95,7 @@
 		let lyrics, message, title
 		const isEmpty = obj => Object.keys(obj).length === 0;
 
-		if (isEmpty(obj) || obj[uid]?.title && obj[uid]?.title!=val) {
+		if (isEmpty(obj) || obj[uid]?.title && obj[uid]?.title != val) {
 			var resp = await (await getLyrics(val, channel)).text();
 
 			result = await chrome.scripting.executeScript({
@@ -85,7 +111,7 @@
 					const b_TopTitle = doc.querySelector('.b_topTitle')
 
 					//Alternate container
-					if(b_TopTitle && b_TopTitle.textContent === "Lyrics"){
+					if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
 						lContainer = doc.querySelector('.l_tac_facts')
 					}
 

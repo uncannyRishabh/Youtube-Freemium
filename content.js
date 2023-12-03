@@ -17,6 +17,12 @@ const messageHandler = (type, val, meta) => {
 		switch (type) {
 			case 'NEW_SEARCH': {
 				var ytc = document.querySelector('#secondary > #secondary-inner')
+				
+				if(!ytc){
+					res({ 'name': '', 'channel': '' })
+					break;
+				}
+				
 				var container = ytc.querySelector('.yf-container')
 				var progressbar = ytc.querySelector('#ytf-progressbar')
 				
