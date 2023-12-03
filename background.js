@@ -6,8 +6,8 @@
 	var tabList = []
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
-		console.log(changeInfo)
-		console.log(tabInfo)
+		// console.log(changeInfo)
+		// console.log(tabInfo)
 
 		// Reload       => loading , faviconUrl , title , title , title , complete , title
 		// Navigate     => loading , complete , faviconUrl , title , 
