@@ -1,15 +1,17 @@
 (() => {
+	var tabTitle = ''
 	var reqUrl = ''
-	var ready = false
+	var complete = false
 	//storage api
 	var tabList = []
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
-		// console.log(changeInfo)
-		// console.log(tabInfo)
+		console.log(changeInfo)
+		console.log(tabInfo)
 
-		// Reload   => loading , faviconUrl , title , title , title , complete , title
-		// Navigate => loading , complete , faviconUrl , title , 
+		// Reload       => loading , faviconUrl , title , title , title , complete , title
+		// Navigate     => loading , complete , faviconUrl , title , 
+		// Search + Nav => loading , complete , faviconUrl , title , title , 
 		// Search   => 1) Local Storage via uid
 		//if title and channel available and not stored in local || not matching tabTitle?  
 		//			   2) search again
@@ -17,14 +19,16 @@
 		//			   2) display existing
 		//			   2) 
 		//			   2) 
-
-		if(changeInfo.status && changeInfo.status === 'complete' && tabInfo.url.includes("youtube.com/watch")){
-			ready = true
-
+		if(changeInfo.status && changeInfo.status === 'loading' && tabInfo.url.includes("youtube.com/watch")){
+			complete = false
 		}
 
-		if(changeInfo.title && ready){
-			ready = false
+		if(changeInfo.status && changeInfo.status === 'complete' && tabInfo.url.includes("youtube.com/watch")){
+			complete = true
+		}
+
+		if(changeInfo.title && complete){
+			tabTitle = tabInfo.title
 			console.log('Detected : ' + tabInfo.title)
 			reqUrl = tabInfo.url
 			if (!tabList.includes(tabId)) {
