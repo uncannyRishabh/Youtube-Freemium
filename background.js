@@ -11,49 +11,50 @@
 
 		// Reload       => loading , faviconUrl , title , title , title , complete , title
 		// Navigate     => loading , complete , faviconUrl , title , 
-		// Search + Nav => loading , complete , faviconUrl , title , title , 
+		// Search + Nav => loading , complete , faviconUrl , title , title
+
 		// Search   => 1) Local Storage via uid
 		//if title and channel available and not stored in local || not matching tabTitle?  
 		//			   2) search again
 		//else 
 		//			   2) display existing
-		//			   2) 
-		//			   2) 
-		if(changeInfo.status && changeInfo.status === 'loading' && tabInfo.url.includes("youtube.com/watch")){
-			complete = false
-		}
-
-		if(changeInfo.status && changeInfo.status === 'complete' && tabInfo.url.includes("youtube.com/watch")){
-			complete = true
-		}
-
-		if(changeInfo.title && complete){
-			tabTitle = tabInfo.title
-			console.log('Detected : ' + tabInfo.title)
-			reqUrl = tabInfo.url
-			if (!tabList.includes(tabId)) {
-				tabList.push(tabId)
-				console.log('Added.. ' + tabId + ' from  :' + tabList)
+		if(tabInfo.url.includes("youtube.com/watch")){
+			if (changeInfo.status && changeInfo.status === 'loading') {
+				complete = false
 			}
 	
-			if (tabList.includes(tabId) && tabInfo.title.split(' ').length > 1) {
-				chrome.tabs.sendMessage(tabId, {
-					type: "NEW_SEARCH",
-					'uid': getVideoID(reqUrl)
-				}, (response) => {
-					if (chrome.runtime.lastError) {
-						console.log('Error getting');
-					}
-					if (response) {
-						if (response.name && response.channel) {
-							console.log(response)
+			if (changeInfo.status && changeInfo.status === 'complete') {
+				complete = true
+			}
+	
+			if (changeInfo.title && complete) {
+				tabTitle = tabInfo.title
+				console.log('Detected : ' + tabInfo.title)
+				reqUrl = tabInfo.url
+				if (!tabList.includes(tabId)) {
+					tabList.push(tabId)
+					console.log('Added.. ' + tabId + ' from  :' + tabList)
+				}
+	
+				if (tabList.includes(tabId) && tabInfo.title.split(' ').length > 1) {
+					chrome.tabs.sendMessage(tabId, {
+						type: "NEW_SEARCH",
+						'uid': getVideoID(reqUrl)
+					}, (response) => {
+						if (chrome.runtime.lastError) {
+							console.log('Error getting');
 						}
-					}
-					runInContext(tabId)
-				});
+						if (response) {
+							if (response.name && response.channel) {
+								console.log(response)
+							}
+						}
+						runInContext(tabId,getTitleFromTabTitle(tabTitle))
+					});
+				}
+	
 			}
 		}
-
 
 	});
 
@@ -66,10 +67,16 @@
 
 	});
 
-	const runInContext = async (tabId) => {
+	const runInContext = async (tabId,tabTitle) => {
 		//check for tabId 
 		console.log('runInContext Called')
-
+		
+		let lyrics, message, title
+		var uid = getVideoID(reqUrl)
+		var obj = await getFromStorage(uid)
+		console.log(obj)
+		const isEmpty = obj => Object.keys(obj).length === 0;
+		
 		let result = await chrome.scripting.executeScript({
 			target: { tabId },
 			function: () => {
@@ -79,25 +86,15 @@
 				return JSON.stringify({ val, channel });
 			}
 		});
-
+		
 		let val, channel;
-
+		
 		if (result[0]?.result) {
 			({ val, channel } = JSON.parse(result[0]?.result));
-			console.log(val, channel);
+			console.log("CHECKPOINT "+val+' - '+channel);
 		} else {
 			console.log("result is undefined");
 		}
-
-		// Now you can use val and channel outside the if scope
-		console.log(val, channel);
-
-
-		var uid = getVideoID(reqUrl)
-		var obj = await getFromStorage(uid)
-		console.log(obj)
-		let lyrics, message, title
-		const isEmpty = obj => Object.keys(obj).length === 0;
 
 		if (isEmpty(obj) || obj[uid]?.title && obj[uid]?.title != val) {
 			var resp = await (await getLyrics(val, channel)).text();
@@ -373,7 +370,7 @@
 		}
 	}
 
-	function queryMaker(q, n) {
+	function queryBuilder(q, n) {
 		q = q.trim();
 		q = q.replace(/\[[^\]]*\]/g, ''); // remove [contents]
 		q = q.replace(/\([^)]*\)/g, ''); // remove (contents)
@@ -381,8 +378,9 @@
 		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
 		// q = q?.replace(/[\s\t\n]/g, '+') //+
 
-		if (q.split(' ').length < 2 || (q.length < 4 && !q.contins('-'))) {
-			q += ' ' + n
+		if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
+			if(!q.includes(n))
+				q += ' ' + n
 		}
 		//TODO:Append verified creator channel name only if one letter title
 		return q + " lyrics"
@@ -428,12 +426,19 @@
 			redirect: 'follow'
 		};
 
-		var mq = queryMaker(name, channel)
+		var mq = queryBuilder(name, channel)
 		// var url = `https://www.google.com/search?q=${mq}`
 		var url = `https://www.bing.com/search?q=${mq}`
 		console.log('searching : ', mq)
 		var response = fetch(url, requestOptions)
 		return response;
+	}
+
+	function getTitleFromTabTitle(tabTitle) {
+		tabTitle = tabTitle.split('-')[0]
+		tabTitle = tabTitle.replace(/\([^)]*\)/g, '')
+		tabTitle = tabTitle.trim().replace('YouTube','')
+		return tabTitle
 	}
 
 
