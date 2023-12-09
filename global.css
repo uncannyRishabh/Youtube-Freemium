@@ -151,6 +151,8 @@
 	transform: scaleX(.9) scaleY(1.1);
 	word-spacing: -5px;
 	padding: 2px;
+	user-select: none;
+
 }
 
 .now-playing-div {
@@ -240,13 +242,14 @@
 }
 
 .yf-menu {
-	top: calc(50% - 2px);
+	top: calc(75% - 2px);
 	right: 5%;
 	font-size: 23px;
 	font-weight: 500;
 	position: absolute;
 	color: var(--yt-spec-text-secondary);
 	transform: rotate(90deg) translate(-50%, -50%);
+	cursor: pointer;
 	user-select: none;
 }
 
@@ -277,54 +280,56 @@
 }
 
 .pure-material-progress-linear {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    border: none;
-    min-height: 2px;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	border: none;
+	min-height: 2px;
 	height: 2px;
 	width: 100%;
-    color: #e21;
-    background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12);
-    font-size: 16px;
+	color: #e21;
+	background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12);
+	font-size: 16px;
 }
 
 .pure-material-progress-linear::-webkit-progress-bar {
-    background-color: transparent;
+	background-color: transparent;
 }
 
 .pure-material-progress-linear::-moz-progress-bar {
-    background-color: currentColor;
-    transition: all 0.2s;
+	background-color: currentColor;
+	transition: all 0.2s;
 }
 
 .pure-material-progress-linear:indeterminate {
-    background-size: 200% 100%;
-    background-image: linear-gradient(to right, transparent 50%, currentColor 50%, currentColor 60%, transparent 60%, transparent 71.5%, currentColor 71.5%, currentColor 84%, transparent 84%);
-    animation: pure-material-progress-linear 2s infinite linear;
+	background-size: 200% 100%;
+	background-image: linear-gradient(to right, transparent 50%, currentColor 50%, currentColor 60%, transparent 60%, transparent 71.5%, currentColor 71.5%, currentColor 84%, transparent 84%);
+	animation: pure-material-progress-linear 2s infinite linear;
 }
 
 .pure-material-progress-linear:indeterminate::-moz-progress-bar {
-    background-color: transparent;
+	background-color: transparent;
 }
 
 .pure-material-progress-linear:indeterminate::-ms-fill {
-    animation-name: none;
+	animation-name: none;
 }
 
 @keyframes pure-material-progress-linear {
-    0% {
-        background-size: 200% 100%;
-        background-position: left -31.25% top 0%;
-    }
-    50% {
-        background-size: 800% 100%;
-        background-position: left -49% top 0%;
-    }
-    100% {
-        background-size: 400% 100%;
-        background-position: left -102% top 0%;
-    }
+	0% {
+		background-size: 200% 100%;
+		background-position: left -31.25% top 0%;
+	}
+
+	50% {
+		background-size: 800% 100%;
+		background-position: left -49% top 0%;
+	}
+
+	100% {
+		background-size: 400% 100%;
+		background-position: left -102% top 0%;
+	}
 }
 
 .yf-insert {
@@ -334,4 +339,46 @@
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--yt-spec-10-percent-layer);
+}
+
+.yf-dropdown {
+	color: var(--yt-spec-text-primary);
+	display: none;
+	position: absolute;
+	right: 5%;
+	background-color: var(--yt-spec-menu-background);
+	border-radius: 12px;
+	top: 100%;
+	list-style: none;
+	padding: 8px 0;
+	white-space: nowrap;
+	margin-right: 24px;
+	font-family: "Roboto", "Arial", sans-serif;
+	font-size: 1.4rem;
+	line-height: 2rem;
+	font-weight: 400;
+}
+
+.yf-dd-list {
+	display: flex;
+	align-items: center;
+	min-height: var(36px, 48px);
+	cursor: pointer;
+	padding: 0 12px 0 16px;
+}
+
+.yf-dd-list:hover {
+	background-color: var(--yt-spec-10-percent-layer);
+}
+
+.yf-dd-list-icon {
+	background-color: red;
+	margin-right: 16px;
+	width: 24px;
+	height: 24px;
+}
+
+.yf-dd-item-cont {
+	margin-right: 24px;
+	padding: 8px;
 }

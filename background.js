@@ -18,15 +18,15 @@
 		//			   2) search again
 		//else 
 		//			   2) display existing
-		if(tabInfo.url.includes("youtube.com/watch")){
+		if (tabInfo.url.includes("youtube.com/watch")) {
 			if (changeInfo.status && changeInfo.status === 'loading') {
 				complete = false
 			}
-	
+
 			if (changeInfo.status && changeInfo.status === 'complete') {
 				complete = true
 			}
-	
+
 			if (changeInfo.title && complete) {
 				tabTitle = tabInfo.title
 				console.log('Detected : ' + tabInfo.title)
@@ -35,7 +35,7 @@
 					tabList.push(tabId)
 					console.log('Added.. ' + tabId + ' from  :' + tabList)
 				}
-	
+
 				if (tabList.includes(tabId) && tabInfo.title.split(' ').length > 1) {
 					chrome.tabs.sendMessage(tabId, {
 						type: "NEW_SEARCH",
@@ -49,10 +49,10 @@
 								console.log(response)
 							}
 						}
-						runInContext(tabId,getTitleFromTabTitle(tabTitle))
+						runInContext(tabId, getTitleFromTabTitle(tabTitle))
 					});
 				}
-	
+
 			}
 		}
 
@@ -67,16 +67,16 @@
 
 	});
 
-	const runInContext = async (tabId,tabTitle) => {
+	const runInContext = async (tabId, tabTitle) => {
 		//check for tabId 
 		console.log('runInContext Called')
-		
+
 		let lyrics, message, title
 		var uid = getVideoID(reqUrl)
 		var obj = await getFromStorage(uid)
 		console.log(obj)
 		const isEmpty = obj => Object.keys(obj).length === 0;
-		
+
 		let result = await chrome.scripting.executeScript({
 			target: { tabId },
 			function: () => {
@@ -86,12 +86,12 @@
 				return JSON.stringify({ val, channel });
 			}
 		});
-		
+
 		let val, channel;
-		
+
 		if (result[0]?.result) {
 			({ val, channel } = JSON.parse(result[0]?.result));
-			console.log("CHECKPOINT "+val+' - '+channel);
+			console.log("CHECKPOINT " + val + ' - ' + channel);
 		} else {
 			console.log("result is undefined");
 		}
@@ -227,13 +227,45 @@
 					menuSpan.className = "yf-menu";
 					menuSpan.textContent = "...";
 
-					menuSpan.addEventListener('onClick', () => {
+					var yfDropdown = document.createElement('div');
+					yfDropdown.id = 'yf-dropdown';
+					yfDropdown.className = 'yf-dropdown';
 
+					const ul = document.createElement('ul');
+
+					['Font Size', 'Report'].forEach((optionText, index) => {
+						const li = ul.appendChild(document.createElement('li'));
+						li.className = 'yf-dd-list';
+
+						li.appendChild(document.createElement('div')).className = 'yf-dd-list-icon';
+						li.appendChild(document.createElement('div')).className = 'yf-dd-item-cont';
+						li.lastChild.textContent = optionText;
+					});
+
+					yfDropdown.appendChild(ul);
+
+					menuSpan.addEventListener('click', () => {
+						yfDropdown.style.display = (yfDropdown.style.display === 'none' || yfDropdown.style.display === '') ? 'block' : 'none';
 					})
+
+					yfDropdown.addEventListener('click', (event) => {
+						var listItem = event.target.closest('.yf-dd-list');
+						if (listItem) {
+							var optionText = listItem.querySelector('.yf-dd-item-cont').textContent;
+							console.log('Clicked on:', optionText);
+						}
+					});
+
+					ytc.addEventListener('mousedown', (event) => {
+						if (!yfDropdown.contains(event.target) && event.target !== menuSpan) {
+							yfDropdown.style.display = 'none';
+						}
+					});
 
 					header.appendChild(logoContainerDiv);
 					header.appendChild(nowPlayingDiv);
 					header.appendChild(menuSpan);
+					header.appendChild(yfDropdown);
 
 					container.appendChild(header);
 
@@ -379,7 +411,7 @@
 		// q = q?.replace(/[\s\t\n]/g, '+') //+
 
 		if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
-			if(!q.includes(n))
+			if (!q.includes(n))
 				q += ' ' + n
 		}
 		//TODO:Append verified creator channel name only if one letter title
@@ -437,7 +469,7 @@
 	function getTitleFromTabTitle(tabTitle) {
 		tabTitle = tabTitle.split('-')[0]
 		tabTitle = tabTitle.replace(/\([^)]*\)/g, '')
-		tabTitle = tabTitle.trim().replace('YouTube','')
+		tabTitle = tabTitle.trim().replace('YouTube', '')
 		return tabTitle
 	}
 

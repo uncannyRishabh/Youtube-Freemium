@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Saira+Extra+Condensed:wght@500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald&display=swap');
 
 body {
 	height: 440px;
@@ -16,13 +16,11 @@ body {
 }
 
 .dynamic-container {
-	border-radius: 12px;
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
-	border: 1px solid rgb(225, 225, 225);
 	box-sizing: border-box;
-}
+  }  
 
 .navbar {
 	display: flex;
@@ -77,9 +75,9 @@ body {
 }
 
 .freemium {
-	font-family: 'Saira Extra Condensed', sans-serif;
+	font-family: 'Oswald', sans-serif;
 	line-height: 2.6rem;
-	font-weight: 600;
+	font-weight: 500;
 	overflow: hidden;
 	display: block;
 	max-height: 2.8rem;
@@ -88,8 +86,7 @@ body {
 	text-overflow: ellipsis;
 	white-space: normal;
 	color: var(--yt-spec-text-primary);
-	font-size: 1.75rem;
-	transform: scaleX(0.9) scaleY(1.1);
+	font-size: 1.65rem;
 	word-spacing: -5px;
 	padding: 2px;
 }
