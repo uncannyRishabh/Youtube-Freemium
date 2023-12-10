@@ -174,10 +174,26 @@
 					var progressbar = document.createElement("progress");
 					container = document.createElement('div')
 
+					//Imports
+					var linkElement1 = document.createElement('link');
+					linkElement1.rel = 'stylesheet';
+					linkElement1.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0,0';
+					document.head.appendChild(linkElement1);
+
+					var linkElement2 = document.createElement('link');
+					linkElement2.rel = 'stylesheet';
+					linkElement2.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,300,0,0';
+					document.head.appendChild(linkElement2);
+
+					var linkElement3 = document.createElement('link');
+					linkElement3.rel = 'stylesheet';
+					linkElement3.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@300&family=Saira+Extra+Condensed:wght@500&display=swap';
+					document.head.appendChild(linkElement3);
+
 					header.id = 'header'
 					header.className = 'yf-header'
 
-					container.id = 'yf-contaier'
+					container.id = 'yf-container'
 					container.className = 'yf-container'
 
 					var logoContainerDiv = document.createElement("div");
@@ -204,7 +220,7 @@
 
 					var nowPlayingSpan = document.createElement("span");
 					nowPlayingSpan.className = "now-playing";
-					nowPlayingSpan.textContent = "Now Playing -";
+					nowPlayingSpan.textContent = "Searching -";
 
 					var spaceElement = document.createElement("span");
 					spaceElement.innerHTML = "&nbsp;";
@@ -237,9 +253,62 @@
 						const li = ul.appendChild(document.createElement('li'));
 						li.className = 'yf-dd-list';
 
-						li.appendChild(document.createElement('div')).className = 'yf-dd-list-icon';
-						li.appendChild(document.createElement('div')).className = 'yf-dd-item-cont';
-						li.lastChild.textContent = optionText;
+						switch (optionText) {
+							case 'Font Size': {
+								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded yf-dd-list-icon';
+								li.firstChild.textContent = 'format_size';
+
+								li.appendChild(document.createElement('span')).className = 'yf-dd-item-cont';
+								li.lastChild.textContent = optionText;
+
+								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded sFont';
+								li.lastChild.textContent = 'text_decrease';
+
+								li.lastChild.addEventListener('click', () => {
+									var fontSizeElement = li.querySelector('#yf-font-size');
+									var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
+									var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize - 1) + 'px';
+									console.log(fontSizeElement.textContent)
+									console.log(fontSize)
+									localStorage.setItem('fontSize', fontSize);
+									if (fontSizeElement) {
+										fontSizeElement.textContent = fontSize;
+									}
+
+								});
+
+								
+								li.appendChild(document.createElement('span')).className = 'yf-fontSize';
+								li.lastChild.id = 'yf-font-size';
+								var localFontSize = localStorage.getItem('fontSize');
+								if(localFontSize)
+									li.lastChild.textContent = localFontSize
+								else
+									li.lastChild.textContent = '14px';
+
+								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded sFont';
+								li.lastChild.textContent = 'text_increase';
+
+								li.lastChild.addEventListener('click', () => {
+									var fontSizeElement = li.querySelector('#yf-font-size');
+									var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
+									var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
+									localStorage.setItem('fontSize', fontSize);
+									if (fontSizeElement) {
+										fontSizeElement.textContent = fontSize;
+									}
+								});
+								break;
+							}
+
+							case 'Report': {
+								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded yf-dd-list-icon';
+								li.firstChild.textContent = 'report'
+								li.appendChild(document.createElement('div')).className = 'yf-dd-item-cont';
+								li.lastChild.textContent = optionText;
+								break;
+							}
+						}
 					});
 
 					yfDropdown.appendChild(ul);
@@ -248,13 +317,13 @@
 						yfDropdown.style.display = (yfDropdown.style.display === 'none' || yfDropdown.style.display === '') ? 'block' : 'none';
 					})
 
-					yfDropdown.addEventListener('click', (event) => {
-						var listItem = event.target.closest('.yf-dd-list');
-						if (listItem) {
-							var optionText = listItem.querySelector('.yf-dd-item-cont').textContent;
-							console.log('Clicked on:', optionText);
-						}
-					});
+					// yfDropdown.addEventListener('click', (event) => {
+					// 	var listItem = event.target.closest('.yf-dd-list');
+					// 	if (listItem) {
+					// 		var optionText = listItem.querySelector('.yf-dd-item-cont').textContent;
+					// 		console.log('Clicked on:', optionText);
+					// 	}
+					// });
 
 					ytc.addEventListener('mousedown', (event) => {
 						if (!yfDropdown.contains(event.target) && event.target !== menuSpan) {
@@ -285,6 +354,10 @@
 					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
 					lyricContainer.className = 'lyricContainer lyric sizeM'
+
+					var localFontSize = localStorage.getItem('fontSize');
+					if(localFontSize)
+						lyricContainer.style.fontSize = localFontSize
 
 					lyrics.forEach(l => {
 						var d = document.createElement('span');
@@ -345,7 +418,9 @@
 				}
 
 				var progressbar = container.querySelector('#ytf-progressbar')
+				var nowPlaying = container.querySelector('.now-playing')
 				if (progressbar) progressbar.style.visibility = 'hidden'
+				if(nowPlaying && nowPlaying.textContent.includes('Searching')) nowPlaying.textContent = 'Now Playing -'
 
 			},
 			args: [lyrics, message, uid, title]

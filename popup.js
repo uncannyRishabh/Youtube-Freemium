@@ -34,17 +34,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Fix query builder (-channel)
 //✅Fix save/search algorithm
 //✅add clear storage
-//keep track of tabs
-//Create menu
+//✅Create menu
+//✅Make font size functional
+//Searching -> Now Playing transition
+//Add AZL
+//Make container collapsible
 //Add manual search
 //Restrict search for non music content
 //Add search with channel when not found
+//keep track of tabs
 // (upto 50 for 2 month)
 //reset data attribute
 //fix lyrics-uid-mapping (same song multiple videos)
 //create popup view
-//Add AZL
-//Make container collapsible
 //add view in section 1 when applicable
 //add tooltip
 //:visited

@@ -25,13 +25,15 @@ const messageHandler = (type, val, meta) => {
 				
 				var container = ytc.querySelector('.yf-container')
 				var progressbar = ytc.querySelector('#ytf-progressbar')
-				
+				var nowPlaying = ytc.querySelector('.now-playing')
+
 				if(container && container.getAttribute('data-uid')===uid){
 					res({ 'name': '', 'channel': '' })
 					break;
 				}
 
 				if(progressbar) progressbar.style.visibility = 'visible'
+				if(nowPlaying && nowPlaying.textContent.includes('Now Playing')) nowPlaying.textContent = 'Searching -'
 
 				let val = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();

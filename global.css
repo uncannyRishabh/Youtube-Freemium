@@ -27,17 +27,27 @@
 }
 
 .sizeS {
-	font-size: 1.25rem;
+	font-size: 12px;
 	line-height: 1.3em;
 }
 
+.sizeSM {
+	font-size: 13px;
+	line-height: 1.35em;
+}
+
 .sizeM {
-	font-size: 1.4rem;
+	font-size: 14px;
 	line-height: 1.45em;
 }
 
+.sizeML {
+	font-size: 15px;
+	line-height: 1.55em;
+}
+
 .sizeL {
-	font-size: 1.6rem;
+	font-size: 16px;
 	line-height: 1.65em;
 }
 
@@ -152,7 +162,6 @@
 	word-spacing: -5px;
 	padding: 2px;
 	user-select: none;
-
 }
 
 .now-playing-div {
@@ -168,6 +177,7 @@
 	padding-top: 6px;
 	padding-bottom: 10px;
 	white-space: nowrap;
+	user-select: none;
 }
 
 .now-playing-text {
@@ -345,7 +355,7 @@
 	color: var(--yt-spec-text-primary);
 	display: none;
 	position: absolute;
-	right: 5%;
+	right: -18px;
 	background-color: var(--yt-spec-menu-background);
 	border-radius: 12px;
 	top: 100%;
@@ -356,7 +366,8 @@
 	font-family: "Roboto", "Arial", sans-serif;
 	font-size: 1.4rem;
 	line-height: 2rem;
-	font-weight: 400;
+	font-weight: 200;
+	user-select: none;
 }
 
 .yf-dd-list {
@@ -372,7 +383,6 @@
 }
 
 .yf-dd-list-icon {
-	background-color: red;
 	margin-right: 16px;
 	width: 24px;
 	height: 24px;
@@ -380,5 +390,16 @@
 
 .yf-dd-item-cont {
 	margin-right: 24px;
-	padding: 8px;
+	padding: 8px 8px 8px 0;
+}
+
+.sFont {
+	font-size: 14px;
+	padding: 4px;
+}
+
+.yf-fontSize {
+	font-size: 13px;
+	padding: 4px;
+	border: 1px solid;
 }

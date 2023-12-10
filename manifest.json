@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "YT Freemium",
-	"version": "0.7",
+	"version": "0.85",
 	"description": "Display lyrics for youtube by @uncannyRishabh",
 	"host_permissions": [
 		"https://www.bing.com/*",
