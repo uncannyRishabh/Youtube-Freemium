@@ -2,15 +2,14 @@
 
 <h3>Features<h3>
 
+- Text Size
+- Explicit lyric filter
 - Find and display lyrics in popup or in floating manner.
 - mute ads (preserve state)
 - skip upcoming ad
 - display time saved
 - Manual search if unable to find lyrics
 - Lyrics Source: Bing
-- Text Size
-- multi tab support
-- Explicit lyric filter
 - Donate
 
 <h3>WP<h3>

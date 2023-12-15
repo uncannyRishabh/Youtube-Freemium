@@ -36,10 +36,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅add clear storage
 //✅Create menu
 //✅Make font size functional
-//Searching -> Now Playing transition
+//✅Searching -> Now Playing transition
+//Add manual search
+//Add options [clear data, explicit filter toggle, sources, skip ads, mute ads, buy coffee]
 //Add AZL
 //Make container collapsible
-//Add manual search
 //Restrict search for non music content
 //Add search with channel when not found
 //keep track of tabs

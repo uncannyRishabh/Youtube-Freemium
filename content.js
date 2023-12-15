@@ -60,4 +60,21 @@ const messageHandler = (type, val, meta) => {
 
 	})
 
+	// var input = document.querySelector('.now-playing-text-input')
+	// document.addEventListener('keydown', function(event) {
+	// 	if(!input){
+	// 		input = document.querySelector('.now-playing-text-input')
+	// 	}
+
+	// 	if(input){
+	// 		if (event.target === input) {
+	// 			console.log('Blocking key listener')
+	// 			event.stopPropagation();
+	// 			event.preventDefault();
+	// 			return;
+	// 		}
+	// 	}
+		
+	// });
+
 })();

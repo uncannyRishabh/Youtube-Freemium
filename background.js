@@ -1,17 +1,18 @@
 (() => {
-	var tabTitle = ''
+	var tabTitle = undefined
 	var reqUrl = ''
 	var complete = false
 	//storage api
 	var tabList = []
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
-		// console.log(changeInfo)
-		// console.log(tabInfo)
+		console.log(changeInfo)
+		console.log(tabInfo)
 
 		// Reload       => loading , faviconUrl , title , title , title , complete , title
 		// Navigate     => loading , complete , faviconUrl , title , 
 		// Search + Nav => loading , complete , faviconUrl , title , title
+		// Back & Forth => loading , complete , loading , complete , loading , complete
 
 		// Search   => 1) Local Storage via uid
 		//if title and channel available and not stored in local || not matching tabTitle?  
@@ -21,42 +22,41 @@
 		if (tabInfo.url.includes("youtube.com/watch")) {
 			if (changeInfo.status && changeInfo.status === 'loading') {
 				complete = false
+				tabTitle = tabInfo.title
 			}
-
 			if (changeInfo.status && changeInfo.status === 'complete') {
 				complete = true
-			}
-
-			if (changeInfo.title && complete) {
 				tabTitle = tabInfo.title
-				console.log('Detected : ' + tabInfo.title)
-				reqUrl = tabInfo.url
-				if (!tabList.includes(tabId)) {
-					tabList.push(tabId)
-					console.log('Added.. ' + tabId + ' from  :' + tabList)
-				}
+			}
+			if (changeInfo.title && complete) {
+				// main(tabInfo.title, tabInfo.url, tabId);
 
-				if (tabList.includes(tabId) && tabInfo.title.split(' ').length > 1) {
-					chrome.tabs.sendMessage(tabId, {
-						type: "NEW_SEARCH",
-						'uid': getVideoID(reqUrl)
-					}, (response) => {
-						if (chrome.runtime.lastError) {
-							console.log('Error getting');
-						}
-						if (response) {
-							if (response.name && response.channel) {
-								console.log(response)
-							}
-						}
-						runInContext(tabId, getTitleFromTabTitle(tabTitle))
-					});
-				}
-
+				
 			}
 		}
 
 	});
+
+
+	chrome.webNavigation.onHistoryStateUpdated.addListener(function (details) {
+		console.log("transitionQualifier: " + details.transitionQualifiers);
+		if (details.transitionQualifiers && details.url && details.url.includes("youtube.com/watch")) {
+			console.log("FORDWARD_BACK " + details.url);
+			if (tabTitle == undefined) {
+				chrome.tabs.get(details.tabId, function (tab) {
+					tabTitle = tab.title;
+				});
+			}
+			console.log("Tab Title:", tabTitle);
+			// main(tabTitle, details.url, details.tabId);
+		}
+	});
+
+
+	// chrome.webNavigation.onCommitted.addListener(function (details) {
+	// 	console.log('Detected : ')
+	// 	console.log(details);
+	// }, { url: [{ urlMatches: 'https://www.youtube.com/watch' }] });
 
 	chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
 		console.log(removeInfo)
@@ -67,9 +67,36 @@
 
 	});
 
+	function main(title, url, tabId) {
+		tabTitle = title;
+		console.log('Detected : ' + title);
+		reqUrl = url;
+		if (!tabList.includes(tabId)) {
+			tabList.push(tabId);
+			console.log('Added.. ' + tabId + ' from  :' + tabList);
+		}
+
+		if (tabList.includes(tabId) && title && title.split(' ').length > 1) {
+			chrome.tabs.sendMessage(tabId, {
+				type: "NEW_SEARCH",
+				'uid': getVideoID(reqUrl)
+			}, (response) => {
+				if (chrome.runtime.lastError) {
+					console.log('Error getting');
+				}
+				if (response) {
+					if (response.name && response.channel) {
+						console.log(response);
+					}
+				}
+				runInContext(tabId, getTitleFromTabTitle(tabTitle));
+			});
+		}
+	}
+
 	const runInContext = async (tabId, tabTitle) => {
 		//check for tabId 
-		console.log('runInContext Called')
+		console.log('runInContext Called : '+tabTitle)
 
 		let lyrics, message, title
 		var uid = getVideoID(reqUrl)
@@ -219,25 +246,33 @@
 					nowPlayingDiv.className = "now-playing-div";
 
 					var nowPlayingSpan = document.createElement("span");
-					nowPlayingSpan.className = "now-playing";
+					nowPlayingSpan.className = "now-playing now-playing-text";
 					nowPlayingSpan.textContent = "Searching -";
 
-					var spaceElement = document.createElement("span");
-					spaceElement.innerHTML = "&nbsp;";
+					// var spaceElement = document.createElement("span");
+					// spaceElement.innerHTML = "&nbsp;";
 
-					var tooltip = document.createElement("span");
-					tooltip.className = "tooltiptext";
-					tooltip.textContent = title;
+					// var tooltip = document.createElement("span");
+					// tooltip.className = "tooltiptext";
+					// tooltip.textContent = title;
 
-					var nowPlayingText = document.createElement("div");
-					nowPlayingText.className = "now-playing now-playing-text tooltip";
+					var nowPlayingText = document.createElement("input");
+					nowPlayingText.className = "now-playing-text-input";
 					nowPlayingText.textContent = title;
+					// nowPlayingText.appendChild(tooltip);
 
-					nowPlayingText.appendChild(tooltip);
+					var searchIcon = document.createElement("span");
+					searchIcon.className = 'material-symbols-rounded yf-search'
+					searchIcon.textContent = 'search'
+
+					searchIcon.addEventListener('click', () => {
+
+					})
 
 					nowPlayingDiv.appendChild(nowPlayingSpan);
-					nowPlayingDiv.appendChild(spaceElement);
+					// nowPlayingDiv.appendChild(spaceElement);
 					nowPlayingDiv.appendChild(nowPlayingText);
+					nowPlayingDiv.appendChild(searchIcon);
 
 					var menuSpan = document.createElement("span");
 					menuSpan.className = "yf-menu";
@@ -277,11 +312,11 @@
 
 								});
 
-								
+
 								li.appendChild(document.createElement('span')).className = 'yf-fontSize';
 								li.lastChild.id = 'yf-font-size';
 								var localFontSize = localStorage.getItem('fontSize');
-								if(localFontSize)
+								if (localFontSize)
 									li.lastChild.textContent = localFontSize
 								else
 									li.lastChild.textContent = '14px';
@@ -345,10 +380,13 @@
 					ytc.insertBefore(container, ytc.firstChild)
 				}
 
-				var npt = container.querySelector('.now-playing.now-playing-text')
+				var npt = container.querySelector('.now-playing-text-input')
 
 				if (message === 'OK') {
-					if (npt) npt.textContent = title
+					var nowPlaying = container.querySelector('.now-playing')
+					if (nowPlaying && nowPlaying.textContent.includes('Searching')) nowPlaying.textContent = 'Now Playing -'
+
+					if (npt) npt.placeholder = title
 					container.setAttribute('data-uid', uid)
 
 					lyricContainer = document.createElement('div')
@@ -356,7 +394,7 @@
 					lyricContainer.className = 'lyricContainer lyric sizeM'
 
 					var localFontSize = localStorage.getItem('fontSize');
-					if(localFontSize)
+					if (localFontSize)
 						lyricContainer.style.fontSize = localFontSize
 
 					lyrics.forEach(l => {
@@ -380,7 +418,7 @@
 					}
 				}
 				else if (message === 'NOK') {
-					if (npt) npt.textContent = title
+					if (npt) npt.placeholder = title
 					container.setAttribute('data-uid', uid)
 
 					var notFoundDiv = document.createElement('div');
@@ -405,7 +443,7 @@
 					}
 				}
 				else {
-					if (npt) npt.textContent = title
+					if (npt) npt.placeholder = title
 					container.removeAttribute('data-uid')
 
 					console.log('Removing..')
@@ -418,9 +456,7 @@
 				}
 
 				var progressbar = container.querySelector('#ytf-progressbar')
-				var nowPlaying = container.querySelector('.now-playing')
 				if (progressbar) progressbar.style.visibility = 'hidden'
-				if(nowPlaying && nowPlaying.textContent.includes('Searching')) nowPlaying.textContent = 'Now Playing -'
 
 			},
 			args: [lyrics, message, uid, title]
@@ -428,6 +464,7 @@
 
 
 	}
+
 
 	function removeView(tabId) {
 		chrome.scripting.executeScript({
