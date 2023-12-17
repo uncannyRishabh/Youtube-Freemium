@@ -33,7 +33,7 @@ const messageHandler = (type, val, meta) => {
 				}
 
 				if(progressbar) progressbar.style.visibility = 'visible'
-				if(nowPlaying && nowPlaying.textContent.includes('Now Playing')) nowPlaying.textContent = 'Searching -'
+				if(nowPlaying) nowPlaying.textContent = 'Searching -'
 
 				let val = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
@@ -59,22 +59,5 @@ const messageHandler = (type, val, meta) => {
 		}
 
 	})
-
-	// var input = document.querySelector('.now-playing-text-input')
-	// document.addEventListener('keydown', function(event) {
-	// 	if(!input){
-	// 		input = document.querySelector('.now-playing-text-input')
-	// 	}
-
-	// 	if(input){
-	// 		if (event.target === input) {
-	// 			console.log('Blocking key listener')
-	// 			event.stopPropagation();
-	// 			event.preventDefault();
-	// 			return;
-	// 		}
-	// 	}
-		
-	// });
 
 })();

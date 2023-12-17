@@ -2,6 +2,7 @@
 	var tabTitle = undefined
 	var reqUrl = ''
 	var complete = false
+	var process = false
 	//storage api
 	var tabList = []
 
@@ -22,33 +23,47 @@
 		if (tabInfo.url.includes("youtube.com/watch")) {
 			if (changeInfo.status && changeInfo.status === 'loading') {
 				complete = false
-				tabTitle = tabInfo.title
+				console.log('complete = false')
+				if (tabInfo.title != 'YouTube') {
+					tabTitle = tabInfo.title
+				}
+
 			}
 			if (changeInfo.status && changeInfo.status === 'complete') {
 				complete = true
-				tabTitle = tabInfo.title
+				console.log('complete = true')
+				if (tabInfo.title != 'YouTube') {
+					tabTitle = tabInfo.title
+				}
 			}
 			if (changeInfo.title && complete) {
-				// main(tabInfo.title, tabInfo.url, tabId);
+				if (process != true) {
+					complete = false
+					console.log('CALL !!! MAIN FROM onUPDATE')
+					main(tabInfo.title, tabInfo.url, tabId);
+				}
 
-				
 			}
 		}
 
 	});
 
-
 	chrome.webNavigation.onHistoryStateUpdated.addListener(function (details) {
 		console.log("transitionQualifier: " + details.transitionQualifiers);
 		if (details.transitionQualifiers && details.url && details.url.includes("youtube.com/watch")) {
-			console.log("FORDWARD_BACK " + details.url);
-			if (tabTitle == undefined) {
-				chrome.tabs.get(details.tabId, function (tab) {
-					tabTitle = tab.title;
-				});
+			if (details.transitionQualifiers.includes('forward_back')) {
+				if (tabTitle == undefined) {
+					chrome.tabs.get(details.tabId, function (tab) {
+						console.log(tab)
+						if (tab.title != 'Youtube') tabTitle = tab.title;
+					});
+				}
+				if (process != true) {
+					complete = false;
+					console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
+					main(tabTitle, details.url, details.tabId);
+				}
 			}
-			console.log("Tab Title:", tabTitle);
-			// main(tabTitle, details.url, details.tabId);
 		}
 	});
 
@@ -68,6 +83,7 @@
 	});
 
 	function main(title, url, tabId) {
+		process = true
 		tabTitle = title;
 		console.log('Detected : ' + title);
 		reqUrl = url;
@@ -96,9 +112,11 @@
 
 	const runInContext = async (tabId, tabTitle) => {
 		//check for tabId 
-		console.log('runInContext Called : '+tabTitle)
+		//check if tabId title match ? (source of truth > title)
+		//
+		console.log('runInContext Called : ' + tabTitle)
 
-		let lyrics, message, title
+		let lyrics, message, title = ''
 		var uid = getVideoID(reqUrl)
 		var obj = await getFromStorage(uid)
 		console.log(obj)
@@ -106,7 +124,7 @@
 
 		let result = await chrome.scripting.executeScript({
 			target: { tabId },
-			function: () => {
+			function: () => { 
 				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
 				console.log('Title : ' + val + ' Channel : ' + channel)
@@ -123,7 +141,7 @@
 			console.log("result is undefined");
 		}
 
-		if (isEmpty(obj) || obj[uid]?.title && obj[uid]?.title != val) {
+		if (!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) {
 			var resp = await (await getLyrics(val, channel)).text();
 
 			result = await chrome.scripting.executeScript({
@@ -179,10 +197,13 @@
 				saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
 			}
 		}
-		else {
+		else if (!isEmpty(obj)) {
 			lyrics = obj[uid]?.lyrics
 			message = obj[uid]?.message
 			title = obj[uid]?.title
+		}
+		else if (isEmpty(obj)) {
+			message = 'NOK'
 		}
 
 		chrome.scripting.executeScript({
@@ -384,7 +405,7 @@
 
 				if (message === 'OK') {
 					var nowPlaying = container.querySelector('.now-playing')
-					if (nowPlaying && nowPlaying.textContent.includes('Searching')) nowPlaying.textContent = 'Now Playing -'
+					if (nowPlaying) nowPlaying.textContent = 'Now Playing -'
 
 					if (npt) npt.placeholder = title
 					container.setAttribute('data-uid', uid)
@@ -462,7 +483,7 @@
 			args: [lyrics, message, uid, title]
 		});
 
-
+		process = false;
 	}
 
 
