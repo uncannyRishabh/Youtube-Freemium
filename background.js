@@ -10,59 +10,47 @@
 		console.log(changeInfo)
 		console.log(tabInfo)
 
-		// Reload       => loading , faviconUrl , title , title , title , complete , title
-		// Navigate     => loading , complete , faviconUrl , title , 
-		// Search + Nav => loading , complete , faviconUrl , title , title
-		// Back & Forth => loading , complete , loading , complete , loading , complete
-
 		// Search   => 1) Local Storage via uid
 		//if title and channel available and not stored in local || not matching tabTitle?  
 		//			   2) search again
 		//else 
 		//			   2) display existing
+		
 		if (tabInfo.url.includes("youtube.com/watch")) {
 			if (changeInfo.status && changeInfo.status === 'loading') {
 				complete = false
-				console.log('complete = false')
-				if (tabInfo.title != 'YouTube') {
-					tabTitle = tabInfo.title
-				}
-
 			}
 			if (changeInfo.status && changeInfo.status === 'complete') {
-				complete = true
-				console.log('complete = true')
-				if (tabInfo.title != 'YouTube') {
-					tabTitle = tabInfo.title
+				// console.log('complete = true')
+				// if (process != true) {
+					// console.log('CALL !!! MAIN FROM onUPDATE')
+					// main(tabInfo.title, tabInfo.url, tabId);
+					// complete = false
+					// }
 				}
-			}
-			if (changeInfo.title && complete) {
-				if (process != true) {
-					complete = false
+				if(changeInfo.title) {
+					console.log('complete = true')
 					console.log('CALL !!! MAIN FROM onUPDATE')
+					tabTitle = tabInfo.title
 					main(tabInfo.title, tabInfo.url, tabId);
 				}
-
 			}
-		}
-
-	});
+			
+		});
 
 	chrome.webNavigation.onHistoryStateUpdated.addListener(function (details) {
-		console.log("transitionQualifier: " + details.transitionQualifiers);
-		if (details.transitionQualifiers && details.url && details.url.includes("youtube.com/watch")) {
-			if (details.transitionQualifiers.includes('forward_back')) {
-				if (tabTitle == undefined) {
-					chrome.tabs.get(details.tabId, function (tab) {
-						console.log(tab)
-						if (tab.title != 'Youtube') tabTitle = tab.title;
-					});
-				}
-				if (process != true) {
-					complete = false;
-					console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
-					main(tabTitle, details.url, details.tabId);
-				}
+		console.log("transitionQualifier: " + details.transitionQualifiers, details);
+		if (details.url && details.url.includes("youtube.com/watch")) {
+			// if (tabTitle == undefined) {
+				chrome.tabs.get(details.tabId, function (tab) {
+					console.log(tab)
+					if (tab.title != 'Youtube') tabTitle = tab.title;
+				});
+			// }
+			if (process != true) {
+				complete = true;
+				// console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
+				// main(tabTitle, details.url, details.tabId);
 			}
 		}
 	});
@@ -84,7 +72,6 @@
 
 	function main(title, url, tabId) {
 		process = true
-		tabTitle = title;
 		console.log('Detected : ' + title);
 		reqUrl = url;
 		if (!tabList.includes(tabId)) {
@@ -141,7 +128,7 @@
 			console.log("result is undefined");
 		}
 
-		if (!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) {
+		if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
 			var resp = await (await getLyrics(val, channel)).text();
 
 			result = await chrome.scripting.executeScript({
@@ -187,8 +174,14 @@
 			});
 
 			let resultObject = JSON.parse(result[0]?.result);
-			lyrics = resultObject.lyrics;
-			message = resultObject.message;
+			console.log('search result : ',resultObject)
+			if(resultObject.lyrics === null){
+				message = 'NOK'
+			}
+			else{
+				lyrics = resultObject.lyrics ? resultObject.lyrics : '';
+				message = resultObject.message ? resultObject.message : '';
+			}
 			var scroll = 0
 			var timestamp = Date.now()
 			title = val
@@ -201,9 +194,6 @@
 			lyrics = obj[uid]?.lyrics
 			message = obj[uid]?.message
 			title = obj[uid]?.title
-		}
-		else if (isEmpty(obj)) {
-			message = 'NOK'
 		}
 
 		chrome.scripting.executeScript({
@@ -483,7 +473,6 @@
 			args: [lyrics, message, uid, title]
 		});
 
-		process = false;
 	}
 
 
