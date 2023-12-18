@@ -3,6 +3,7 @@
 	var reqUrl = ''
 	var complete = false
 	var process = false
+	var navigation = false
 	//storage api
 	var tabList = []
 
@@ -19,19 +20,19 @@
 		if (tabInfo.url.includes("youtube.com/watch")) {
 			if (changeInfo.status && changeInfo.status === 'loading') {
 				complete = false
+				navigation = false
 			}
 			if (changeInfo.status && changeInfo.status === 'complete') {
-				// console.log('complete = true')
-				// if (process != true) {
-				// console.log('CALL !!! MAIN FROM onUPDATE')
-				// main(tabInfo.title, tabInfo.url, tabId);
-				// complete = false
-				// }
+				if (navigation) {
+					navigation = false
+					tabTitle = tabInfo.title
+					console.log('CALL !!! MAIN FROM onUPDATE : forward_back')
+					main(tabInfo.title, tabInfo.url, tabId);
+				}
 			}
 			if (changeInfo.title) {
-				console.log('complete = true')
-				console.log('CALL !!! MAIN FROM onUPDATE')
 				tabTitle = tabInfo.title
+				console.log('CALL !!! MAIN FROM onUPDATE')
 				main(tabInfo.title, tabInfo.url, tabId);
 			}
 		}
@@ -49,6 +50,9 @@
 				complete = true;
 				// console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
 				// main(tabTitle, details.url, details.tabId);
+			}
+			if (details.transitionQualifiers.includes('forward_back')){
+				navigation = true
 			}
 		}
 	});
