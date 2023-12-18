@@ -15,7 +15,7 @@
 		//			   2) search again
 		//else 
 		//			   2) display existing
-		
+
 		if (tabInfo.url.includes("youtube.com/watch")) {
 			if (changeInfo.status && changeInfo.status === 'loading') {
 				complete = false
@@ -23,31 +23,29 @@
 			if (changeInfo.status && changeInfo.status === 'complete') {
 				// console.log('complete = true')
 				// if (process != true) {
-					// console.log('CALL !!! MAIN FROM onUPDATE')
-					// main(tabInfo.title, tabInfo.url, tabId);
-					// complete = false
-					// }
-				}
-				if(changeInfo.title) {
-					console.log('complete = true')
-					console.log('CALL !!! MAIN FROM onUPDATE')
-					tabTitle = tabInfo.title
-					main(tabInfo.title, tabInfo.url, tabId);
-				}
+				// console.log('CALL !!! MAIN FROM onUPDATE')
+				// main(tabInfo.title, tabInfo.url, tabId);
+				// complete = false
+				// }
 			}
-			
-		});
+			if (changeInfo.title) {
+				console.log('complete = true')
+				console.log('CALL !!! MAIN FROM onUPDATE')
+				tabTitle = tabInfo.title
+				main(tabInfo.title, tabInfo.url, tabId);
+			}
+		}
+
+	});
 
 	chrome.webNavigation.onHistoryStateUpdated.addListener(function (details) {
 		console.log("transitionQualifier: " + details.transitionQualifiers, details);
 		if (details.url && details.url.includes("youtube.com/watch")) {
-			// if (tabTitle == undefined) {
-				chrome.tabs.get(details.tabId, function (tab) {
-					console.log(tab)
-					if (tab.title != 'Youtube') tabTitle = tab.title;
-				});
-			// }
-			if (process != true) {
+			chrome.tabs.get(details.tabId, function (tab) {
+				console.log(tab)
+				if (tab.title != 'Youtube') tabTitle = tab.title;
+			});
+			if (details.frameId === 0 && process != true) {
 				complete = true;
 				// console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
 				// main(tabTitle, details.url, details.tabId);
@@ -111,7 +109,7 @@
 
 		let result = await chrome.scripting.executeScript({
 			target: { tabId },
-			function: () => { 
+			function: () => {
 				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
 				console.log('Title : ' + val + ' Channel : ' + channel)
@@ -140,7 +138,7 @@
 					const parser = new DOMParser();
 					const doc = parser.parseFromString(resp, 'text/html');
 					// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-					const lContainer = doc.querySelector('#lyric_body > .lyrics')
+					var lContainer = doc.querySelector('#lyric_body > .lyrics')
 					const b_TopTitle = doc.querySelector('.b_topTitle')
 
 					//Alternate container
@@ -174,11 +172,11 @@
 			});
 
 			let resultObject = JSON.parse(result[0]?.result);
-			console.log('search result : ',resultObject)
-			if(resultObject.lyrics === null){
+			console.log('search result : ', resultObject)
+			if (resultObject.lyrics === null) {
 				message = 'NOK'
 			}
-			else{
+			else {
 				lyrics = resultObject.lyrics ? resultObject.lyrics : '';
 				message = resultObject.message ? resultObject.message : '';
 			}
