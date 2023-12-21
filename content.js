@@ -11,7 +11,7 @@ const messageHandler = (type, val, meta) => {
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		//NEW_SEARCH
-		const { type, uid } = obj;
+		const { type, val } = obj;
 		// console.log(obj)
 
 		switch (type) {
@@ -27,7 +27,7 @@ const messageHandler = (type, val, meta) => {
 				var progressbar = ytc.querySelector('#ytf-progressbar')
 				var nowPlaying = ytc.querySelector('.now-playing')
 
-				if(container && container.getAttribute('data-uid')===uid){
+				if(container && container.getAttribute('data-uid')===val){
 					res({ 'name': '', 'channel': '' })
 					break;
 				}
@@ -35,12 +35,12 @@ const messageHandler = (type, val, meta) => {
 				if(progressbar) progressbar.style.visibility = 'visible'
 				if(nowPlaying) nowPlaying.textContent = 'Searching -'
 
-				let val = document.querySelector('#above-the-fold > #title')?.textContent.trim();
+				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-				console.log(val + " - " + channel)
+				console.log(title + " - " + channel)
 
-				if (val && channel) {
-					res({ 'name': val, 'channel': channel })
+				if (title && channel) {
+					res({ 'name': title, 'channel': channel })
 				}
 				else {
 					res({ 'name': '', 'channel': '' })

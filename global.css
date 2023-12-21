@@ -228,7 +228,9 @@
     right: 5px;
     transform: translateY(-50%);
 	cursor: pointer;
+	user-select: none;
 	visibility: hidden;
+	background-color: var(--yt-spec-brand-background-primary);
 }
 
 .now-playing-text-input:hover {
@@ -240,7 +242,7 @@
 	visibility: visible;
 }
 
-.yf-search:focus {
+.yf-search:hover {
 	visibility: visible;
 }
 

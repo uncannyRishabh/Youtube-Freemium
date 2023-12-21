@@ -51,17 +51,11 @@
 				// console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
 				// main(tabTitle, details.url, details.tabId);
 			}
-			if (details.transitionQualifiers.includes('forward_back')){
+			if (details.transitionQualifiers.includes('forward_back')) {
 				navigation = true
 			}
 		}
 	});
-
-
-	// chrome.webNavigation.onCommitted.addListener(function (details) {
-	// 	console.log('Detected : ')
-	// 	console.log(details);
-	// }, { url: [{ urlMatches: 'https://www.youtube.com/watch' }] });
 
 	chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
 		console.log(removeInfo)
@@ -84,7 +78,7 @@
 		if (tabList.includes(tabId) && title && title.split(' ').length > 1) {
 			chrome.tabs.sendMessage(tabId, {
 				type: "NEW_SEARCH",
-				'uid': getVideoID(reqUrl)
+				'val': getVideoID(reqUrl)
 			}, (response) => {
 				if (chrome.runtime.lastError) {
 					console.log('Error getting');
@@ -209,7 +203,8 @@
 					if (lyricContainer) {
 						container.removeChild(container.lastChild)
 					}
-				} else {
+				}
+				else {
 					var header = document.createElement('div')
 					var progressbar = document.createElement("progress");
 					container = document.createElement('div')
@@ -270,16 +265,30 @@
 					// tooltip.textContent = title;
 
 					var nowPlayingText = document.createElement("input");
+					nowPlayingText.id = "now-playing-text-input";
 					nowPlayingText.className = "now-playing-text-input";
 					nowPlayingText.textContent = title;
 					// nowPlayingText.appendChild(tooltip);
 
 					var searchIcon = document.createElement("span");
+					searchIcon.id = 'yf-search'
 					searchIcon.className = 'material-symbols-rounded yf-search'
 					searchIcon.textContent = 'search'
 
 					searchIcon.addEventListener('click', () => {
-
+						var input =  document.querySelector('#now-playing-text-input')
+						var text = input?.value.trim();
+						console.log('Search '+text)
+						validateAndSearch(text)
+						var obj = {
+							'type' : 'NEW_SEARCH',
+							'val' : [text]
+						}
+						chrome.runtime.sendMessage(obj, async (response) => {
+							if (chrome.runtime.lastError)
+								console.log('Error getting');
+							if (response) console.log(response)
+						});
 					})
 
 					nowPlayingDiv.appendChild(nowPlayingSpan);
