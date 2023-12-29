@@ -113,14 +113,6 @@ body {
 	overflow: hidden;
 }
 
-.replaceable-container {
-	height: 100%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-
-}
-
 .yf-menu {
 	top: calc(50% - 2px);
 	right: 5%;
@@ -130,4 +122,29 @@ body {
 	color: var(--yt-spec-text-secondary);
 	transform: rotate(90deg) translate(-50%, -50%);
 	user-select: none;
+}
+
+.replaceable-container {
+	height: 100%;
+	/* display: flex;
+	flex-direction: column;
+	align-items: center; */
+
+}
+
+.yf-listMenu {
+	box-sizing: border-box;
+	width: 100%;
+    padding: 12px 8%;
+	
+}
+
+.yf-menuText {
+	color: var(--yt-spec-text-secondary);
+	user-select: none;
+}
+
+.buyMeKofi {
+	text-decoration: none;
+
 }

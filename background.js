@@ -185,6 +185,9 @@
 			if (message === 'OK' && lyrics && lyrics.length > 0) {
 				saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
 			}
+			else if(message === 'NOK'){
+
+			}
 		}
 		else if (!isEmpty(obj)) {
 			lyrics = obj[uid]?.lyrics
@@ -279,7 +282,7 @@
 						var input =  document.querySelector('#now-playing-text-input')
 						var text = input?.value.trim();
 						console.log('Search '+text)
-						validateAndSearch(text)
+						// validateAndSearch(text)
 						var obj = {
 							'type' : 'NEW_SEARCH',
 							'val' : [text]
@@ -442,6 +445,9 @@
 				else if (message === 'NOK') {
 					if (npt) npt.placeholder = title
 					container.setAttribute('data-uid', uid)
+
+					var nowPlaying = container.querySelector('.now-playing')
+					if (nowPlaying) nowPlaying.textContent = 'Now Playing -'
 
 					var notFoundDiv = document.createElement('div');
 					notFoundDiv.id = 'notFound'
