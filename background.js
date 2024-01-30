@@ -8,8 +8,8 @@
 	var tabList = []
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
-		console.log(changeInfo)
-		console.log(tabInfo)
+		// console.log(changeInfo)
+		// console.log(tabInfo)
 
 		// Search   => 1) Local Storage via uid
 		//if title and channel available and not stored in local || not matching tabTitle?  
@@ -40,10 +40,10 @@
 	});
 
 	chrome.webNavigation.onHistoryStateUpdated.addListener(function (details) {
-		console.log("transitionQualifier: " + details.transitionQualifiers, details);
+		// console.log("transitionQualifier: " + details.transitionQualifiers, details);
 		if (details.url && details.url.includes("youtube.com/watch")) {
 			chrome.tabs.get(details.tabId, function (tab) {
-				console.log(tab)
+				// console.log(tab)
 				if (tab.title != 'Youtube') tabTitle = tab.title;
 			});
 			if (details.frameId === 0 && process != true) {
@@ -58,7 +58,7 @@
 	});
 
 	chrome.tabs.onRemoved.addListener(function (tabId, removeInfo) {
-		console.log(removeInfo)
+		// console.log(removeInfo)
 		if (tabList.includes(tabId)) {
 			tabList = tabList.filter(item => item !== tabId);
 			console.log('Detached.. ' + tabId + ' from  :' + tabList)
@@ -268,36 +268,35 @@
 					// tooltip.textContent = title;
 
 					var nowPlayingText = document.createElement("input");
+					nowPlayingText.setAttribute("autocomplete", "off");					
 					nowPlayingText.id = "now-playing-text-input";
 					nowPlayingText.className = "now-playing-text-input";
 					nowPlayingText.textContent = title;
 					// nowPlayingText.appendChild(tooltip);
 
-					var searchIcon = document.createElement("span");
-					searchIcon.id = 'yf-search'
-					searchIcon.className = 'material-symbols-rounded yf-search'
-					searchIcon.textContent = 'search'
+					// var searchIcon = document.createElement("span");
+					// searchIcon.id = 'yf-search'
+					// searchIcon.className = 'material-symbols-rounded yf-search'
+					// searchIcon.textContent = 'search'
 
-					searchIcon.addEventListener('click', () => {
-						var input =  document.querySelector('#now-playing-text-input')
-						var text = input?.value.trim();
-						console.log('Search '+text)
-						// validateAndSearch(text)
-						var obj = {
-							'type' : 'NEW_SEARCH',
-							'val' : [text]
-						}
-						chrome.runtime.sendMessage(obj, async (response) => {
-							if (chrome.runtime.lastError)
-								console.log('Error getting');
-							if (response) console.log(response)
-						});
-					})
+					// searchIcon.addEventListener('click', () => {
+					// 	var input =  document.querySelector('#now-playing-text-input')
+					// 	var text = input?.value.trim();
+					// 	// validateAndSearch(text)
+					// 	var obj = {
+					// 		'type' : 'NEW_SEARCH',
+					// 		'val' : [text]
+					// 	}
+					// 	chrome.runtime.sendMessage(obj, async (response) => {
+					// 		if (chrome.runtime.lastError)
+					// 			console.log('Error getting');
+					// 		if (response) console.log(response)
+					// 	});
+					// })
 
 					nowPlayingDiv.appendChild(nowPlayingSpan);
-					// nowPlayingDiv.appendChild(spaceElement);
 					nowPlayingDiv.appendChild(nowPlayingText);
-					nowPlayingDiv.appendChild(searchIcon);
+					// nowPlayingDiv.appendChild(searchIcon);
 
 					var menuSpan = document.createElement("span");
 					menuSpan.className = "yf-menu";
@@ -383,6 +382,7 @@
 					// 		var optionText = listItem.querySelector('.yf-dd-item-cont').textContent;
 					// 		console.log('Clicked on:', optionText);
 					// 	}
+					//how to
 					// });
 
 					ytc.addEventListener('mousedown', (event) => {
