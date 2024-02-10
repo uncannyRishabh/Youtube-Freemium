@@ -1,8 +1,9 @@
 @import url('https://fonts.googleapis.com/css2?family=Oswald&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald&display=swap');
 
 body {
-	height: 440px;
-	width: 380px;
+	height: 340px;
+	width: 340px;
 	margin: 0;
 	padding: 0;
 	background: none;
@@ -70,40 +71,30 @@ body {
 	text-align: center;
 	font-family: "Roboto", "Arial";
 	font-weight: 600;
-	font-size: 1.2rem;
+	font-size: 1rem;
 	z-index: 1;
 }
 
 .freemium {
-	font-family: 'Oswald', sans-serif;
-	line-height: 2.6rem;
-	font-weight: 500;
-	overflow: hidden;
-	display: block;
-	max-height: 2.8rem;
-	-webkit-line-clamp: 1;
-	-webkit-box-orient: vertical;
-	text-overflow: ellipsis;
-	white-space: normal;
-	color: var(--yt-spec-text-primary);
-	font-size: 1.65rem;
-	word-spacing: -5px;
-	padding: 2px;
+	font-family: Roboto, sans-serif;
+    line-height: 2.8rem;
+    font-weight: 600;
+    display: block;
+    max-height: 2.8rem;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    color: #f1f1f1;
+    font-size: 1.4rem;
+    transform: scaleX(0.85) scaleY(1.1);
+    word-spacing: -5px;
+    user-select: none;
+    overflow: hidden;
+    white-space: normal;
 }
 
 .now-playing-div {
 	display: flex;
-}
-
-.now-playing {
-	color: var(--yt-spec-text-secondary);
-	font-family: "YouTube Sans", "Roboto", "Arial";
-	font-size: 1.4rem;
-	font-weight: 400;
-	line-height: 1.5rem;
-	padding-top: 6px;
-	padding-bottom: 10px;
-	white-space: nowrap;
 }
 
 .now-playing-text {
@@ -126,6 +117,7 @@ body {
 
 .replaceable-container {
 	height: 100%;
+	padding-inline: 6px;
 	/* display: flex;
 	flex-direction: column;
 	align-items: center; */
@@ -134,8 +126,11 @@ body {
 
 .yf-listMenu {
 	box-sizing: border-box;
-	width: 100%;
+    width: 100%;
     padding: 12px 8%;
+    border: 1px solid #f1f1f1;
+    border-radius: 6px;
+    margin-top: 8px;
 	
 }
 
@@ -145,6 +140,11 @@ body {
 }
 
 .buyMeKofi {
+	color: #f1f1f1;
 	text-decoration: none;
 
+}
+
+.buyMeKofi:visited {
+	color: #f1f1f1;
 }
