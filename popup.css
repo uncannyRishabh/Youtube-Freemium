@@ -21,15 +21,14 @@ body {
 	display: flex;
 	flex-direction: column;
 	box-sizing: border-box;
-  }  
+}
 
 .navbar {
 	display: flex;
 	flex-direction: column;
 	position: relative;
 	box-sizing: border-box;
-	padding: 12px 16px 0 16px;
-	border-radius: 12px 12px 0px 0px;
+	padding: 8px 16px 0 16px;
 	background-color: #212121;
 }
 
@@ -67,34 +66,35 @@ body {
 
 .yf-f {
 	width: var(--width);
-    color: #fff;
-    text-align: center;
-    font-family: "Catamaran", sans-serif;
-    font-optical-sizing: auto;
-    font-weight: 700;
-    font-size: .87rem;
-    z-index: 1;
+	color: #fff;
+	text-align: center;
+	font-family: "Catamaran", sans-serif;
+	font-optical-sizing: auto;
+	font-weight: 700;
+	font-size: .87rem;
+	z-index: 1;
 	transform: translateY(-1px);
 }
 
 .freemium {
 	font-family: Oswald, sans-serif;
-    font-optical-sizing: auto;
-    line-height: 2.8rem;
-    font-weight: 600;
-    display: block;
-    max-height: 2.8rem;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
-    text-overflow: ellipsis;
-    color: #f1f1f1;
-    font-size: 1.25rem;
-    transform: scaleX(0.95) scaleY(1);
-    word-spacing: -5px;
-    user-select: none;
-    overflow: hidden;
-    white-space: normal;
-    margin-left: 4px;
+	font-optical-sizing: auto;
+	line-height: 2.8rem;
+	font-weight: 600;
+	display: block;
+	max-height: 2.8rem;
+	-webkit-line-clamp: 1;
+	-webkit-box-orient: vertical;
+	text-overflow: ellipsis;
+	color: #f1f1f1;
+	font-size: 1.25rem;
+	transform: scaleX(1.05) scaleY(1);
+	word-spacing: -5px;
+	user-select: none;
+	overflow: hidden;
+	white-space: normal;
+	margin-left: 6px;
+	margin-bottom: 1px;
 }
 
 .now-playing-div {
@@ -130,15 +130,20 @@ body {
 
 .yf-listMenu {
 	box-sizing: border-box;
-    width: 100%;
-    padding: 10px 4%;
-    border: 1px solid #212121;
-    border-radius: 6px;
-    margin-top: 8px;
-    display: flex;
-    align-items: center;
-    column-gap: 12px;
-    background-color: #212121;
+	width: 100%;
+	padding: 10px 4%;
+	border: 1px solid #212121;
+	border-radius: 6px;
+	margin-top: 8px;
+	display: flex;
+	align-items: center;
+	column-gap: 12px;
+	background-color: #212121;
+	transition: border .2s linear;
+}
+
+.yf-listMenu:hover {
+	border: 1px solid #e21;
 }
 
 .yf-menuText {
@@ -148,14 +153,37 @@ body {
 }
 
 .yf-coming-soon {
-	color: #f1f1f1;
-	text-decoration: none;
+	filter: blur(1.8px);
 }
 
 .buyMeKofi {
-	color: #f1f1f1;
-	text-decoration: none;
+	font-family: "Nanum Pen Script", cursive;
+    font-size: 20px;
+    position: absolute;
+    color: #f1f1f1;
+    text-decoration: none;
+    bottom: 10px;
+    left: 50%;
+    transform: translate(-50%, 0%);
+    background: conic-gradient(from 180deg at 50% 50%, #B9BCFF 0deg, #FF0000 181.8deg, #F8CF9F 360deg);
+    /* background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); */
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: hue 3s infinite linear;
+    -webkit-animation: hue 9s infinite linear;
+}
 
+@keyframes hue {
+	from {
+		filter: hue-rotate(0deg);
+		-webkit-filter: hue-rotate(0deg);
+	}
+
+	to {
+		filter: hue-rotate(-360deg);
+		-webkit-filter: hue-rotate(-360deg);
+	}
 }
 
 .buyMeKofi:visited {
@@ -164,4 +192,12 @@ body {
 
 .yf-font {
 	font-size: 22px;
+}
+
+.material-symbols-outlined {
+	font-variation-settings:
+		'FILL' 0,
+		'wght' 300,
+		'GRAD' -25,
+		'opsz' 24
 }
