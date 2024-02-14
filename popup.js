@@ -13,7 +13,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 	})
 })
 
-//********************TODO********************
+//****************************TODO****************************
 //✅poc
 //✅Add comms
 //✅Create popup layout
@@ -41,14 +41,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 //Restrict search for non music content
 //Add options [clear data, explicit filter toggle, sources, skip ads, mute ads, buy coffee]
 //Add AZL
+//add full screen support
+//add view in section 1 when applicable
 //Make container collapsible
 //Add search with channel when not found
 //keep track of tabs
 // (upto 50 for 2 month)
 //reset data attribute
 //fix lyrics-uid-mapping (same song multiple videos)
-//create popup view
-//add view in section 1 when applicable
 //add tooltip
 //:visited
 //handle yt -> other site navigation
