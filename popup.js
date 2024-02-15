@@ -1,11 +1,19 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
 	var toggleExplicit = document.querySelector('#explicitFilter')
+	var toggleExplicitText = document.querySelector('#explicitFilter > .yf-menuText')
 	var clearData = document.querySelector('#clearData')
-	var skipAds = document.querySelector('#skipAds')
+	var clearDataText = document.querySelector('#clearData > .yf-menuText')
+	var skipAds = document.querySelector('#skipAds > .yf-menuText')
+	var skipAdsText = document.querySelector('#skipAds > .yf-menuText')
 
 	toggleExplicit.addEventListener('click', () => {
-		
+		if(toggleExplicitText.textContent === 'Disable explicit lyrics'){
+			toggleExplicitText.textContent = 'Enable explicit lyrics'
+		}
+		else if(toggleExplicitText.textContent === 'Enable explicit lyrics'){
+			toggleExplicitText.textContent = 'Disable explicit lyrics'
+		}
 	})
 
 	clearData.addEventListener('click', () => {

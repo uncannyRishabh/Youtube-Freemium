@@ -140,6 +140,7 @@ body {
 	column-gap: 12px;
 	background-color: #212121;
 	transition: border .2s linear;
+	user-select: none;
 }
 
 .yf-listMenu:hover {
@@ -154,7 +155,6 @@ body {
 .yf-tooltip::before,
 .yf-tooltip::after {
 	--scale: 0;
-
 	position: absolute;
 	top: 1rem;
     left: 50%;
