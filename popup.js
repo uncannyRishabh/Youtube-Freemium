@@ -1,7 +1,14 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
-	var cd = document.querySelector('#clearData')
-	cd.addEventListener('click', () => {
+	var toggleExplicit = document.querySelector('#explicitFilter')
+	var clearData = document.querySelector('#clearData')
+	var skipAds = document.querySelector('#skipAds')
+
+	toggleExplicit.addEventListener('click', () => {
+		
+	})
+
+	clearData.addEventListener('click', () => {
 		console.log('Clear...')
 		chrome.storage.local.clear(function () {
 			if (chrome.runtime.lastError) {
@@ -11,6 +18,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 			}
 		  });
 	})
+
 })
 
 //****************************TODO****************************

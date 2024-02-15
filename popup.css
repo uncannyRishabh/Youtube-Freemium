@@ -146,6 +146,38 @@ body {
 	border: 1px solid #e21;
 }
 
+.yf-tooltip {
+	--scale: 0;
+	position: relative;
+}
+
+.yf-tooltip::before,
+.yf-tooltip::after {
+	--scale: 0;
+
+	position: absolute;
+	top: 1rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%) scale(var(--scale));
+    transition: 150ms transform;
+}
+
+.yf-tooltip::before {
+	content: attr(data-tooltip);
+    color: white;
+    padding: .6rem .9rem;
+    border-radius: .4rem;
+    font-size: 12px;
+    text-align: center;
+    width: max-content;
+    max-width: 100%;
+    background: #333;
+}
+
+.yf-tooltip:hover::before {
+	--scale: 1;
+}
+
 .yf-menuText {
 	color: var(--yt-spec-text-secondary);
 	user-select: none;
