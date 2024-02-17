@@ -185,7 +185,7 @@ body {
 }
 
 .yf-coming-soon {
-	filter: blur(1.8px);
+	filter: blur(1.5px);
 }
 
 .buyMeKofi {
@@ -197,13 +197,12 @@ body {
     bottom: 10px;
     left: 50%;
     transform: translate(-50%, 0%);
-    background: conic-gradient(from 180deg at 50% 50%, #B9BCFF 0deg, #FF0000 181.8deg, #F8CF9F 360deg);
-    /* background-image: -webkit-linear-gradient(92deg, #f35626, #feab3a); */
+	background: conic-gradient(from 180deg at 50% 50%, #9fa3ff 0deg, #f94f4f 181.8deg, #ffa55f 360deg);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    animation: hue 3s infinite linear;
-    -webkit-animation: hue 9s infinite linear;
+    animation: hue 20s infinite linear;
+    -webkit-animation: hue 20s infinite linear;
 }
 
 @keyframes hue {

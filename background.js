@@ -5,6 +5,7 @@
 	var process = false
 	var navigation = false
 	//storage api
+	var currTabId = ''
 	var tabList = []
 
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
@@ -66,6 +67,21 @@
 
 	});
 
+	chrome.runtime.onMessage.addListener(
+		function (obj, sender, sendResponse) {
+			const { type, val } = obj;
+
+			switch (type) {
+				case 'PROFANITY_TOGGLE': {
+					tabList.forEach(async (tabId) => {
+						toggleProfanityFilter(tabId, JSON.parse(val))
+					})
+					break;
+				}
+			}
+		}
+	);
+
 	function main(title, url, tabId) {
 		process = true
 		console.log('Detected : ' + title);
@@ -103,7 +119,6 @@
 		var uid = getVideoID(reqUrl)
 		var obj = await getFromStorage(uid)
 		console.log(obj)
-		const isEmpty = obj => Object.keys(obj).length === 0;
 
 		let result = await chrome.scripting.executeScript({
 			target: { tabId },
@@ -185,7 +200,7 @@
 			if (message === 'OK' && lyrics && lyrics.length > 0) {
 				saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
 			}
-			else if(message === 'NOK'){
+			else if (message === 'NOK') {
 
 			}
 		}
@@ -268,7 +283,7 @@
 					// tooltip.textContent = title;
 
 					var nowPlayingText = document.createElement("input");
-					nowPlayingText.setAttribute("autocomplete", "off");					
+					nowPlayingText.setAttribute("autocomplete", "off");
 					nowPlayingText.id = "now-playing-text-input";
 					nowPlayingText.className = "now-playing-text-input";
 					nowPlayingText.textContent = title;
@@ -417,17 +432,29 @@
 					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
 					lyricContainer.className = 'lyricContainer lyric sizeM'
+					lyricContainer.setAttribute('data-profanity', 'false')
 
 					var localFontSize = localStorage.getItem('fontSize');
 					if (localFontSize)
 						lyricContainer.style.fontSize = localFontSize
 
+					const fuzzyMatch = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
+					// const exactMatch = ['ass']
+					const censorRegex = new RegExp('\\b(?:' + fuzzyMatch.join('|') + ')\\b', 'gi');
+
 					lyrics.forEach(l => {
 						var d = document.createElement('span');
-						// d.className = 'lyric sizeM'
-						d.textContent = l
-						lyricContainer.appendChild(d)
-					})
+						// var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
+						if (lyricContainer.getAttribute('data-profanity') === 'true') {
+							var replacedLine = l.replace(censorRegex, match => match[0] + '*'.repeat(match.length - 1));
+							d.textContent = replacedLine;
+						}
+						else {
+							d.textContent = l;
+						}
+
+						lyricContainer.appendChild(d);
+					});
 
 					// var replacement = lyricContainer.children[0].parentNode
 					if (ytc.querySelector('#notFound')) {
@@ -492,6 +519,73 @@
 
 	}
 
+
+	async function toggleProfanityFilter(tabId, bool) {
+		var uid = await chrome.scripting.executeScript({
+			target: { tabId },
+			function: () => {
+				var container = document.querySelector('#yf-container')
+				return container.getAttribute('data-uid')
+			}
+		});
+
+		if (uid[0]?.result) {
+			var lyricsObj = await getFromStorage(uid[0]?.result)
+			if (isEmpty(lyricsObj)) {
+				return
+			}
+
+			var lyrics = lyricsObj[uid[0]?.result]?.lyrics
+
+			await chrome.scripting.executeScript({
+				target: { tabId },
+				function: (bool, lyrics) => {
+					var container = document.querySelector('#yf-container')
+					container.removeChild(container.lastChild)
+
+					var lyricContainer = document.createElement('div')
+					lyricContainer.id = 'lyricContainer'
+					lyricContainer.className = 'lyricContainer lyric sizeM'
+
+					var localFontSize = localStorage.getItem('fontSize');
+					if (localFontSize)
+						lyricContainer.style.fontSize = localFontSize
+
+					if (bool) {
+						lyricContainer.setAttribute('data-profanity', 'true')
+						lyricContainer.remove
+
+						lyrics.forEach(l => {
+							var d = document.createElement('span');
+							d.textContent = l;
+							lyricContainer.appendChild(d);
+						});
+					}
+					else {
+						lyricContainer.setAttribute('data-profanity', 'false')
+
+						const fuzzyMatch = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
+						// const exactMatch = ['ass']
+						const censorRegex = new RegExp('\\b(?:' + fuzzyMatch.join('|') + ')\\b', 'gi');
+
+						lyrics.forEach(l => {
+							var d = document.createElement('span');
+							// var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
+							var replacedLine = l.replace(censorRegex, match => match[0] + '*'.repeat(match.length - 1));
+							d.textContent = replacedLine;
+							lyricContainer.appendChild(d);
+						});
+
+					}
+					container.appendChild(lyricContainer)
+				},
+				args: [bool, lyrics]
+			})
+		}
+
+	}
+
+	const isEmpty = obj => Object.keys(obj).length === 0;
 
 	function removeView(tabId) {
 		chrome.scripting.executeScript({

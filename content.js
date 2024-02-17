@@ -1,11 +1,3 @@
-const messageHandler = (type, val, meta) => {
-	chrome.runtime.sendMessage({ type, val, meta }, async (response) => {
-		if (chrome.runtime.lastError)
-			console.log('Error getting');
-		if (response) console.log(response)
-	});
-}
-
 (async () => {
 	console.log('Script Injected')
 
@@ -14,10 +6,10 @@ const messageHandler = (type, val, meta) => {
 		const { type, val } = obj;
 		// console.log(obj)
 
+		var ytc = document.querySelector('#secondary > #secondary-inner')
+		
 		switch (type) {
-			case 'NEW_SEARCH': {
-				var ytc = document.querySelector('#secondary > #secondary-inner')
-				
+			case 'NEW_SEARCH': {		
 				if(!ytc){
 					res({ 'name': '', 'channel': '' })
 					break;
@@ -52,6 +44,7 @@ const messageHandler = (type, val, meta) => {
 				// if(currentTab.isActive){
 
 				// }
+				break;
 			}
 			default: {
 				console.log('cjs : Unknown command')
