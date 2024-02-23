@@ -4,7 +4,6 @@ function messageHandler(type, val){
 			console.log('Error getting');
 		if (response) {
 			console.log(response)
-			toggleExplicitText.textContent = response.val === 'true' ? 'Disable profanity filter' : 'Enable profanity filter'
 		}
 	});
 }
@@ -59,13 +58,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 			toggleExplicitText.textContent = 'Enable profanity filter'
 			userPrefs['yt-userPrefs'] = {...userPrefs['yt-userPrefs'], profanity: 'true'}
 			saveObject('',userPrefs)
-			messageHandler('PROFANITY_TOGGLE','false')
+			messageHandler('PROFANITY_TOGGLE','true')
 		}
 		else if(toggleExplicitText.textContent === 'Enable profanity filter'){
 			toggleExplicitText.textContent = 'Disable profanity filter'
 			userPrefs['yt-userPrefs'] = {...userPrefs['yt-userPrefs'], profanity: 'false'}
 			saveObject('',userPrefs)
-			messageHandler('PROFANITY_TOGGLE','true')
+			messageHandler('PROFANITY_TOGGLE','false')
 		}
 	})
 
@@ -108,6 +107,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Searching -> Now Playing transition
 //Add options [clear data, profanity filter toggle, sources, skip ads, mute ads, buy coffee]
 //Add AZL
+//Add font preload
+//Fix font size limit
 //add full screen support
 //add view in section 1 when applicable
 //Add manual search

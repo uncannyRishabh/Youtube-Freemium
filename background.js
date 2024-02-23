@@ -210,9 +210,12 @@
 			title = obj[uid]?.title
 		}
 
+		var prefs = await getFromStorage('yt-userPrefs')
+		var profanityCheck = prefs['yt-userPrefs']?.profanity;
+
 		chrome.scripting.executeScript({
 			target: { tabId },
-			function: (lyrics, message, uid, title) => {
+			function: (lyrics, message, uid, title, profanityCheck) => {
 				var ytc = document.querySelector('#secondary > #secondary-inner')
 				var container = ytc.querySelector('.yf-container')
 				var lyricContainer = ytc.querySelector('#lyricContainer')
@@ -432,7 +435,13 @@
 					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
 					lyricContainer.className = 'lyricContainer lyric sizeM'
-					lyricContainer.setAttribute('data-profanity', 'false')
+
+					if (profanityCheck) {
+						lyricContainer.setAttribute('data-profanity', profanityCheck)
+					}
+					else {
+						lyricContainer.setAttribute('data-profanity', 'false')
+					}
 
 					var localFontSize = localStorage.getItem('fontSize');
 					if (localFontSize)
@@ -514,7 +523,7 @@
 				if (progressbar) progressbar.style.visibility = 'hidden'
 
 			},
-			args: [lyrics, message, uid, title]
+			args: [lyrics, message, uid, title, profanityCheck]
 		});
 
 	}
@@ -531,6 +540,10 @@
 
 		if (uid[0]?.result) {
 			var lyricsObj = await getFromStorage(uid[0]?.result)
+			var profanity = await getFromStorage('yt-userPrefs')
+			profanity['yt-userPrefs'] = {...profanity['yt-userPrefs'], profanity: (!bool).toString()}
+			saveObject('',profanity)
+
 			if (isEmpty(lyricsObj)) {
 				return
 			}
@@ -541,9 +554,18 @@
 				target: { tabId },
 				function: (bool, lyrics) => {
 					var container = document.querySelector('#yf-container')
+					var lyricContainer = container.querySelector('#lyricContainer')
+
+					if (lyricContainer.getAttribute('data-profanity') === 'false' && !bool) {
+						return
+					}
+					if (lyricContainer.getAttribute('data-profanity') === 'true' && bool) {
+						return
+					}
+
 					container.removeChild(container.lastChild)
 
-					var lyricContainer = document.createElement('div')
+					lyricContainer = document.createElement('div')
 					lyricContainer.id = 'lyricContainer'
 					lyricContainer.className = 'lyricContainer lyric sizeM'
 
@@ -553,7 +575,6 @@
 
 					if (bool) {
 						lyricContainer.setAttribute('data-profanity', 'true')
-						lyricContainer.remove
 
 						lyrics.forEach(l => {
 							var d = document.createElement('span');
@@ -604,7 +625,13 @@
 	}
 
 	function saveObject(uid, obj) {
-		var v = { [uid]: obj }
+		var v
+		if (uid === '') {
+			v = obj
+		}
+		else {
+			v = { [uid]: obj }
+		}
 		console.log(v)
 		chrome.storage.local.set(v, () => {
 			if (chrome.runtime.lastError)

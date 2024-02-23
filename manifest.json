@@ -1,15 +1,14 @@
 {
 	"manifest_version": 3,
 	"name": "YT Freemium",
-	"version": "0.9",
-	"description": "Display lyrics for youtube by @uncannyRishabh",
+	"version": "1.0.1",
+	"description": "Display lyrics for youtube videos",
 	"host_permissions": [
 		"https://www.bing.com/*",
 		"https://www.youtube.com/*"
 	],
 	"permissions": [
 		"tabs",
-		"activeTab",
 		"history",
 		"scripting",
 		"storage",
