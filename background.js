@@ -345,15 +345,16 @@
 									var fontSizeElement = li.querySelector('#yf-font-size');
 									var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
 									var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize - 1) + 'px';
-									console.log(fontSizeElement.textContent)
-									console.log(fontSize)
-									localStorage.setItem('fontSize', fontSize);
-									if (fontSizeElement) {
-										fontSizeElement.textContent = fontSize;
+									if (currentFontSize > 8) {
+										console.log(fontSizeElement.textContent)
+										console.log(fontSize)
+										localStorage.setItem('fontSize', fontSize);
+										if (fontSizeElement) {
+											fontSizeElement.textContent = fontSize;
+										}
 									}
 
 								});
-
 
 								li.appendChild(document.createElement('span')).className = 'yf-fontSize';
 								li.lastChild.id = 'yf-font-size';
@@ -361,7 +362,7 @@
 								if (localFontSize)
 									li.lastChild.textContent = localFontSize
 								else
-									li.lastChild.textContent = '14px';
+									li.lastChild.textContent = '14px'
 
 								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded sFont';
 								li.lastChild.textContent = 'text_increase';
@@ -369,10 +370,12 @@
 								li.lastChild.addEventListener('click', () => {
 									var fontSizeElement = li.querySelector('#yf-font-size');
 									var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
-									var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
-									localStorage.setItem('fontSize', fontSize);
-									if (fontSizeElement) {
-										fontSizeElement.textContent = fontSize;
+									if (currentFontSize < 24) {
+										var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
+										localStorage.setItem('fontSize', fontSize);
+										if (fontSizeElement) {
+											fontSizeElement.textContent = fontSize;
+										}
 									}
 								});
 								break;
@@ -541,8 +544,8 @@
 		if (uid[0]?.result) {
 			var lyricsObj = await getFromStorage(uid[0]?.result)
 			var profanity = await getFromStorage('yt-userPrefs')
-			profanity['yt-userPrefs'] = {...profanity['yt-userPrefs'], profanity: (!bool).toString()}
-			saveObject('',profanity)
+			profanity['yt-userPrefs'] = { ...profanity['yt-userPrefs'], profanity: (!bool).toString() }
+			saveObject('', profanity)
 
 			if (isEmpty(lyricsObj)) {
 				return
@@ -660,28 +663,34 @@
 		catch (e) {
 			return ''
 		}
+		// 	"authority": "www.google.com",
 	}
 
 	function queryBuilder(q, n) {
-		q = q.trim();
-		q = q.replace(/\[[^\]]*\]/g, ''); // remove [contents]
-		q = q.replace(/\([^)]*\)/g, ''); // remove (contents)
-		q = q.replace(/\s+/g, ' '); // replace multiple spaces with a single space
-		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
-		// q = q?.replace(/[\s\t\n]/g, '+') //+
+		try {
+			q = q.trim();
+			q = q.replace(/\[[^\]]*\]/g, ''); // remove [contents]
+			q = q.replace(/\([^)]*\)/g, ''); // remove (contents)
+			q = q.replace(/\s+/g, ' '); // replace multiple spaces with a single space
+			q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
+			// q = q?.replace(/[\s\t\n]/g, '+') //+
 
-		if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
-			if (!q.includes(n))
-				q += ' ' + n
+			if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
+				if (!q.includes(n))
+					q += ' ' + n
+			}
+			//TODO:Append verified creator channel name only if one letter title
+			return q + " lyrics"
+			// return encodeURIComponent(q + "+lyrics")
 		}
-		//TODO:Append verified creator channel name only if one letter title
-		return q + " lyrics"
-		// return encodeURIComponent(q + "+lyrics")
+		catch (e) {
+			console.log(e)
+			return "(404) lyrics"
+		}
 	}
 
 	async function getLyrics(name, channel) {
 		// var myHeaders = {
-		// 	"authority": "www.google.com",
 		// 	"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
 		// 	"accept-language": "en-US,en;q=0.9",
 		// 	"cache-control": "max-age=0",

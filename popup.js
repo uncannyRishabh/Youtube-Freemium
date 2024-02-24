@@ -105,13 +105,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Create menu
 //✅Make font size functional
 //✅Searching -> Now Playing transition
-//Add options [clear data, profanity filter toggle, sources, skip ads, mute ads, buy coffee]
+//✅Add options [clear data, profanity filter toggle, buy coffee]
+//✅Add font preload
+//✅Fix font size limit
 //Add AZL
-//Add font preload
-//Fix font size limit
 //add full screen support
 //add view in section 1 when applicable
 //Add manual search
+//Add options[sources, skip ads, mute ads]
 //Restrict search for non music content
 //Make container collapsible
 //Add search with channel when not found
