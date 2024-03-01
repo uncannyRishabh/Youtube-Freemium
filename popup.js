@@ -113,6 +113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 //add view in section 1 when applicable
 //Add manual search
 //Add options[sources, skip ads, mute ads]
+//Remove removeme in next release
 //Restrict search for non music content
 //Make container collapsible
 //Add search with channel when not found

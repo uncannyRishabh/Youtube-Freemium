@@ -290,6 +290,7 @@
 					nowPlayingText.id = "now-playing-text-input";
 					nowPlayingText.className = "now-playing-text-input";
 					nowPlayingText.textContent = title;
+					nowPlayingText.disabled = "disabled"; //REMOVEME
 					// nowPlayingText.appendChild(tooltip);
 
 					// var searchIcon = document.createElement("span");
