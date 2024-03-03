@@ -8,6 +8,32 @@
 	var currTabId = ''
 	var tabList = []
 
+	chrome.runtime.onInstalled.addListener(function (details) {
+		var bool
+		if (details.reason == "install") {
+			console.log("I installed a goated extension")
+			bool = true
+		} else if (details.reason == "update") {
+			console.log("Goated extension just updated")
+			bool = false
+		}
+
+		chrome.tabs.query({ url: "*://*.youtube.com/watch?*" }, function (tabs) {
+			tabs.forEach(tab => {
+				var tabId = tab.id
+				chrome.scripting.executeScript({
+					target: { tabId },
+					function: (bool) => {
+						window.location.reload(JSON.parse(bool));
+					},
+					args: [bool]
+				});
+			});
+
+		});
+
+	});
+
 	chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
 		// console.log(changeInfo)
 		// console.log(tabInfo)
@@ -110,10 +136,7 @@
 	}
 
 	const runInContext = async (tabId, tabTitle) => {
-		//check for tabId 
-		//check if tabId title match ? (source of truth > title)
-		//
-		console.log('runInContext Called : ' + tabTitle)
+		// console.log('runInContext Called : ' + tabTitle)
 
 		let lyrics, message, title = ''
 		var uid = getVideoID(reqUrl)
@@ -213,6 +236,9 @@
 		var prefs = await getFromStorage('yt-userPrefs')
 		var profanityCheck = prefs['yt-userPrefs']?.profanity;
 		console.log(profanityCheck)
+		if(!profanityCheck || profanityCheck == undefined){
+			profanityCheck = false
+		}
 
 		chrome.scripting.executeScript({
 			target: { tabId },

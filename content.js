@@ -7,25 +7,25 @@
 		// console.log(obj)
 
 		var ytc = document.querySelector('#secondary > #secondary-inner')
-		
+
 		switch (type) {
-			case 'NEW_SEARCH': {		
-				if(!ytc){
+			case 'NEW_SEARCH': {
+				if (!ytc) {
 					res({ 'name': '', 'channel': '' })
 					break;
 				}
-				
+
 				var container = ytc.querySelector('.yf-container')
 				var progressbar = ytc.querySelector('#ytf-progressbar')
 				var nowPlaying = ytc.querySelector('.now-playing')
 
-				if(container && container.getAttribute('data-uid')===val){
+				if (container && container.getAttribute('data-uid') === val) {
 					res({ 'name': '', 'channel': '' })
 					break;
 				}
 
-				if(progressbar) progressbar.style.visibility = 'visible'
-				if(nowPlaying) nowPlaying.textContent = 'Searching -'
+				if (progressbar) progressbar.style.visibility = 'visible'
+				if (nowPlaying) nowPlaying.textContent = 'Searching -'
 
 				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();

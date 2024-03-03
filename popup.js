@@ -105,16 +105,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Create menu
 //✅Make font size functional
 //✅Searching -> Now Playing transition
-//✅Add options [clear data, profanity filter toggle, buy coffee]
+//✅Add options [clear data, profanity filter toggle, perform search only on music videos, buy coffee]
 //✅Add font preload
 //✅Fix font size limit
+//✅Refresh on install/update
 //Add AZL
-//add full screen support
 //add view in section 1 when applicable
+//add full screen support
 //Add manual search
 //Add options[sources, skip ads, mute ads]
 //Remove removeme in next release
 //Restrict search for non music content
+//handle yt -> other site navigation
+//Replace chrome with browser apis
 //Make container collapsible
 //Add search with channel when not found
 //keep track of tabs
@@ -123,9 +126,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 //fix lyrics-uid-mapping (same song multiple videos)
 //add tooltip
 //:visited
-//handle yt -> other site navigation
 //Add source
-//Save state
 //wrap console.logs inside debugMode
-//Add dynamic user agent
 //add diagnostics
