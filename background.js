@@ -212,6 +212,7 @@
 
 		var prefs = await getFromStorage('yt-userPrefs')
 		var profanityCheck = prefs['yt-userPrefs']?.profanity;
+		console.log(profanityCheck)
 
 		chrome.scripting.executeScript({
 			target: { tabId },
@@ -546,6 +547,7 @@
 			var lyricsObj = await getFromStorage(uid[0]?.result)
 			var profanity = await getFromStorage('yt-userPrefs')
 			profanity['yt-userPrefs'] = { ...profanity['yt-userPrefs'], profanity: (!bool).toString() }
+			console.log(profanity)
 			saveObject('', profanity)
 
 			if (isEmpty(lyricsObj)) {
@@ -560,12 +562,7 @@
 					var container = document.querySelector('#yf-container')
 					var lyricContainer = container.querySelector('#lyricContainer')
 
-					if (lyricContainer.getAttribute('data-profanity') === 'false' && !bool) {
-						return
-					}
-					if (lyricContainer.getAttribute('data-profanity') === 'true' && bool) {
-						return
-					}
+					console.log('PROFANITY CHECKPOINT !!')
 
 					container.removeChild(container.lastChild)
 

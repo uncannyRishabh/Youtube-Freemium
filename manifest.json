@@ -1,8 +1,8 @@
 {
 	"manifest_version": 3,
-	"name": "YT Freemium",
-	"version": "1.1.0",
-	"description": "Display lyrics for youtube videos",
+	"name": "Youtube Freemium",
+	"version": "1.2.0",
+	"description": "Enable lyrics for youtube music videos",
 	"host_permissions": [
 		"https://www.bing.com/*",
 		"https://www.youtube.com/*"

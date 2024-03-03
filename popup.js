@@ -16,7 +16,7 @@ function saveObject(uid, obj) {
 	else{
 		v = { [uid]: obj }
 	}
-	console.log(v)
+	console.log("Saving : %o",v)
 	chrome.storage.local.set(v, () => {
 		if (chrome.runtime.lastError)
 			reject(chrome.runtime.lastError);
