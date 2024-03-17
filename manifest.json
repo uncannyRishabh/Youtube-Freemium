@@ -7,6 +7,10 @@
 		"https://www.bing.com/*",
 		"https://www.youtube.com/*"
 	],
+	"content_security_policy": {
+		"extension_pages": "script-src 'self'; img-src 'self'"
+
+	},
 	"permissions": [
 		"tabs",
 		"history",
@@ -16,7 +20,11 @@
 	],
 	"action": {
 		"default_title": "Youtube Freemium",
-		"default_popup": "popup.html"
+		"default_popup": "popup.html",
+		"default_icon": {
+            "38": "asset/ytf_38.png",
+            "19": "asset/ytf_19.png"
+        }
 	},
 	"background": {
 		"service_worker": "background.js",
