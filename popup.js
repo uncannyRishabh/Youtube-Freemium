@@ -112,6 +112,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 //Add AZL
 //add view in section 1 when applicable
 //add full screen support
+//Remove preconnect stuff from popup
+//Add popup light/dark modes
 //Add manual search
 //Add options[sources, skip ads, mute ads]
 //Remove removeme in next release

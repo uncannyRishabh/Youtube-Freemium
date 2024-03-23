@@ -11,10 +11,20 @@ body {
 
 @media (prefers-color-scheme: dark) {
 	body {
-		color: #b0b0b0;
-		background-color: #101010;
+		--yf-text-color: #b0b0b0;
+		--yf-primary-bg-color: #101010;
+		--yf-secondary-bg-color: #212121;
 	}
 }
+
+@media (prefers-color-scheme: light) {
+    body {
+		--yf-text-color: #262525;
+		--yf-primary-bg-color: #f8f8f8;
+		--yf-secondary-bg-color: #f1f1f1;
+    }
+}
+
 
 .dynamic-container {
 	height: 100vh;
@@ -29,7 +39,7 @@ body {
 	position: relative;
 	box-sizing: border-box;
 	padding: 8px 16px 0 16px;
-	background-color: #212121;
+    background-color: var(--yf-secondary-bg-color);
 }
 
 .yf-logo-container {
@@ -86,7 +96,7 @@ body {
 	-webkit-line-clamp: 1;
 	-webkit-box-orient: vertical;
 	text-overflow: ellipsis;
-	color: #f1f1f1;
+    color: var(--yf-text-color);
 	font-size: 1.25rem;
 	transform: scaleX(1.05) scaleY(1);
 	word-spacing: -5px;
@@ -114,7 +124,7 @@ body {
 	font-size: 23px;
 	font-weight: 500;
 	position: absolute;
-	color: var(--yt-spec-text-secondary);
+	color: var(--yf-text-color);
 	transform: rotate(90deg) translate(-50%, -50%);
 	user-select: none;
 }
@@ -122,23 +132,20 @@ body {
 .replaceable-container {
 	height: 100%;
 	padding-inline: 6px;
-	/* display: flex;
-	flex-direction: column;
-	align-items: center; */
-
+	background-color: var(--yf-primary-bg-color);
 }
 
 .yf-listMenu {
 	box-sizing: border-box;
 	width: 100%;
 	padding: 10px 4%;
-	border: 1px solid #212121;
+    border: 1px solid var(--yf-primary-bg-color);
 	border-radius: 6px;
 	margin-top: 8px;
 	display: flex;
 	align-items: center;
 	column-gap: 12px;
-	background-color: #212121;
+	background-color: var(--yf-secondary-bg-color);
 	transition: border .2s linear;
 	user-select: none;
 }
@@ -179,7 +186,7 @@ body {
 }
 
 .yf-menuText {
-	color: var(--yt-spec-text-secondary);
+	color: var(--yf-text-color);
 	user-select: none;
 	font-size: 14px;
 }
@@ -221,8 +228,8 @@ body {
 	color: #f1f1f1;
 }
 
-.yf-font {
-	font-size: 22px;
+.yf-svg {
+	fill: var(--yf-text-color);
 }
 
 .material-symbols-outlined {
