@@ -67,3 +67,46 @@ document.addEventListener('DOMContentLoaded', () => {
 	preconnect2.crossOrigin = "";
 	document.head.appendChild(preconnect2);
 })
+
+function windowResize() {
+	console.log('---------RESIZE-------')
+	var insidePrimary = true;
+    var divToMove = document.querySelector('#primary > #primary-inner > #below > #yf-container');
+	if(divToMove == null){
+		insidePrimary = false
+		divToMove = document.querySelector('#secondary > #secondary-inner > #yf-container');
+	}
+    
+	if(divToMove){
+		if (window.innerWidth < 1000) {
+			if(!insidePrimary) {
+				moveDivToPrimary(divToMove);
+			}
+		} else {
+			if(insidePrimary){
+				moveDivToSecondary(divToMove);
+			} 
+    	}
+	}
+
+}
+
+function moveDivToPrimary(divToMove) {
+    var primaryInner = document.querySelector('#primary > #primary-inner > #below');
+	const firstChild = primaryInner.children[2];
+
+	if (divToMove && primaryInner && firstChild) {
+		primaryInner.insertBefore(divToMove, firstChild);
+    }
+}
+
+function moveDivToSecondary(divToMove) {
+    var secondaryInner = document.querySelector('#secondary > #secondary-inner');
+    const firstChild = secondaryInner.firstChild;
+
+	if (divToMove && secondaryInner) {
+		secondaryInner.insertBefore(divToMove, firstChild);
+    }
+}
+
+window.onresize = windowResize

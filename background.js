@@ -158,7 +158,8 @@
 		if (result[0]?.result) {
 			({ val, channel } = JSON.parse(result[0]?.result));
 			console.log("CHECKPOINT " + val + ' - ' + channel);
-		} else {
+		} 
+		else {
 			console.log("result is undefined");
 		}
 

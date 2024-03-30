@@ -109,14 +109,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Add font preload
 //✅Fix font size limit
 //✅Refresh on install/update
+//✅Remove preconnect stuff from popup
+//✅Add popup light/dark modes
 //Add AZL
 //add view in section 1 when applicable
 //add full screen support
-//Remove preconnect stuff from popup
-//Add popup light/dark modes
 //Add manual search
 //Add options[sources, skip ads, mute ads]
 //Remove removeme in next release
+//add last accessed and time created to lyrics
 //Restrict search for non music content
 //handle yt -> other site navigation
 //Replace chrome with browser apis
