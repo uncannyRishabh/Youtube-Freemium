@@ -244,7 +244,7 @@
 		chrome.scripting.executeScript({
 			target: { tabId },
 			function: (lyrics, message, uid, title, profanityCheck) => {
-				var ytc = document.querySelector('#secondary > #secondary-inner')
+				var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
 				var container = ytc.querySelector('.yf-container')
 				var lyricContainer = ytc.querySelector('#lyricContainer')
 

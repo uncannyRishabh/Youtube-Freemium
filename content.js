@@ -1,5 +1,30 @@
+var player, lyricContainer, moveRequired, insidePrimary, observer
+var primaryInner, secondaryInner
+
 (async () => {
 	console.log('Script Injected')
+	var preconnect1 = document.createElement("link");
+	preconnect1.rel = "preconnect";
+	preconnect1.href = "https://fonts.googleapis.com";
+	document.head.appendChild(preconnect1);
+
+	var preconnect2 = document.createElement("link");
+	preconnect2.rel = "preconnect";
+	preconnect2.href = "https://fonts.gstatic.com";
+	preconnect2.crossOrigin = "";
+	document.head.appendChild(preconnect2);
+
+	moveRequired = document.querySelector(window.innerWidth < 1000 
+		? '#primary > #primary-inner > #below > #yf-container' 
+		: '#secondary > #secondary-inner > #yf-container') == null;
+
+	// player = document.querySelector('#primary video')
+	// lyricContainer = document.querySelector('#columns #yf-container');
+
+	// observer = new MutationObserver(observePlayer);
+	// if(player != null){
+	// observer.observe(player, { attributes: true, attributeFilter: ['style'] });
+	// }
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		//NEW_SEARCH
@@ -18,6 +43,11 @@
 				var container = ytc.querySelector('.yf-container')
 				var progressbar = ytc.querySelector('#ytf-progressbar')
 				var nowPlaying = ytc.querySelector('.now-playing')
+
+				// player = document.querySelector('#primary video')
+				// if(player != null){
+				// 	observer.observe(player, { attributes: true, attributeFilter: ['style'] });
+				// }
 
 				if (container && container.getAttribute('data-uid') === val) {
 					res({ 'name': '', 'channel': '' })
@@ -55,58 +85,62 @@
 
 })();
 
-document.addEventListener('DOMContentLoaded', () => {
-	var preconnect1 = document.createElement("link");
-	preconnect1.rel = "preconnect";
-	preconnect1.href = "https://fonts.googleapis.com";
-	document.head.appendChild(preconnect1);
 
-	var preconnect2 = document.createElement("link");
-	preconnect2.rel = "preconnect";
-	preconnect2.href = "https://fonts.gstatic.com";
-	preconnect2.crossOrigin = "";
-	document.head.appendChild(preconnect2);
-})
+// function observePlayer() {
+// 	if(lyricContainer == null){
+// 		lyricContainer = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below > #yf-container' : '#secondary > #secondary-inner > #yf-container');
+// 	}
+// 	if (insidePrimary && lyricContainer) {
+// 		player.style.width = `${lyricContainer.style.width}px`;
+// 	}
+// }
 
 function windowResize() {
-	console.log('---------RESIZE-------')
-	var insidePrimary = true;
-    var divToMove = document.querySelector('#primary > #primary-inner > #below > #yf-container');
-	if(divToMove == null){
-		insidePrimary = false
-		divToMove = document.querySelector('#secondary > #secondary-inner > #yf-container');
-	}
-    
-	if(divToMove){
-		if (window.innerWidth < 1000) {
-			if(!insidePrimary) {
-				moveDivToPrimary(divToMove);
-			}
-		} else {
-			if(insidePrimary){
-				moveDivToSecondary(divToMove);
-			} 
-    	}
+	insidePrimary = document.querySelector('#primary > #primary-inner > #below > #yf-container')
+	moveRequired = document.querySelector(window.innerWidth < 1000 
+		? '#primary > #primary-inner > #below > #yf-container' 
+		: '#secondary > #secondary-inner > #yf-container') == null;
+	
+	if(moveRequired){
+		if (insidePrimary) {
+			moveDivToSecondary();
+		}
+		else {
+			moveDivToPrimary();
+		}
 	}
 
 }
 
-function moveDivToPrimary(divToMove) {
-    var primaryInner = document.querySelector('#primary > #primary-inner > #below');
-	const firstChild = primaryInner.children[2];
+function moveDivToPrimary() {
+	lyricContainer = document.querySelector('#secondary > #secondary-inner > #yf-container');
 
-	if (divToMove && primaryInner && firstChild) {
-		primaryInner.insertBefore(divToMove, firstChild);
-    }
+	if (lyricContainer) {
+		if (primaryInner == null) {
+			primaryInner = document.querySelector('#primary > #primary-inner > #below');
+		}
+		const firstChild = primaryInner.children[2];
+
+		if (firstChild) {
+			primaryInner.insertBefore(lyricContainer, firstChild);
+		}
+	}
 }
 
-function moveDivToSecondary(divToMove) {
-    var secondaryInner = document.querySelector('#secondary > #secondary-inner');
-    const firstChild = secondaryInner.firstChild;
+function moveDivToSecondary() {
+	lyricContainer = document.querySelector('#primary > #primary-inner > #below > #yf-container');
 
-	if (divToMove && secondaryInner) {
-		secondaryInner.insertBefore(divToMove, firstChild);
-    }
+	if (lyricContainer) {
+		if (secondaryInner == null) {
+			secondaryInner = document.querySelector('#secondary > #secondary-inner');
+		}
+		const firstChild = secondaryInner.firstChild;
+
+		if (firstChild) {
+			secondaryInner.insertBefore(lyricContainer, firstChild);
+		}
+	}
+
 }
 
-window.onresize = windowResize
+window.onresize = windowResize;
