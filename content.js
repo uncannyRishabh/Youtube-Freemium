@@ -116,6 +116,7 @@ function moveDivToPrimary() {
 	lyricContainer = document.querySelector('#secondary > #secondary-inner > #yf-container');
 
 	if (lyricContainer) {
+		lyricContainer.classList.add('ytf-container-marginTop');
 		if (primaryInner == null) {
 			primaryInner = document.querySelector('#primary > #primary-inner > #below');
 		}
@@ -131,6 +132,7 @@ function moveDivToSecondary() {
 	lyricContainer = document.querySelector('#primary > #primary-inner > #below > #yf-container');
 
 	if (lyricContainer) {
+		lyricContainer.classList.remove('ytf-container-marginTop');
 		if (secondaryInner == null) {
 			secondaryInner = document.querySelector('#secondary > #secondary-inner');
 		}

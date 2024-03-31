@@ -279,6 +279,10 @@
 
 					container.id = 'yf-container'
 					container.className = 'yf-container'
+					if(window.innerWidth < 1000){
+						container.classList.add('ytf-container-marginTop');
+					}
+
 
 					var logoContainerDiv = document.createElement("div");
 					logoContainerDiv.className = "yf-logo-container";
