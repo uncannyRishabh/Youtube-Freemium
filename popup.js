@@ -111,11 +111,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Refresh on install/update
 //✅Remove preconnect stuff from popup
 //✅Add popup light/dark modes
+//✅add view in section 1 when applicable
 //Add AZL
-//add view in section 1 when applicable
-//add full screen support
 //Add manual search
+//add full screen support
 //Add options[sources, skip ads, mute ads]
+//click outside to close menu
 //Remove removeme in next release
 //add last accessed and time created to lyrics
 //Restrict search for non music content
