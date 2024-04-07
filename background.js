@@ -4,7 +4,6 @@
 	var complete = false
 	var process = false
 	var navigation = false
-	//storage api
 	var currTabId = ''
 	var tabList = []
 
@@ -416,9 +415,20 @@
 
 							case 'Report': {
 								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded yf-dd-list-icon';
-								li.firstChild.textContent = 'report'
-								li.appendChild(document.createElement('div')).className = 'yf-dd-item-cont';
-								li.lastChild.textContent = optionText;
+								li.firstChild.textContent = 'report';
+								
+								const reportLinkContainer = document.createElement('div');
+								const reportLink = document.createElement('a');
+								reportLink.setAttribute("id", "report");
+								reportLink.setAttribute("class", "reportLink")
+								reportLink.setAttribute("href", "mailto:uncannyrishabh@gmail.com?subject=REPORT%20%7C%20YTF&body=%3Cdescribe_issue_here%3E%0A%3Cattach_screenshot%3E");
+								reportLink.innerText = optionText;
+								
+								reportLinkContainer.appendChild(reportLink);
+								
+								reportLinkContainer.className = 'yf-dd-item-cont';
+								li.appendChild(reportLinkContainer);
+
 								break;
 							}
 						}
