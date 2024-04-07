@@ -258,10 +258,10 @@
 					container = document.createElement('div')
 
 					//Imports
-					var linkElement1 = document.createElement('link');
-					linkElement1.rel = 'stylesheet';
-					linkElement1.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0,0';
-					document.head.appendChild(linkElement1);
+					// var linkElement1 = document.createElement('link');
+					// linkElement1.rel = 'stylesheet';
+					// linkElement1.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0,0';
+					// document.head.appendChild(linkElement1);
 
 					var linkElement2 = document.createElement('link');
 					linkElement2.rel = 'stylesheet';
@@ -364,14 +364,37 @@
 
 						switch (optionText) {
 							case 'Font Size': {
-								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded yf-dd-list-icon';
-								li.firstChild.textContent = 'format_size';
+								//Size Icon
+								var svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+								svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+								svgElement.setAttribute("height", "24");
+								svgElement.setAttribute("viewBox", "0 -960 960 960");
+								svgElement.setAttribute("width", "24");
+								svgElement.classList.add('material-symbols-outlined')
+								svgElement.classList.add('yf-dd-list-icon')
+								var pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+								pathElement.setAttribute("d", "M592.54-687.001H432.385q-12.628 0-21.467-8.853-8.84-8.852-8.84-21.499 0-12.646 8.84-21.646 8.839-9 21.467-9h381.307q12.628 0 21.467 8.853 8.84 8.853 8.84 21.499 0 12.647-8.84 21.646-8.839 9-21.467 9H653.537v444.693q0 12.628-8.852 21.467-8.853 8.84-21.5 8.84-12.646 0-21.646-8.952-8.999-8.952-8.999-21.74v-444.308ZM235.232-496.924h-88.924q-12.628 0-21.467-8.853-8.84-8.852-8.84-21.499 0-12.646 8.84-21.646 8.839-9 21.467-9h238.461q12.628 0 21.467 8.853 8.84 8.852 8.84 21.499 0 12.646-8.84 21.646-8.839 9-21.467 9h-88.924v254.616q0 12.628-8.853 21.467-8.852 8.84-21.499 8.84-12.646 0-21.454-8.84-8.807-8.839-8.807-21.467v-254.616Z");
+								svgElement.appendChild(pathElement);
+								li.appendChild(svgElement)
+
 
 								li.appendChild(document.createElement('span')).className = 'yf-dd-item-cont';
 								li.lastChild.textContent = optionText;
 
-								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded sFont';
-								li.lastChild.textContent = 'text_decrease';
+
+								//Decrease Icon
+								svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+								svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+								svgElement.setAttribute("height", "24");
+								svgElement.setAttribute("viewBox", "0 -960 960 960");
+								svgElement.setAttribute("width", "24");
+								svgElement.classList.add('sFont')
+								svgElement.classList.add('material-symbols-outlined')
+								pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+								pathElement.setAttribute("d", "M609.975-454.001q-11.033 0-18.657-7.418-7.625-7.418-7.625-18.384 0-10.966 7.463-18.581t18.496-7.615h215.757q11.033 0 18.658 7.418 7.624 7.418 7.624 18.384 0 10.966-7.463 18.581t-18.495 7.615H609.975Zm-403.58 79.846-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Z");
+								svgElement.appendChild(pathElement);
+								li.appendChild(svgElement);
+
 
 								li.lastChild.addEventListener('click', () => {
 									var fontSizeElement = li.querySelector('#yf-font-size');
@@ -396,9 +419,21 @@
 								else
 									li.lastChild.textContent = '14px'
 
-								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded sFont';
-								li.lastChild.textContent = 'text_increase';
-
+								
+								//Increase Icon
+								svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+								svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+								svgElement.setAttribute("height", "24");
+								svgElement.setAttribute("viewBox", "0 -960 960 960");
+								svgElement.setAttribute("width", "24");
+								svgElement.classList.add('sFont');
+								svgElement.classList.add('material-symbols-outlined');
+								pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+								pathElement.setAttribute("d", "m206.395-374.155-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Zm468.617-32.253h-82.001q-11.05 0-18.524-7.503-7.475-7.503-7.475-18.492t7.475-18.41q7.474-7.42 18.524-7.42h82.001v-81.689q0-10.984 7.418-18.609 7.418-7.624 18.384-7.624 10.966 0 18.455 7.475 7.49 7.474 7.49 18.524v82.001h82.168q11.086 0 18.585 7.478 7.498 7.479 7.498 18.534 0 11.056-7.498 18.521-7.499 7.465-18.585 7.465H743.44V-372q0 11.05-7.503 18.524-7.503 7.475-18.258 7.475-11.056 0-18.521-7.499-7.465-7.499-7.465-18.584v-82.168Z");
+								svgElement.appendChild(pathElement);
+								li.appendChild(svgElement);
+								
+								
 								li.lastChild.addEventListener('click', () => {
 									var fontSizeElement = li.querySelector('#yf-font-size');
 									var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
@@ -414,9 +449,19 @@
 							}
 
 							case 'Report': {
-								li.appendChild(document.createElement('span')).className = 'material-symbols-rounded yf-dd-list-icon';
-								li.firstChild.textContent = 'report';
-								
+								//Report Icon
+								svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+								svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+								svgElement.setAttribute("height", "24");
+								svgElement.setAttribute("viewBox", "0 -960 960 960");
+								svgElement.setAttribute("width", "24");
+								svgElement.classList.add('yf-dd-list-icon');
+								svgElement.classList.add('material-symbols-outlined');
+								pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+								pathElement.setAttribute("d", "M479.789-311.539q11.942 0 20.23-8.078t8.288-20.019q0-11.941-8.078-20.229-8.077-8.289-20.018-8.289-11.942 0-20.23 8.078t-8.288 20.019q0 11.941 8.078 20.229 8.077 8.289 20.018 8.289Zm.014-111.23q10.966 0 18.581-7.474 7.615-7.475 7.615-18.525v-189.54q0-11.05-7.418-18.524-7.418-7.475-18.384-7.475-10.966 0-18.581 7.475-7.615 7.474-7.615 18.524v189.54q0 11.05 7.418 18.525 7.418 7.474 18.384 7.474ZM376.385-164.001q-12.855 0-24.504-4.616-11.65-4.615-21.496-14.461L183.078-331.385q-8.889-9.021-13.983-21.195-5.094-12.173-5.094-24.805v-206.23q0-12.855 4.616-24.504 4.615-11.65 14.461-21.496l147.307-147.307q9.846-9.846 21.496-14.461 11.649-4.616 24.504-4.616h207.23q12.855 0 24.504 4.616 11.65 4.615 21.496 14.461l147.307 147.307q9.846 9.846 14.461 21.496 4.616 11.649 4.616 24.504v207.23q0 12.855-4.616 24.504-4.615 11.65-14.461 21.496L628.615-183.078q-9.021 8.889-21.195 13.983-12.173 5.094-24.805 5.094h-206.23ZM371-216h218l155-155v-218L588-744H371L216-589v218l155 155Zm109-264Z");
+								svgElement.appendChild(pathElement);
+								li.appendChild(svgElement);
+
 								const reportLinkContainer = document.createElement('div');
 								const reportLink = document.createElement('a');
 								reportLink.setAttribute("id", "report");

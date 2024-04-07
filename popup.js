@@ -113,7 +113,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅Add popup light/dark modes
 //✅add view in section 1 when applicable
 //✅add report func
-//add offline resources
+//✅use offline resources
 //Add AZL
 //Add manual search
 //add full screen support
