@@ -114,23 +114,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅add view in section 1 when applicable
 //✅add report func
 //✅use offline resources
+//✅Restrict search for non music content
 //Add AZL
 //Add manual search
+//add last accessed and time created to lyrics
 //add full screen support
 //Add options[select sources, skip ads, mute ads]
+//Make container collapsible
 //click outside to close menu
 //Remove removeme in next release
-//add last accessed and time created to lyrics
-//Restrict search for non music content
 //handle yt -> other site navigation
 //Replace chrome with browser apis
-//Make container collapsible
 //Add search with channel when not found
-//keep track of tabs
 // (upto 50 for 2 month)
-//reset data attribute
 //fix lyrics-uid-mapping (same song multiple videos)
-//add tooltip
+//add tooltip(s)
 //:visited
 //Add source
 //wrap console.logs inside debugMode

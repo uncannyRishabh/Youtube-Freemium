@@ -446,6 +446,7 @@
 .yf-dd-list-icon {
 	margin-right: 16px;
 	width: 24px;
+	min-width: 24px;
 	height: 24px;
 }
 
@@ -471,10 +472,13 @@
 }
 
 
-.reportLink {
+.yf-reportLink {
 	text-decoration: none;
     color: inherit;
-    padding: 12px 60px 12px 0px;
+	display: inline-block;
+    width: 100%;
+    height: 100%;
+    line-height: 2.5;
 }
 
 .material-symbols-outlined {
@@ -484,3 +488,11 @@
 		'GRAD' -25,
 		'opsz' 24
 }
+
+.yf-report-container {
+	display: inline-block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+

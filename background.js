@@ -137,108 +137,111 @@
 	const runInContext = async (tabId, tabTitle) => {
 		// console.log('runInContext Called : ' + tabTitle)
 
+		let result = await getVideoMetadata(tabId)
+		let val, channel, isMusic;
+		if (result[0]?.result) {
+			({ val, channel, isMusic } = JSON.parse(result[0]?.result));
+			isMusic = Boolean(isMusic)
+			console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
+		}
+		else {
+			console.log("result is undefined");
+		}
+
 		let lyrics, message, title = ''
 		var uid = getVideoID(reqUrl)
 		var obj = await getFromStorage(uid)
 		console.log(obj)
 
-		let result = await chrome.scripting.executeScript({
-			target: { tabId },
-			function: () => {
-				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
-				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
-				console.log('Title : ' + val + ' Channel : ' + channel)
-				return JSON.stringify({ val, channel });
+		if (isMusic) {
+			if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
+				var resp = await (await getLyrics(val, channel)).text();
+
+				result = await chrome.scripting.executeScript({
+					target: { tabId },
+					function: (resp) => {
+						// console.log(resp)
+						var lyrics = []
+						var message = ''
+						const parser = new DOMParser();
+						const doc = parser.parseFromString(resp, 'text/html');
+						// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
+						var lContainer = doc.querySelector('#lyric_body > .lyrics')
+						const b_TopTitle = doc.querySelector('.b_topTitle')
+
+						//Alternate container
+						if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
+							lContainer = doc.querySelector('.l_tac_facts')
+						}
+
+						if (lContainer) {
+							// console.log(lContainer.textContent)
+							message = 'OK'
+							// lContainer.querySelectorAll('span').forEach(span => {
+							// 	lyrics.push(span.textContent.trim());
+							// });
+
+							var raw = lContainer.innerHTML
+							var wd = raw.replace(/<\/?div[^>]*>/g, '');
+							lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
+
+							// console.log(lyrics);
+						}
+						else {
+							message = 'NOK'
+						}
+
+						//VALIDATE HERE
+						var r = { lyrics, message }
+						// console.log(r)
+						return JSON.stringify(r)
+					},
+					args: [resp]
+				});
+
+				let resultObject = JSON.parse(result[0]?.result);
+				console.log('search result : ', resultObject)
+				if (resultObject.lyrics === null) {
+					message = 'NOK'
+				}
+				else {
+					lyrics = resultObject.lyrics ? resultObject.lyrics : '';
+					message = resultObject.message ? resultObject.message : '';
+				}
+				var scroll = 0
+				var timestamp = Date.now()
+				title = val
+
+				if (message === 'OK' && lyrics && lyrics.length > 0) {
+					saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
+				}
+				else if (message === 'NOK') {
+
+				}
 			}
-		});
-
-		let val, channel;
-
-		if (result[0]?.result) {
-			({ val, channel } = JSON.parse(result[0]?.result));
-			console.log("CHECKPOINT " + val + ' - ' + channel);
-		} 
+			else if (!isEmpty(obj)) {
+				lyrics = obj[uid]?.lyrics
+				message = obj[uid]?.message
+				title = obj[uid]?.title
+			}
+		}
 		else {
-			console.log("result is undefined");
-		}
-
-		if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
-			var resp = await (await getLyrics(val, channel)).text();
-
-			result = await chrome.scripting.executeScript({
-				target: { tabId },
-				function: (resp) => {
-					// console.log(resp)
-					var lyrics = []
-					var message = ''
-					const parser = new DOMParser();
-					const doc = parser.parseFromString(resp, 'text/html');
-					// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-					var lContainer = doc.querySelector('#lyric_body > .lyrics')
-					const b_TopTitle = doc.querySelector('.b_topTitle')
-
-					//Alternate container
-					if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
-						lContainer = doc.querySelector('.l_tac_facts')
-					}
-
-					if (lContainer) {
-						// console.log(lContainer.textContent)
-						message = 'OK'
-						// lContainer.querySelectorAll('span').forEach(span => {
-						// 	lyrics.push(span.textContent.trim());
-						// });
-
-						var raw = lContainer.innerHTML
-						var wd = raw.replace(/<\/?div[^>]*>/g, '');
-						lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
-
-						// console.log(lyrics);
-					}
-					else {
-						message = 'NOK'
-					}
-
-					//VALIDATE HERE
-					var r = { lyrics, message }
-					// console.log(r)
-					return JSON.stringify(r)
-				},
-				args: [resp]
-			});
-
-			let resultObject = JSON.parse(result[0]?.result);
-			console.log('search result : ', resultObject)
-			if (resultObject.lyrics === null) {
-				message = 'NOK'
-			}
-			else {
-				lyrics = resultObject.lyrics ? resultObject.lyrics : '';
-				message = resultObject.message ? resultObject.message : '';
-			}
-			var scroll = 0
-			var timestamp = Date.now()
-			title = val
-
-			if (message === 'OK' && lyrics && lyrics.length > 0) {
-				saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
-			}
-			else if (message === 'NOK') {
-
-			}
-		}
-		else if (!isEmpty(obj)) {
 			lyrics = obj[uid]?.lyrics
 			message = obj[uid]?.message
 			title = obj[uid]?.title
 		}
 
+
 		var prefs = await getFromStorage('yt-userPrefs')
 		var profanityCheck = prefs['yt-userPrefs']?.profanity;
 		console.log(profanityCheck)
-		if(!profanityCheck || profanityCheck == undefined){
+		if (!profanityCheck || profanityCheck == undefined) {
 			profanityCheck = false
 		}
+
+		lyrics = lyrics?lyrics:""
+		message = message?message:"NOK"
+		title = title?title:val
 
 		chrome.scripting.executeScript({
 			target: { tabId },
@@ -278,7 +281,7 @@
 
 					container.id = 'yf-container'
 					container.className = 'yf-container'
-					if(window.innerWidth < 1000){
+					if (window.innerWidth < 1000) {
 						container.classList.add('ytf-container-marginTop');
 					}
 
@@ -419,7 +422,7 @@
 								else
 									li.lastChild.textContent = '14px'
 
-								
+
 								//Increase Icon
 								svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 								svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -432,8 +435,8 @@
 								pathElement.setAttribute("d", "m206.395-374.155-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Zm468.617-32.253h-82.001q-11.05 0-18.524-7.503-7.475-7.503-7.475-18.492t7.475-18.41q7.474-7.42 18.524-7.42h82.001v-81.689q0-10.984 7.418-18.609 7.418-7.624 18.384-7.624 10.966 0 18.455 7.475 7.49 7.474 7.49 18.524v82.001h82.168q11.086 0 18.585 7.478 7.498 7.479 7.498 18.534 0 11.056-7.498 18.521-7.499 7.465-18.585 7.465H743.44V-372q0 11.05-7.503 18.524-7.503 7.475-18.258 7.475-11.056 0-18.521-7.499-7.465-7.499-7.465-18.584v-82.168Z");
 								svgElement.appendChild(pathElement);
 								li.appendChild(svgElement);
-								
-								
+
+
 								li.lastChild.addEventListener('click', () => {
 									var fontSizeElement = li.querySelector('#yf-font-size');
 									var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
@@ -465,13 +468,13 @@
 								const reportLinkContainer = document.createElement('div');
 								const reportLink = document.createElement('a');
 								reportLink.setAttribute("id", "report");
-								reportLink.setAttribute("class", "reportLink")
+								reportLink.setAttribute("class", "yf-reportLink")
 								reportLink.setAttribute("href", "mailto:uncannyrishabh@gmail.com?subject=REPORT%20%7C%20YTF&body=%3Cdescribe_issue_here%3E%0A%3Cattach_screenshot%3E");
 								reportLink.innerText = optionText;
-								
+
 								reportLinkContainer.appendChild(reportLink);
-								
-								reportLinkContainer.className = 'yf-dd-item-cont';
+
+								reportLinkContainer.className = 'yf-dd-item-cont yf-report-container';
 								li.appendChild(reportLinkContainer);
 
 								break;
@@ -619,6 +622,19 @@
 
 	}
 
+	async function getVideoMetadata(tabId) {
+		return chrome.scripting.executeScript({
+			target: { tabId },
+			function: () => {
+				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
+				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
+				let music = document.querySelector('button-view-model a')
+				let isMusic = music === null ? false : (music.textContent == 'Music')
+				console.log('Title : ' + val + ' Channel : ' + channel + ' isMusic : ' + isMusic)
+				return JSON.stringify({ val, channel, isMusic });
+			}
+		});
+	}
 
 	async function toggleProfanityFilter(tabId, bool) {
 		var uid = await chrome.scripting.executeScript({

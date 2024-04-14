@@ -43,7 +43,8 @@ var primaryInner, secondaryInner
 				var container = ytc.querySelector('.yf-container')
 				var progressbar = ytc.querySelector('#ytf-progressbar')
 				var nowPlaying = ytc.querySelector('.now-playing')
-
+				var music = document.querySelector('button-view-model a')
+				var isMusic = music === null ? false : (music.textContent == 'Music')
 				// player = document.querySelector('#primary video')
 				// if(player != null){
 				// 	observer.observe(player, { attributes: true, attributeFilter: ['style'] });
@@ -54,9 +55,10 @@ var primaryInner, secondaryInner
 					break;
 				}
 
-				if (progressbar) progressbar.style.visibility = 'visible'
-				if (nowPlaying) nowPlaying.textContent = 'Searching -'
-
+				if(isMusic){
+					if (progressbar) progressbar.style.visibility = 'visible'
+					if (nowPlaying) nowPlaying.textContent = 'Searching -'
+				}
 				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
 				console.log(title + " - " + channel)
