@@ -137,15 +137,21 @@
 	const runInContext = async (tabId, tabTitle) => {
 		// console.log('runInContext Called : ' + tabTitle)
 
-		let result = await getVideoMetadata(tabId)
 		let val, channel, isMusic;
+		let result = await getSongAndArtist(tabId);
+		console.log("getSongAndArtist : ",result[0]?.result)
 		if (result[0]?.result) {
 			({ val, channel, isMusic } = JSON.parse(result[0]?.result));
+			if (val == undefined || channel == undefined) {
+				result = await getVideoNameAndChannel(tabId);
+				({ val, channel, isMusic } = JSON.parse(result[0]?.result))
+				console.log("getVideoNameAndChannel : ",result[0]?.result)
+			}
 			isMusic = Boolean(isMusic)
 			console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
 		}
 		else {
-			console.log("result is undefined");
+			console.log("Error getting artist and song name.");
 		}
 
 		let lyrics, message, title = ''
@@ -166,7 +172,7 @@
 						const parser = new DOMParser();
 						const doc = parser.parseFromString(resp, 'text/html');
 						// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-						var lContainer = doc.querySelector('#lyric_body > .lyrics')
+						var lContainer = doc.querySelectorAll('.lyric_body .verse')
 						const b_TopTitle = doc.querySelector('.b_topTitle')
 
 						//Alternate container
@@ -180,10 +186,17 @@
 							// lContainer.querySelectorAll('span').forEach(span => {
 							// 	lyrics.push(span.textContent.trim());
 							// });
-
-							var raw = lContainer.innerHTML
-							var wd = raw.replace(/<\/?div[^>]*>/g, '');
-							lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
+							
+							var raw = ''
+							lContainer.forEach(verse => raw+=verse.innerHTML)
+							// console.log(raw)
+							if(raw.length > 0){
+								var wd = raw.replace(/<\/?div[^>]*>/g, '');
+								lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
+							}
+							else{
+								message = 'NOK'
+							}
 
 							// console.log(lyrics);
 						}
@@ -201,7 +214,7 @@
 
 				let resultObject = JSON.parse(result[0]?.result);
 				console.log('search result : ', resultObject)
-				if (resultObject.lyrics === null) {
+				if (resultObject === null || resultObject.lyrics === null) {
 					message = 'NOK'
 				}
 				else {
@@ -234,7 +247,7 @@
 
 		var prefs = await getFromStorage('yt-userPrefs')
 		var profanityCheck = prefs['yt-userPrefs']?.profanity;
-		console.log(profanityCheck)
+		console.log("Profanity : ",profanityCheck)
 		if (!profanityCheck || profanityCheck == undefined) {
 			profanityCheck = false
 		}
@@ -622,12 +635,32 @@
 
 	}
 
-	async function getVideoMetadata(tabId) {
+	async function getVideoNameAndChannel(tabId) {
 		return chrome.scripting.executeScript({
 			target: { tabId },
 			function: () => {
+				//Fallback for fetching song/artist
 				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
+				let music = document.querySelector('button-view-model a')
+				let isMusic = music === null ? false : (music.textContent == 'Music')
+				console.log('FALLBACK -> Title : ' + val + ' Channel : ' + channel + ' isMusic : ' + isMusic)
+				return JSON.stringify({ val, channel, isMusic });
+			}
+		});
+	}
+
+	async function getSongAndArtist(tabId) {
+		return chrome.scripting.executeScript({
+			target: { tabId },
+			function: () => {
+				//Fallback for fetching song/artist
+				let val, channel = ''
+				let musicCard = document.querySelectorAll('#header-container #title')
+				if(musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')){
+					val = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(1)').textContent.trim();
+					channel = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(2)').textContent.trim();
+				}
 				let music = document.querySelector('button-view-model a')
 				let isMusic = music === null ? false : (music.textContent == 'Music')
 				console.log('Title : ' + val + ' Channel : ' + channel + ' isMusic : ' + isMusic)
@@ -775,10 +808,11 @@
 			q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
 			// q = q?.replace(/[\s\t\n]/g, '+') //+
 
-			if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
+			// if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
 				if (!q.includes(n))
 					q += ' ' + n
-			}
+			// }
+
 			//TODO:Append verified creator channel name only if one letter title
 			return q + " lyrics"
 			// return encodeURIComponent(q + "+lyrics")
@@ -830,7 +864,7 @@
 		var mq = queryBuilder(name, channel)
 		// var url = `https://www.google.com/search?q=${mq}`
 		var url = `https://www.bing.com/search?q=${mq}`
-		console.log('searching : ', mq)
+		console.log('searching : ', url)
 		var response = fetch(url, requestOptions)
 		return response;
 	}

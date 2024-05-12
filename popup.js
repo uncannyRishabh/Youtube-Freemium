@@ -116,8 +116,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅use offline resources
 //✅Restrict search for non music content
 //Add AZL
+//update title & artist logic
+//update profanity
 //Add manual search
 //add last accessed and time created to lyrics
+//Update profanity (logic & dictionary)
 //add full screen support
 //Add options[select sources, skip ads, mute ads]
 //Make container collapsible
