@@ -4,7 +4,6 @@
 	var complete = false
 	var process = false
 	var navigation = false
-	var currTabId = ''
 	var tabList = []
 
 	chrome.runtime.onInstalled.addListener(function (details) {
@@ -137,84 +136,23 @@
 	const runInContext = async (tabId, tabTitle) => {
 		// console.log('runInContext Called : ' + tabTitle)
 
-		let val, channel, isMusic;
-		let result = await getSongAndArtist(tabId);
-		console.log("getSongAndArtist : ",result[0]?.result)
-		if (result[0]?.result) {
-			({ val, channel, isMusic } = JSON.parse(result[0]?.result));
-			if (val == undefined || channel == undefined) {
-				result = await getVideoNameAndChannel(tabId);
-				({ val, channel, isMusic } = JSON.parse(result[0]?.result))
-				console.log("getVideoNameAndChannel : ",result[0]?.result)
-			}
-			isMusic = Boolean(isMusic)
-			console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
-		}
-		else {
-			console.log("Error getting artist and song name.");
-		}
+		var uid = getVideoID(reqUrl);
+		var obj = await getFromStorage(uid);
+		let isMusic = await musicCheck(tabId);
+		let result = await findSongAndArtist(tabId);
+		let { val, channel } = JSON.parse(result[0]?.result);
 
-		let lyrics, message, title = ''
-		var uid = getVideoID(reqUrl)
-		var obj = await getFromStorage(uid)
+		console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
 		console.log(obj)
+		let lyrics, message, title = ''
 
 		if (isMusic) {
 			if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
-				var resp = await (await getLyrics(val, channel)).text();
-
-				result = await chrome.scripting.executeScript({
-					target: { tabId },
-					function: (resp) => {
-						// console.log(resp)
-						var lyrics = []
-						var message = ''
-						const parser = new DOMParser();
-						const doc = parser.parseFromString(resp, 'text/html');
-						// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-						var lContainer = doc.querySelectorAll('.lyric_body .verse')
-						const b_TopTitle = doc.querySelector('.b_topTitle')
-
-						//Alternate container
-						if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
-							lContainer = doc.querySelector('.l_tac_facts')
-						}
-
-						if (lContainer) {
-							// console.log(lContainer.textContent)
-							message = 'OK'
-							// lContainer.querySelectorAll('span').forEach(span => {
-							// 	lyrics.push(span.textContent.trim());
-							// });
-							
-							var raw = ''
-							lContainer.forEach(verse => raw+=verse.innerHTML)
-							// console.log(raw)
-							if(raw.length > 0){
-								var wd = raw.replace(/<\/?div[^>]*>/g, '');
-								lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
-							}
-							else{
-								message = 'NOK'
-							}
-
-							// console.log(lyrics);
-						}
-						else {
-							message = 'NOK'
-						}
-
-						//VALIDATE HERE
-						var r = { lyrics, message }
-						// console.log(r)
-						return JSON.stringify(r)
-					},
-					args: [resp]
-				});
+				let result = await findLyricsfromSources(tabId, "", val, channel)
 
 				let resultObject = JSON.parse(result[0]?.result);
 				console.log('search result : ', resultObject)
-				if (resultObject === null || resultObject.lyrics === null) {
+				if (resultObject === undefined || resultObject === null || resultObject.message === 'NOK') {
 					message = 'NOK'
 				}
 				else {
@@ -247,14 +185,14 @@
 
 		var prefs = await getFromStorage('yt-userPrefs')
 		var profanityCheck = prefs['yt-userPrefs']?.profanity;
-		console.log("Profanity : ",profanityCheck)
+		console.log("Profanity : ", profanityCheck)
 		if (!profanityCheck || profanityCheck == undefined) {
 			profanityCheck = false
 		}
 
-		lyrics = lyrics?lyrics:""
-		message = message?message:"NOK"
-		title = title?title:val
+		lyrics = lyrics ? lyrics : ""
+		message = message ? message : "NOK"
+		title = title ? title : val
 
 		chrome.scripting.executeScript({
 			target: { tabId },
@@ -635,37 +573,191 @@
 
 	}
 
-	async function getVideoNameAndChannel(tabId) {
-		return chrome.scripting.executeScript({
+	async function musicCheck(tabId) {
+		var isMusic = await chrome.scripting.executeScript({
 			target: { tabId },
 			function: () => {
-				//Fallback for fetching song/artist
-				let val = document.querySelector('#above-the-fold > #title').textContent.trim();
-				let channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
 				let music = document.querySelector('button-view-model a')
-				let isMusic = music === null ? false : (music.textContent == 'Music')
-				console.log('FALLBACK -> Title : ' + val + ' Channel : ' + channel + ' isMusic : ' + isMusic)
-				return JSON.stringify({ val, channel, isMusic });
+				return (music === null) || (music === undefined) ? false : (music.textContent == 'Music')
 			}
 		});
+		return Boolean(isMusic)
 	}
 
-	async function getSongAndArtist(tabId) {
+	async function findSongAndArtist(tabId) {
 		return chrome.scripting.executeScript({
 			target: { tabId },
 			function: () => {
 				//Fallback for fetching song/artist
 				let val, channel = ''
 				let musicCard = document.querySelectorAll('#header-container #title')
-				if(musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')){
+
+				if (musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')) {
 					val = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(1)').textContent.trim();
 					channel = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(2)').textContent.trim();
+					console.log('getSongAndArtistFromCard => Title : ' + val + ' Channel : ' + channel)
 				}
-				let music = document.querySelector('button-view-model a')
-				let isMusic = music === null ? false : (music.textContent == 'Music')
-				console.log('Title : ' + val + ' Channel : ' + channel + ' isMusic : ' + isMusic)
-				return JSON.stringify({ val, channel, isMusic });
+
+				if (val == undefined || channel == undefined) {
+					val = document.querySelector('#above-the-fold > #title').textContent.trim();
+					channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
+					console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Channel : ' + channel)
+				}
+
+				return JSON.stringify({ val, channel });
 			}
+		});
+	}
+
+	async function findLyricsfromSources(tabId, source, val, channel) {
+		var result;
+
+		switch (source) {
+			case 'BING': {
+				result = await searchBing(tabId, val, channel)
+				break;
+			}
+			case 'A2Z': {
+				result = await searchA2Z(tabId, val, channel)
+				break;
+			}
+			default: {
+				result = await searchBing(tabId, val, channel)
+				if (isEmpty(result) || JSON.parse(result[0].result).message === 'NOK') {
+					result = await searchA2Z(tabId, val, channel)
+				}
+			}
+		}
+
+		return result;
+	}
+
+	async function searchBing(tabId, name, channel) {
+		var myHeaders = {
+			"authority": "www.bing.com",
+			"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+			"accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
+			"dnt": "1",
+			"sec-ch-ua": "\"Google Chrome\";v=\"119\", \"Chromium\";v=\"119\", \"Not?A_Brand\";v=\"24\"",
+			"sec-ch-ua-full-version": "\"119.0.6045.123\"",
+			"sec-ch-ua-full-version-list": "\"Google Chrome\";v=\"119.0.6045.123\", \"Chromium\";v=\"119.0.6045.123\", \"Not?A_Brand\";v=\"24.0.0.0\"",
+			"sec-ch-ua-mobile": "?1",
+			"sec-fetch-dest": "document",
+			"sec-fetch-mode": "navigate",
+			"sec-fetch-site": "same-origin",
+			"sec-fetch-user": "?1",
+			"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+		}
+
+		var requestOptions = {
+			method: 'GET',
+			headers: myHeaders,
+			redirect: 'follow'
+		};
+
+		var mq = queryBuilder(name, channel)
+		var url = `https://www.bing.com/search?q=${mq}`
+		console.log('searching : ', url)
+		var response = await (await fetch(url, requestOptions)).text();
+
+		//Handle not found
+		return await chrome.scripting.executeScript({
+			target: { tabId },
+			function: (resp) => {
+				// console.log(resp)
+				var lyrics = []
+				var message = ''
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(resp, 'text/html');
+				// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
+				var lContainer = doc.querySelectorAll('.lyric_body .verse')
+				const b_TopTitle = doc.querySelector('.b_topTitle')
+
+				//Alternate container
+				if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
+					lContainer = doc.querySelector('.l_tac_facts')
+				}
+
+				if (lContainer) {
+					// console.log(lContainer.textContent)
+					message = 'OK'
+					// lContainer.querySelectorAll('span').forEach(span => {
+					// 	lyrics.push(span.textContent.trim());
+					// });
+
+					var raw = ''
+					lContainer.forEach(verse => raw += verse.innerHTML)
+					// console.log(raw)
+					if (raw.length > 0) {
+						var wd = raw.replace(/<\/?div[^>]*>/g, '');
+						lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
+					}
+					else {
+						message = 'NOK'
+					}
+
+					// console.log(lyrics);
+				}
+				else {
+					message = 'NOK'
+				}
+
+				//VALIDATE HERE
+				var r = { lyrics, message }
+				// console.log(r)
+				return JSON.stringify(r)
+			},
+			args: [response]
+		});
+	}
+
+	async function searchA2Z(tabId, name, channel) {
+		const requestOptions = {
+			method: "GET",
+			redirect: "follow"
+		};
+
+		var url = `https://www.azlyrics.com/lyrics/${channel.replaceAll(" ", "").toLowerCase()}/${name.replaceAll(" ", "").toLowerCase()}.html`
+		var response = await fetch(url, requestOptions)
+		var page = await response.text()
+
+		//Handle not found
+		return await chrome.scripting.executeScript({
+			target: { tabId },
+			function: (resp) => {
+				// console.log(resp)
+				var lyrics = []
+				var message = ''
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(resp, 'text/html');
+
+				let look = true;
+				let raw = ''
+				let refDiv = doc.querySelector(".ringtone"); 
+				while (look && refDiv.nextElementSibling) {
+					refDiv = refDiv.nextElementSibling;
+					if (refDiv.tagName === 'DIV') {
+						look = false;
+						raw = refDiv.textContent
+						console.log(refDiv.textContent)
+					}
+				}
+				var wd = raw.replace(/<\/?div[^>]*>/g, '');
+				var lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean)
+				
+				if(lyrics !=undefined || lyrics.length > 0){
+					message = "OK"
+				}
+				else{
+					message = "NOK"
+				}
+
+				//VALIDATE HERE
+				var r = { lyrics, message }
+				// console.log(r)
+				return JSON.stringify(r)
+			},
+			args: [page]
 		});
 	}
 
@@ -809,8 +901,8 @@
 			// q = q?.replace(/[\s\t\n]/g, '+') //+
 
 			// if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
-				if (!q.includes(n))
-					q += ' ' + n
+			if (!q.includes(n))
+				q += ' ' + n
 			// }
 
 			//TODO:Append verified creator channel name only if one letter title
@@ -823,36 +915,20 @@
 		}
 	}
 
-	async function getLyrics(name, channel) {
-		// var myHeaders = {
-		// 	"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-		// 	"accept-language": "en-US,en;q=0.9",
-		// 	"cache-control": "max-age=0",
-		// 	"dnt": "1",
-		// 	"referer": "https://www.google.com/",
-		// 	"sec-fetch-dest": "document",
-		// 	"sec-fetch-mode": "navigate",
-		// 	"sec-fetch-site": "same-origin",
-		// 	"sec-fetch-user": "?1",
-		// 	"upgrade-insecure-requests": "1",
-		// 	//rotation / dynamic
-		// 	"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1"
-		// }
-
+	async function searchGoogle(name, channel) {
 		var myHeaders = {
-			"authority": "www.bing.com",
 			"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-			"accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
+			"accept-language": "en-US,en;q=0.9",
+			"cache-control": "max-age=0",
 			"dnt": "1",
-			"sec-ch-ua": "\"Google Chrome\";v=\"119\", \"Chromium\";v=\"119\", \"Not?A_Brand\";v=\"24\"",
-			"sec-ch-ua-full-version": "\"119.0.6045.123\"",
-			"sec-ch-ua-full-version-list": "\"Google Chrome\";v=\"119.0.6045.123\", \"Chromium\";v=\"119.0.6045.123\", \"Not?A_Brand\";v=\"24.0.0.0\"",
-			"sec-ch-ua-mobile": "?1",
+			"referer": "https://www.google.com/",
 			"sec-fetch-dest": "document",
 			"sec-fetch-mode": "navigate",
 			"sec-fetch-site": "same-origin",
 			"sec-fetch-user": "?1",
-			"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+			"upgrade-insecure-requests": "1",
+			//rotation / dynamic
+			"user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1"
 		}
 
 		var requestOptions = {
@@ -862,8 +938,7 @@
 		};
 
 		var mq = queryBuilder(name, channel)
-		// var url = `https://www.google.com/search?q=${mq}`
-		var url = `https://www.bing.com/search?q=${mq}`
+		var url = `https://www.google.com/search?q=${mq}`
 		console.log('searching : ', url)
 		var response = fetch(url, requestOptions)
 		return response;
