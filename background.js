@@ -718,10 +718,9 @@
 		};
 
 		var url = `https://www.azlyrics.com/lyrics/${channel.replaceAll(" ", "").toLowerCase()}/${name.replaceAll(" ", "").toLowerCase()}.html`
-		var response = await fetch(url, requestOptions)
+		var response = await fetch(encodeURI(url), requestOptions)
 		var page = await response.text()
 
-		//Handle not found
 		return await chrome.scripting.executeScript({
 			target: { tabId },
 			function: (resp) => {
@@ -733,26 +732,20 @@
 
 				let look = true;
 				let raw = ''
-				let refDiv = doc.querySelector(".ringtone"); 
-				while (look && refDiv.nextElementSibling) {
-					refDiv = refDiv.nextElementSibling;
-					if (refDiv.tagName === 'DIV') {
-						look = false;
-						raw = refDiv.textContent
-						console.log(refDiv.textContent)
+				let refDiv = doc.querySelector(".ringtone");
+				if (refDiv && refDiv.nextElementSibling) {
+					while (look && refDiv.nextElementSibling) {
+						refDiv = refDiv.nextElementSibling;
+						if (refDiv.tagName === 'DIV') {
+							look = false;
+							raw = refDiv.textContent
+						}
 					}
-				}
-				var wd = raw.replace(/<\/?div[^>]*>/g, '');
-				var lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean)
-				
-				if(lyrics !=undefined || lyrics.length > 0){
-					message = "OK"
-				}
-				else{
-					message = "NOK"
+					var wd = raw.replace(/<\/?div[^>]*>/g, '');
+					var lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean)
 				}
 
-				//VALIDATE HERE
+				message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK"
 				var r = { lyrics, message }
 				// console.log(r)
 				return JSON.stringify(r)
