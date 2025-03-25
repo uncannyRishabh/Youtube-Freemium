@@ -16,7 +16,7 @@ function saveObject(uid, obj) {
 	else{
 		v = { [uid]: obj }
 	}
-	console.log("Saving : %o",v)
+
 	chrome.storage.local.set(v, () => {
 		if (chrome.runtime.lastError)
 			reject(chrome.runtime.lastError);
@@ -115,11 +115,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 //✅add report func
 //✅use offline resources
 //✅Restrict search for non music content
-//Add AZL
-//update title & artist logic
+//✅Add AZL
+//✅update title & artist logic
+//✅add last accessed and time created to lyrics
+//✅clear local data on update
+//skip ads
+//fake lyric sync
+//Fluid animations
+//decouple 
 //update profanity
 //Add manual search
-//add last accessed and time created to lyrics
 //Update profanity (logic & dictionary)
 //add full screen support
 //Add options[select sources, skip ads, mute ads]

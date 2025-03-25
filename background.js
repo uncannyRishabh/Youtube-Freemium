@@ -9,10 +9,17 @@
 	chrome.runtime.onInstalled.addListener(function (details) {
 		var bool
 		if (details.reason == "install") {
-			console.log("I installed a goated extension")
+			console.log("I installed the goated extension")
 			bool = true
 		} else if (details.reason == "update") {
-			console.log("Goated extension just updated")
+			console.log("Goated extension just got updated")
+			chrome.storage.local.clear(function () {
+				if (chrome.runtime.lastError) {
+					console.error(chrome.runtime.lastError);
+				} else {
+					console.log("Local storage cleared successfully");
+				}
+			});
 			bool = false
 		}
 
@@ -144,7 +151,7 @@
 
 		console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
 		console.log(obj)
-		let lyrics, message, title = ''
+		let lyrics, message, title, source = ''
 
 		if (isMusic) {
 			if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
@@ -158,16 +165,17 @@
 				else {
 					lyrics = resultObject.lyrics ? resultObject.lyrics : '';
 					message = resultObject.message ? resultObject.message : '';
+					source = resultObject.source ? resultObject.source : '';
 				}
 				var scroll = 0
-				var timestamp = Date.now()
+				var timeCreated = Date.now()
 				title = val
 
 				if (message === 'OK' && lyrics && lyrics.length > 0) {
-					saveObject(uid, { lyrics, message, tabId, scroll, timestamp, title })
+					saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source })
 				}
 				else if (message === 'NOK') {
-
+					;
 				}
 			}
 			else if (!isEmpty(obj)) {
@@ -623,7 +631,7 @@
 			}
 			default: {
 				result = await searchBing(tabId, val, channel)
-				if (isEmpty(result) || JSON.parse(result[0].result).message === 'NOK') {
+				if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
 					result = await searchA2Z(tabId, val, channel)
 				}
 			}
@@ -634,19 +642,22 @@
 
 	async function searchBing(tabId, name, channel) {
 		var myHeaders = {
-			"authority": "www.bing.com",
-			"accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-			"accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
-			"dnt": "1",
-			"sec-ch-ua": "\"Google Chrome\";v=\"119\", \"Chromium\";v=\"119\", \"Not?A_Brand\";v=\"24\"",
-			"sec-ch-ua-full-version": "\"119.0.6045.123\"",
-			"sec-ch-ua-full-version-list": "\"Google Chrome\";v=\"119.0.6045.123\", \"Chromium\";v=\"119.0.6045.123\", \"Not?A_Brand\";v=\"24.0.0.0\"",
-			"sec-ch-ua-mobile": "?1",
-			"sec-fetch-dest": "document",
-			"sec-fetch-mode": "navigate",
-			"sec-fetch-site": "same-origin",
-			"sec-fetch-user": "?1",
-			"user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+			'accept-language': 'en-US,en-IN;q=0.9,en;q=0.8',
+			'cache-control': 'no-cache',
+			'dnt': '1',
+			'pragma': 'no-cache',
+			'priority': 'u=0, i',
+			'sec-ch-ua-bitness': '"64"',
+			'sec-ch-ua-full-version': '"124.0.6367.208"',
+			'sec-ch-ua-full-version-list': '"Chromium";v="124.0.6367.208", "Google Chrome";v="124.0.6367.208", "Not-A.Brand";v="99.0.0.0"',
+			'sec-ch-ua-mobile': '?1',
+			'sec-ch-ua-model': '"Nexus 5"',
+			'sec-ch-ua-platform': '"Android"',
+			'sec-ch-ua-platform-version': '"6.0"',
+			'sec-fetch-dest': 'document',
+			'sec-fetch-mode': 'navigate',
+			'sec-fetch-site': 'same-origin',
+			'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
 		}
 
 		var requestOptions = {
@@ -657,7 +668,7 @@
 
 		var mq = queryBuilder(name, channel)
 		var url = `https://www.bing.com/search?q=${mq}`
-		console.log('searching : ', url)
+		console.log('searching bing : ', url)
 		var response = await (await fetch(url, requestOptions)).text();
 
 		//Handle not found
@@ -667,10 +678,12 @@
 				// console.log(resp)
 				var lyrics = []
 				var message = ''
+				var source = 'BING'
 				const parser = new DOMParser();
 				const doc = parser.parseFromString(resp, 'text/html');
 				// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-				var lContainer = doc.querySelectorAll('.lyric_body .verse')
+				var lyricBody = doc.querySelector('.lyric_body')
+				var lContainer = lyricBody ? doc.querySelectorAll('.lyric_body .verse') : doc.querySelectorAll('#lyric_body .verse')
 				const b_TopTitle = doc.querySelector('.b_topTitle')
 
 				//Alternate container
@@ -678,7 +691,7 @@
 					lContainer = doc.querySelector('.l_tac_facts')
 				}
 
-				if (lContainer) {
+				if (lContainer != null && Object.keys(lContainer).length != 0) {
 					// console.log(lContainer.textContent)
 					message = 'OK'
 					// lContainer.querySelectorAll('span').forEach(span => {
@@ -703,7 +716,7 @@
 				}
 
 				//VALIDATE HERE
-				var r = { lyrics, message }
+				var r = { lyrics, message, source }
 				// console.log(r)
 				return JSON.stringify(r)
 			},
@@ -717,7 +730,12 @@
 			redirect: "follow"
 		};
 
-		var url = `https://www.azlyrics.com/lyrics/${channel.replaceAll(" ", "").toLowerCase()}/${name.replaceAll(" ", "").toLowerCase()}.html`
+		if(name.includes(channel)){
+			name = name.replace(channel,'')
+		}
+
+		var url = `https://www.azlyrics.com/lyrics/${channel.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}/${name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}.html`
+		console.log('searching A2Z : ', url)
 		var response = await fetch(encodeURI(url), requestOptions)
 		var page = await response.text()
 
@@ -727,6 +745,7 @@
 				// console.log(resp)
 				var lyrics = []
 				var message = ''
+				var source = 'A2Z'
 				const parser = new DOMParser();
 				const doc = parser.parseFromString(resp, 'text/html');
 
@@ -746,7 +765,7 @@
 				}
 
 				message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK"
-				var r = { lyrics, message }
+				var r = { lyrics, message, source }
 				// console.log(r)
 				return JSON.stringify(r)
 			},
@@ -782,7 +801,7 @@
 					var container = document.querySelector('#yf-container')
 					var lyricContainer = container.querySelector('#lyricContainer')
 
-					console.log('PROFANITY CHECKPOINT !!')
+					console.log('PROFANITY CHECKPOINT !!',bool)
 
 					container.removeChild(container.lastChild)
 
@@ -827,7 +846,7 @@
 
 	}
 
-	const isEmpty = obj => Object.keys(obj).length === 0;
+	const isEmpty = obj => obj == null || Object.keys(obj).length === 0;
 
 	function removeView(tabId) {
 		chrome.scripting.executeScript({
@@ -867,6 +886,17 @@
 			chrome.storage.local.get(uid, (result) => {
 				if (chrome.runtime.lastError)
 					console.error('Error getting');
+
+				if (!isEmpty(result) && result[uid]?.title) {
+					result[uid].lastAccessed = Date.now();
+					console.log('Update last access : ', { [uid]: result[uid] })
+					chrome.storage.local.set({ [uid]: result[uid] }, () => {
+						if (chrome.runtime.lastError) {
+							console.error('Error setting');
+						}
+						resolve(result);
+					});
+				}
 				resolve(result ? result : {});
 			});
 		});
