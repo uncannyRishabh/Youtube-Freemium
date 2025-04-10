@@ -153,6 +153,7 @@
 	display: block;
 	max-height: 2.8rem;
 	-webkit-line-clamp: 1;
+	line-clamp: 1;
 	-webkit-box-orient: vertical;
 	text-overflow: ellipsis;
 	white-space: normal;
