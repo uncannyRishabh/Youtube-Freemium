@@ -1,82 +1,67 @@
-function messageHandler(type, val){
-	chrome.runtime.sendMessage({ type, val }, async (response) => {
-		if (chrome.runtime.lastError)
-			console.log('Error getting');
-		if (response) {
-			console.log(response)
-		}
-	});
+import { saveObject, getFromStorage } from './utils.js';
+
+/**
+ * Sends a message to the background script
+ * @param {string} type - Message type
+ * @param {any} val - Message payload
+ */
+function messageHandler(type, val) {
+    chrome.runtime.sendMessage({ type, val }, async (response) => {
+        if (chrome.runtime.lastError) {
+            console.log('Error sending message:', chrome.runtime.lastError);
+        }
+        if (response) {
+            console.log('Response received:', response);
+        }
+    });
 }
 
-function saveObject(uid, obj) {
-	var v
-	if(uid === ''){
-		v = obj
-	}
-	else{
-		v = { [uid]: obj }
-	}
-
-	chrome.storage.local.set(v, () => {
-		if (chrome.runtime.lastError)
-			reject(chrome.runtime.lastError);
-	});
-}
-
-function getFromStorage(uid) {
-	return new Promise((resolve) => {
-		chrome.storage.local.get(uid, (result) => {
-			if (chrome.runtime.lastError)
-				console.error('Error getting');
-			resolve(result ? result : {});
-		});
-	});
-}
-
-const isEmpty = obj => Object.keys(obj).length === 0;
-
+// Initialize popup UI when DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
-	var toggleExplicit = document.querySelector('#explicitFilter')
-	var toggleExplicitText = document.querySelector('#explicitFilter > .yf-menuText')
-	var clearData = document.querySelector('#clearData')
-	var skipAds = document.querySelector('#skipAds > .yf-menuText')
-	var skipAdsText = document.querySelector('#skipAds > .yf-menuText')
+    const toggleExplicit = document.querySelector('#explicitFilter');
+    const toggleExplicitText = document.querySelector('#explicitFilter > .yf-menuText');
+    const clearData = document.querySelector('#clearData');
 
-	var userPrefs = await getFromStorage('yt-userPrefs')
-	console.log(userPrefs)
-	if(!isEmpty(userPrefs)){
-		var profanityCheck = userPrefs['yt-userPrefs']?.profanity;
-		toggleExplicitText.textContent = profanityCheck && profanityCheck === 'true' ?
-										'Disable profanity filter':'Enable profanity filter'
-	}
-	else {
-		saveObject('yt-userPrefs',{'profanity':'false'})
-	}
+    // Load user preferences
+    const userPrefs = await getFromStorage('yt-userPrefs');
+    const profanityCheck = userPrefs['yt-userPrefs']?.profanity;
+    
+    // Set initial UI state
+    toggleExplicitText.textContent = profanityCheck === 'true' 
+        ? 'Disable profanity filter'
+        : 'Enable profanity filter';
+    
+    if (!userPrefs['yt-userPrefs']) {
+        await saveObject('yt-userPrefs', { profanity: 'false' });
+    }
 
-	toggleExplicit.addEventListener('click', () => {
-		if(toggleExplicitText.textContent === 'Disable profanity filter'){
-			toggleExplicitText.textContent = 'Enable profanity filter'
-			userPrefs['yt-userPrefs'] = {...userPrefs['yt-userPrefs'], profanity: 'true'}
-			saveObject('',userPrefs)
-			messageHandler('PROFANITY_TOGGLE','true')
-		}
-		else if(toggleExplicitText.textContent === 'Enable profanity filter'){
-			toggleExplicitText.textContent = 'Disable profanity filter'
-			userPrefs['yt-userPrefs'] = {...userPrefs['yt-userPrefs'], profanity: 'false'}
-			saveObject('',userPrefs)
-			messageHandler('PROFANITY_TOGGLE','false')
-		}
-	})
+    // Handle profanity filter toggle
+    toggleExplicit.addEventListener('click', () => {
+        const isEnabled = toggleExplicitText.textContent === 'Disable profanity filter';
+        const newState = !isEnabled;
+        
+        toggleExplicitText.textContent = newState 
+            ? 'Disable profanity filter'
+            : 'Enable profanity filter';
+            
+        userPrefs['yt-userPrefs'] = {
+            ...userPrefs['yt-userPrefs'],
+            profanity: String(newState)
+        };
+        
+        saveObject('', userPrefs);
+        messageHandler('PROFANITY_TOGGLE', String(newState));
+    });
 
-	clearData.addEventListener('click', () => {
-		console.log('Clear...')
-		chrome.storage.local.clear(function () {
-			if (chrome.runtime.lastError) {
-			  console.error(chrome.runtime.lastError);
-			} else {
-			  console.log("Local storage cleared successfully");
-			}
-		  });
-	})
+    // Handle clear data button
+    clearData.addEventListener('click', () => {
+        chrome.storage.local.clear(() => {
+            if (chrome.runtime.lastError) {
+                console.error('Error clearing storage:', chrome.runtime.lastError);
+            } else {
+                console.log("Local storage cleared successfully");
+            }
+        });
+    });
+});
 
-})

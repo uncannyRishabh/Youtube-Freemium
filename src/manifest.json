@@ -45,5 +45,9 @@
 				"global.css"
 			]
 		}
-	]
+	],
+	"web_accessible_resources": [{
+		"resources": ["utils.js"],
+		"matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"]
+	}]
 }
