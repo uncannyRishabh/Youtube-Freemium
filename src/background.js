@@ -85,7 +85,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 	});
 
     /**
-     * Handles YouTube SPA navigation
+     * Handles YouTube forward and backward navigation
      */
     chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
         if (details.url && details.url.includes("youtube.com/watch")) {
@@ -109,7 +109,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
     chrome.tabs.onRemoved.addListener((tabId) => {
         if (currentState.tabList.includes(tabId)) {
             currentState.tabList = currentState.tabList.filter(id => id !== tabId);
-			console.log('Detached.. ' + tabId + ' from  :' + tabList)
+			console.log('Detached.. ' + tabId + ' from  :' + currentState.tabList)
         }
     });
 
@@ -156,14 +156,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         var uid = getVideoID(currentState.reqUrl);
         var obj = await getFromStorage(uid);
         let isMusic = await musicCheck(tabId);
-        let result = await findSongAndArtist(tabId);
-        let { val, channel } = result && result[0]?.result ? JSON.parse(result[0].result) : { val: '', channel: '' };
-
-        console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
-        console.log(obj)
-        let lyrics, message, title, source = ''
-
+		let lyrics, message, title, source = ''
+		
         if (isMusic) {
+			let result = await findSongAndArtist(tabId);
+			let { val, channel } = result && result[0]?.result ? JSON.parse(result[0].result) : { val: '', channel: '' };
+	
+			console.log("CHECKPOINT " + val + ' - ' + channel + ' - ' + isMusic);
+			console.log(obj)
+
             if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
                 let result = await findLyricsfromSources(tabId, "", val, channel)
 
@@ -189,15 +190,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
             }
             else if (!isEmpty(obj)) {
-                lyrics = obj[uid]?.lyrics
-                message = obj[uid]?.message
-                title = obj[uid]?.title
+                lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : "";
+                message = obj[uid]?.message ? obj[uid].message : "NOK";
+                title = obj[uid]?.title ?  obj[uid].title : "";
             }
         }
         else {
-            lyrics = obj[uid]?.lyrics
-            message = obj[uid]?.message
-            title = obj[uid]?.title
+            lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : ""
+            message = obj[uid]?.message ? obj[uid].message : "NOK"
+            title = obj[uid]?.title ?  obj[uid].title : ""
         }
 
 
@@ -208,9 +209,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             profanityCheck = false
         }
 
-        lyrics = lyrics ? lyrics : ""
-        message = message ? message : "NOK"
-        title = title ? title : val
+        
 
         chrome.scripting.executeScript({
             target: { tabId },
@@ -604,7 +603,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 return (music === null) || (music === undefined) ? false : (music.textContent == 'Music')
             }
         });
-        return Boolean(isMusic)
+        return isMusic[0].result;
     }
 
     async function findSongAndArtist(tabId) {
