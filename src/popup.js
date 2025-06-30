@@ -65,3 +65,33 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 });
 
+
+/**ISSUES
+* - Popup Menu z-index issue ✅
+* - Bubble wandering outside container ✅
+* - Make lyrics text bigger and clearer (like apple music) ✅
+* - Issue with Take me back to LA song - for a2z theweeknd is weeknd ✅ alternatively add google search 
+* - remove feat/ft from name ✅
+* - menu blur background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12); ✅
+* - Fix not found not displaying when no lyrics found ✅
+* - Make progressbar color match the header bg color when not in use ✅
+* - Make prgressbar stop animating when not in use ✅
+* - Add sleep timer functionality
+* - Extract prominent colors from album art and use them for bubble animation
+* - Toggle for new UI
+* - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
+* - fix light mode issues
+* - search with other identified artists when no lyrics found
+* - make gap clamp 2-3rem depending on text size calc(var())
+* - 
+
+* - The profanity filter toggle does not update the UI immediately after clicking.
+* - Forward and backward buttons do not update the popup UI.
+* - Make bubble animation efficient - only run animation when tab is in focus
+* - Make bubble animation take colors from album art
+* - Bubbles reacting to song beats
+* - Bubbles spinning when in searching mode
+* - Bubbles to spread out evenly and morph shape. 
+* - 
+
+*/

@@ -118,5 +118,16 @@ export function generateA2ZLyricsUrl(name, channel) {
 	// Remove all non-alphanumeric characters and convert to lowercase for song name
 	let sanitizedName = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-	return `https://www.azlyrics.com/lyrics/${sanitizedArtist}/${sanitizedName}.html`;
+	return `https://www.azlyrics.com/lyrics/${findA2ZspecificName(sanitizedArtist)}/${sanitizedName}.html`;
 }
+
+function findA2ZspecificName(name) {
+	const a2zNames = {
+		'theweeknd': 'weeknd',
+		'thewanted': 'wanted',
+		'thechainsmokers': 'chainsmokers'
+	};
+
+	return a2zNames[name] || name;
+}
+

@@ -120,9 +120,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         const { type, val } = obj;
 
         switch (type) {
-            case 'NEW_SEARCH':
-                // Handle new search request
-                break;
             case 'PROFANITY_TOGGLE':
 				currentState.tabList.forEach(async (tabId) => {
 					toggleProfanityFilter(tabId, JSON.parse(val))
@@ -146,9 +143,26 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             currentState.tabList.push(tabId);
         }
 
-        if (title && title.split(' ').length > 1) {
-            await runInContext(tabId, title);
-        }
+        if (currentState.tabList.includes(tabId) && title && title.split(' ').length > 1) {
+			chrome.tabs.sendMessage(tabId, {
+				type: "NEW_SEARCH",
+				'val': getVideoID(currentState.reqUrl)
+			}, (response) => {
+				if (chrome.runtime.lastError) {
+					console.log('Error getting');
+				}
+				if (response) {
+					if (response.name && response.channel) {
+						console.log(response);
+					}
+				}
+				runInContext(tabId, title);
+			});
+		}
+
+        // if (title && title.split(' ').length > 1) {
+        //     await runInContext(tabId, title);
+        // }
     }
 
     const runInContext = async (tabId) => {
@@ -171,6 +185,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 let resultObject = JSON.parse(result[0]?.result);
                 console.log('search result : ', resultObject)
                 if (resultObject === undefined || resultObject === null || resultObject.message === 'NOK') {
+                    lyrics = '';
                     message = 'NOK'
                 }
                 else {
@@ -190,17 +205,16 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
             }
             else if (!isEmpty(obj)) {
-                lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : "";
+                lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : '';
                 message = obj[uid]?.message ? obj[uid].message : "NOK";
-                title = obj[uid]?.title ?  obj[uid].title : "";
+                title = obj[uid]?.title ?  obj[uid].title : '';
             }
         }
         else {
-            lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : ""
+            lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : ''
             message = obj[uid]?.message ? obj[uid].message : "NOK"
-            title = obj[uid]?.title ?  obj[uid].title : ""
+            title = obj[uid]?.title ?  obj[uid].title : ''
         }
-
 
         var prefs = await getFromStorage('yt-userPrefs')
         var profanityCheck = prefs['yt-userPrefs']?.profanity;
@@ -209,17 +223,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             profanityCheck = false
         }
 
-        
-
-        chrome.scripting.executeScript({
+        await chrome.scripting.executeScript({
             target: { tabId },
             function: (lyrics, message, uid, title, profanityCheck) => {
                 var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
-                var container = ytc.querySelector('.yf-container')
-                var lyricContainer = ytc.querySelector('#lyricContainer')
+                var container = ytc?.querySelector('.yf-container')
+                var intermediateContainer = ytc.querySelector('#intermediateContainer')
 
                 if (container) {
-                    if (lyricContainer) {
+                    if (intermediateContainer) {
                         container.removeChild(container.lastChild)
                     }
                 }
@@ -243,6 +255,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     linkElement3.rel = 'stylesheet';
                     linkElement3.href = 'https://fonts.googleapis.com/css2?family=Oswald:wght@300&family=Saira+Extra+Condensed:wght@500&display=swap';
                     document.head.appendChild(linkElement3);
+
+					var linkElement4 = document.createElement('link');
+                    linkElement4.rel = 'stylesheet';
+                    linkElement4.href = 'https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet';
+                    document.head.appendChild(linkElement4);
 
                     header.id = 'header'
                     header.className = 'yf-header'
@@ -280,40 +297,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     nowPlayingSpan.className = "now-playing now-playing-text";
                     nowPlayingSpan.textContent = "Searching -";
 
-                    // var spaceElement = document.createElement("span");
-                    // spaceElement.innerHTML = "&nbsp;";
-
-                    // var tooltip = document.createElement("span");
-                    // tooltip.className = "tooltiptext";
-                    // tooltip.textContent = title;
-
                     var nowPlayingText = document.createElement("input");
                     nowPlayingText.setAttribute("autocomplete", "off");
                     nowPlayingText.id = "now-playing-text-input";
                     nowPlayingText.className = "now-playing-text-input";
                     nowPlayingText.textContent = title;
                     nowPlayingText.disabled = "disabled"; //REMOVEME
-                    // nowPlayingText.appendChild(tooltip);
-
-                    // var searchIcon = document.createElement("span");
-                    // searchIcon.id = 'yf-search'
-                    // searchIcon.className = 'material-symbols-rounded yf-search'
-                    // searchIcon.textContent = 'search'
-
-                    // searchIcon.addEventListener('click', () => {
-                    // 	var input =  document.querySelector('#now-playing-text-input')
-                    // 	var text = input?.value.trim();
-                    // 	// validateAndSearch(text)
-                    // 	var obj = {
-                    // 		'type' : 'NEW_SEARCH',
-                    // 		'val' : [text]
-                    // 	}
-                    // 	chrome.runtime.sendMessage(obj, async (response) => {
-                    // 		if (chrome.runtime.lastError)
-                    // 			console.log('Error getting');
-                    // 		if (response) console.log(response)
-                    // 	});
-                    // })
 
                     nowPlayingDiv.appendChild(nowPlayingSpan);
                     nowPlayingDiv.appendChild(nowPlayingText);
@@ -456,15 +445,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         yfDropdown.style.display = (yfDropdown.style.display === 'none' || yfDropdown.style.display === '') ? 'block' : 'none';
                     })
 
-                    // yfDropdown.addEventListener('click', (event) => {
-                    // 	var listItem = event.target.closest('.yf-dd-list');
-                    // 	if (listItem) {
-                    // 		var optionText = listItem.querySelector('.yf-dd-item-cont').textContent;
-                    // 		console.log('Clicked on:', optionText);
-                    // 	}
-                    //how to
-                    // });
-
                     ytc.addEventListener('mousedown', (event) => {
                         if (!yfDropdown.contains(event.target) && event.target !== menuSpan) {
                             yfDropdown.style.display = 'none';
@@ -487,14 +467,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                 var npt = container.querySelector('.now-playing-text-input')
 
-                if (message === 'OK') {
+                if (message === 'OK') { 
                     var nowPlaying = container.querySelector('.now-playing')
                     if (nowPlaying) nowPlaying.textContent = 'Now Playing -'
 
                     if (npt) npt.placeholder = title
                     container.setAttribute('data-uid', uid)
 
-                    lyricContainer = document.createElement('div')
+                    intermediateContainer = document.createElement('div')
+                    intermediateContainer.id = 'intermediateContainer'
+                    intermediateContainer.className = 'intermediateContainer'
+
+					lyricContainer = document.createElement('div')
                     lyricContainer.id = 'lyricContainer'
                     lyricContainer.className = 'lyricContainer lyric sizeM'
 
@@ -513,6 +497,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     // const exactMatch = ['ass']
                     const censorRegex = new RegExp('\\b(?:' + fuzzyMatch.join('|') + ')\\b', 'gi');
 
+					// Add blurred bubbles background
+					let bubblesWrapper = container.querySelector('.bubbles-wrapper')
+					if (!bubblesWrapper) {
+						bubblesWrapper = document.createElement('div');
+						bubblesWrapper.className = 'bubbles-wrapper';
+						bubblesWrapper.innerHTML = `
+							<div id="bubble-1" class="bubble"></div>
+							<div id="bubble-2" class="bubble"></div>
+							<div id="bubble-3" class="bubble"></div>
+						`;
+					}
+
                     lyrics.forEach(l => {
                         var d = document.createElement('span');
                         // var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
@@ -527,16 +523,19 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         lyricContainer.appendChild(d);
                     });
 
-                    // var replacement = lyricContainer.children[0].parentNode
+					intermediateContainer.appendChild(lyricContainer)
+					intermediateContainer.appendChild(bubblesWrapper)
+                    
+					// var replacement = lyricContainer.children[0].parentNode
                     if (ytc.querySelector('#notFound')) {
-                        container.replaceChild(lyricContainer, container.lastChild);
+                        container.replaceChild(intermediateContainer, container.lastChild);
                     }
                     else {
                         if (ytc.querySelector('#notFound')) {
-                            container.replaceChild(lyricContainer, ytc.querySelector('#lyricContainer'))
+                            container.replaceChild(intermediateContainer, ytc.querySelector('#lyricContainer'))
                         }
                         else {
-                            container.appendChild(lyricContainer);
+                            container.appendChild(intermediateContainer);
                         }
                     }
                 }
@@ -582,16 +581,84 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
 
                 var progressbar = container.querySelector('#ytf-progressbar')
-                if (progressbar) progressbar.style.visibility = 'hidden'
-
+                if (progressbar) {
+                    //pick color from css variable
+                    console.log('STOP PROGRESSBAR ANIMATION')
+                    progressbar.classList.remove("pure-material-progress-linear");
+                    progressbar.classList.add("no-animate");
+                    // progressbar.style.backgroundColor = color
+                }
             },
             args: [lyrics, message, uid, title, profanityCheck]
         });
 
+		await chrome.scripting.executeScript({
+			target: { tabId },
+			function: () => {
+				const colors = {
+					bubble1: '#7B68EE',
+					bubble2: '#FF6B6B',
+					bubble3: '#4ECDC4',
+				};
+				const bubbles = [
+					document.getElementById('bubble-1'),
+					document.getElementById('bubble-2'),
+					document.getElementById('bubble-3')
+				];
+				if (!bubbles[0] || !bubbles[1] || !bubbles[2]) return;
+				bubbles[0].style.backgroundColor = colors.bubble1;
+				bubbles[1].style.backgroundColor = colors.bubble2;
+				bubbles[2].style.backgroundColor = colors.bubble3;
+				const container = document.getElementById('lyricContainer');
+				class Bubble {
+					constructor(element, index) {
+						this.el = element;
+						this.index = index;
+						this.reset();
+					}
+					reset() {
+						const bounds = container.getBoundingClientRect();
+						this.baseSize = Math.random() * (Math.min(bounds.width, bounds.height) * 0.4) + (Math.min(bounds.width, bounds.height) * 0.2);
+						this.el.style.width = this.baseSize + 'px';
+						this.el.style.height = this.baseSize + 'px';
+						this.x = Math.random() * (bounds.width - this.baseSize);
+						this.y = Math.random() * (bounds.height - this.baseSize);
+						this.vx = (Math.random() - 0.5) * 1.5;
+						this.vy = (Math.random() - 0.5) * 1.5;
+						this.angle = Math.random() * 360;
+						this.sizeFluctuation = Math.random() * 0.4 + 0.1;
+					}
+					update() {
+						const bounds = container.getBoundingClientRect();
+						this.x += this.vx;
+						this.y += this.vy;
+						if (this.x <= 0 || this.x + this.currentSize >= bounds.width) this.vx *= -1;
+						if (this.y <= 0 || this.y + this.currentSize >= bounds.height) this.vy *= -1;
+						this.angle += 0.01;
+						const scale = 1 + Math.sin(this.angle) * this.sizeFluctuation;
+						this.currentSize = this.baseSize * scale;
+						this.el.style.width = this.currentSize + 'px';
+						this.el.style.height = this.currentSize + 'px';
+						this.el.style.transform = 'translate(' + this.x + 'px, ' + this.y + 'px)';
+					}
+				}
+				const bubbleObjects = bubbles.map((el, i) => new Bubble(el, i));
+				function animate() {
+					bubbleObjects.forEach(bubble => bubble.update());
+					requestAnimationFrame(animate);
+				}
+				window.addEventListener('resize', () => {
+					bubbleObjects.forEach(bubble => bubble.reset());
+				});
+				animate();
+			},
+			args: []
+		});
+
     }
 
 	/**
-	 * Checks if the current tab is a YouTube Music page
+	 * Checks if the current tab is playing a Music
 	 * @param {*} tabId 
 	 * @returns 
 	 */
@@ -617,12 +684,20 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 if (musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')) {
                     val = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(1)').textContent.trim();
                     channel = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(2)').textContent.trim();
+                    
+                    val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
+	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
+
                     console.log('getSongAndArtistFromCard => Title : ' + val + ' Channel : ' + channel)
                 }
 
                 if (val == undefined || channel == undefined) {
                     val = document.querySelector('#above-the-fold > #title').textContent.trim();
                     channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
+
+                    val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
+	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
+
                     console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Channel : ' + channel)
                 }
 
@@ -787,7 +862,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         });
     }
 
-		async function toggleProfanityFilter(tabId, bool) {
+	async function toggleProfanityFilter(tabId, bool) {
 		console.log('TAB ID :: ', tabId)
 		var uid = await chrome.scripting.executeScript({
 			target: { tabId },

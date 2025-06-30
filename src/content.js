@@ -56,12 +56,17 @@ var primaryInner, secondaryInner
 				}
 
 				if(isMusic){
-					if (progressbar) progressbar.style.visibility = 'visible'
+					if (progressbar) {
+						progressbar.style.visibility = 'visible'
+                    	progressbar.classList.add("pure-material-progress-linear");
+						progressbar.classList.remove("no-animate")
+						// progressbar.setAttriprogressbar.style.backgroundColor = '#00000000'
+					}
 					if (nowPlaying) nowPlaying.textContent = 'Searching -'
 				}
 				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-				console.log(title + " - " + channel)
+				console.log('Content.js :::: '+title + " - " + channel)
 
 				if (title && channel) {
 					res({ 'name': title, 'channel': channel })
@@ -147,4 +152,24 @@ function moveDivToSecondary() {
 
 }
 
-window.onresize = windowResize;
+// function getAlbumArtColors() {
+//   const colorThief = new ColorThief();
+//   const img = document.querySelector("#items > yt-video-attribute-view-model > div > a > div.yt-video-attribute-view-model__hero-section > img");
+
+//   if (img) {
+//     img.crossOrigin = "Anonymous";
+//     if (img.complete) {
+//       const palette = colorThief.getPalette(img, 3);
+//       console.log(palette);
+//     } else {
+//       img.addEventListener('load', function() {
+//         const palette = colorThief.getPalette(img, 3);
+//         console.log(palette);
+//       });
+//     }
+//   }
+// }
+
+// window.onresize = windowResize;
+
+// getAlbumArtColors();

@@ -95,6 +95,7 @@ body {
 	font-weight: 600;
 	display: block;
 	max-height: 2.8rem;
+	line-clamp: 1;
 	-webkit-line-clamp: 1;
 	-webkit-box-orient: vertical;
 	text-overflow: ellipsis;

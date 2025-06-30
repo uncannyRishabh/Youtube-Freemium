@@ -15,15 +15,52 @@
 	scroll-snap-type: y proximity;
 }
 
+.intermediateContainer {
+	display: flex;
+	overflow-y: scroll;
+	flex-direction: column;
+	color: var(--yt-spec-text-primary);
+	flex: 1 1 auto;
+	position: relative;
+	overflow: hidden;
+	border-bottom-right-radius: 12px;
+	border-bottom-left-radius: 12px;
+}
+
 .lyricContainer {
 	display: flex;
 	flex-direction: column;
-    padding: 12px 14px 120px 18px;
-	overflow-y: scroll;
-	color: var(--yt-spec-text-primary);
-	scroll-behavior: smooth;
+	padding: 24px 3vw 120px 3vw;
 	gap: 2rem;
+	overflow-y: scroll;
+	scroll-behavior: smooth;
 	/* scroll-timeline-name: --squareTimeline; */
+}
+
+.bubbles-wrapper {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	min-height: 0;
+	max-height: var(--ytd-watch-flexy-panel-max-height);
+	filter: blur(60px);
+	z-index: 0;
+	pointer-events: none;
+}
+
+.bubble {
+	position: absolute;
+	border-radius: 50%;
+	will-change: transform, width, height;
+	opacity: 0.7;
+}
+
+.lyricContainer>span,
+.lyricContainer>div:not(.bubbles-wrapper) {
+	position: relative;
+	z-index: 1;
 }
 
 .sizeS {
@@ -52,8 +89,10 @@
 }
 
 .lyric {
-	font-weight: 400;
 	font-family: "Roboto", "Arial", sans-serif;
+	font-weight: 600;
+	/* font-weight: 400; */
+	font-style: normal;
 	text-align: center;
 	overflow-wrap: break-word;
 	scroll-snap-align: center;
@@ -98,6 +137,7 @@
 .yf-header {
 	display: flex;
 	flex-direction: column;
+	flex: 0 0 auto;
 	position: relative;
 	box-sizing: border-box;
 	padding: 12px 16px 0 16px;
@@ -203,8 +243,8 @@
 	font-weight: 400;
 	line-height: 1.5rem;
 	border: 2px solid transparent;
-    caret-color: var(--yt-spec-text-primary);
-    color: var(--ytd-searchbox-text-color);
+	caret-color: var(--yt-spec-text-primary);
+	color: var(--ytd-searchbox-text-color);
 	border-radius: 4px;
 	outline: none;
 	background: none;
@@ -225,9 +265,9 @@
 .yf-search {
 	color: var(--yt-spec-text-primary);
 	position: absolute;
-    top: 50%;
-    right: 5px;
-    transform: translateY(-50%);
+	top: 50%;
+	right: 5px;
+	transform: translateY(-50%);
 	cursor: pointer;
 	user-select: none;
 	visibility: hidden;
@@ -240,7 +280,7 @@
 	border-color: var(--ytd-searchbox-legacy-border-color);
 } */
 
-.now-playing-text-input:focus + .yf-search {
+.now-playing-text-input:focus+.yf-search {
 	visibility: visible;
 }
 
@@ -358,7 +398,7 @@
 	height: 2px;
 	width: 100%;
 	color: #e21;
-	background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12);
+	background-color: var(--yt-spec-brand-background-primary);
 	font-size: 16px;
 }
 
@@ -372,7 +412,7 @@
 }
 
 .pure-material-progress-linear:indeterminate {
-	background-size: 200% 100%;
+	background-size: 400% 100%;
 	background-image: linear-gradient(to right, transparent 50%, currentColor 50%, currentColor 60%, transparent 60%, transparent 71.5%, currentColor 71.5%, currentColor 84%, transparent 84%);
 	animation: pure-material-progress-linear 2s infinite linear;
 }
@@ -383,6 +423,21 @@
 
 .pure-material-progress-linear:indeterminate::-ms-fill {
 	animation-name: none;
+}
+
+.no-animate:indeterminate {
+	min-height: 2px !important;
+	height: 2px !important;
+	background-color: var(--yt-spec-brand-background-primary) !important;
+	appearance: auto !important;
+    box-sizing: unset !important;
+    display: inline-block !important;
+    block-size: unset !important;
+    inline-size: unset !important;
+    vertical-align: unset !important;
+	animation: none !important;
+	background-image: none !important;
+	background-color: var(--yt-spec-brand-background-primary);
 }
 
 @keyframes pure-material-progress-linear {
@@ -412,12 +467,14 @@
 }
 
 .yf-dropdown {
+	z-index: 4;
+	backdrop-filter: blur(4px);
+	background-color: rgb(from var(--yt-spec-brand-background-primary) r g b / .6);
 	color: var(--yt-spec-text-primary);
 	fill: var(--yt-spec-text-primary);
 	display: none;
 	position: absolute;
 	right: -18px;
-	background-color: var(--yt-spec-menu-background);
 	border-radius: 12px;
 	box-shadow: 0 4px 32px 0 var(--yt-spec-static-overlay-background-light);
 	top: 100%;
@@ -475,11 +532,11 @@
 
 .yf-reportLink {
 	text-decoration: none;
-    color: inherit;
+	color: inherit;
 	display: inline-block;
-    width: 100%;
-    height: 100%;
-    line-height: 2.5;
+	width: 100%;
+	height: 100%;
+	line-height: 2.5;
 }
 
 .material-symbols-outlined {
@@ -492,8 +549,7 @@
 
 .yf-report-container {
 	display: inline-block;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+	width: 100%;
+	margin: 0;
+	padding: 0;
 }
-
