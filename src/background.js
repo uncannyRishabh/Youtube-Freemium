@@ -10,6 +10,13 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         navigation: false,
         tabList: []
     };
+    const ONINSTALL_REASON_INSTALL = 'install';
+    const ONINSTALL_REASON_UPDATE = 'update';
+    const YOUTUBE_WATCH_URL = "youtube.com/watch";
+    const CHANGE_INFO_STATUS_LOADING = 'loading';
+    const CHANGE_INFO_STATUS_COMPLETE = 'complete';
+    const TRANSITION_FORWARD_BACK = 'forward_back';
+
 
     /**
      * Handles extension installation/update events
@@ -18,10 +25,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
      */
     chrome.runtime.onInstalled.addListener(function (details) {
         let bool
-		if (details.reason == "install") {
+		if (details.reason == ONINSTALL_REASON_INSTALL) {
 			console.log("I installed the goated extension")
 			bool = true
-		} else if (details.reason == "update") {
+		} else if (details.reason == ONINSTALL_REASON_UPDATE) {
 			console.log("Goated extension just got updated")
 			chrome.storage.local.clear(function () {
 				if (chrome.runtime.lastError) {
@@ -63,12 +70,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 		//else 
 		//			   2) display existing
 
-		if (tabInfo.url.includes("youtube.com/watch")) {
-			if (changeInfo.status && changeInfo.status === 'loading') {
+		if (tabInfo.url.includes(YOUTUBE_WATCH_URL)) {
+			if (changeInfo.status && changeInfo.status === CHANGE_INFO_STATUS_LOADING) {
 				currentState.complete = false
 				currentState.navigation = false
 			}
-			if (changeInfo.status && changeInfo.status === 'complete') {
+			if (changeInfo.status && changeInfo.status === CHANGE_INFO_STATUS_COMPLETE) {
 				if (currentState.navigation) {
 					currentState.navigation = false
 					currentState.tabTitle = tabInfo.title
@@ -88,7 +95,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
      * Handles YouTube forward and backward navigation
      */
     chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
-        if (details.url && details.url.includes("youtube.com/watch")) {
+        if (details.url && details.url.includes(YOUTUBE_WATCH_URL)) {
 			chrome.tabs.get(details.tabId, function (tab) {
 				if (tab.title != 'Youtube') currentState.tabTitle = tab.title;
 			});
@@ -97,7 +104,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				// console.log("Tab Title: " + tabTitle + ' CALL !!! MAIN FROM onHistoryStateUpdated')
 				// main(tabTitle, details.url, details.tabId);
 			}
-			if (details.transitionQualifiers.includes('forward_back')) {
+			if (details.transitionQualifiers.includes(TRANSITION_FORWARD_BACK)) {
 				currentState.navigation = true
 			}
 		}

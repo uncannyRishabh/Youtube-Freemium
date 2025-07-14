@@ -170,6 +170,6 @@ function moveDivToSecondary() {
 //   }
 // }
 
-// window.onresize = windowResize;
+window.onresize = windowResize;
 
 // getAlbumArtColors();
