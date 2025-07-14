@@ -589,11 +589,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                 var progressbar = container.querySelector('#ytf-progressbar')
                 if (progressbar) {
-                    //pick color from css variable
-                    console.log('STOP PROGRESSBAR ANIMATION')
                     progressbar.classList.remove("pure-material-progress-linear");
                     progressbar.classList.add("no-animate");
-                    // progressbar.style.backgroundColor = color
                 }
             },
             args: [lyrics, message, uid, title, profanityCheck]
