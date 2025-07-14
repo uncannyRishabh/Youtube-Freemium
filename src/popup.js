@@ -76,6 +76,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Fix not found not displaying when no lyrics found ✅
 * - Make progressbar color match the header bg color when not in use ✅
 * - Make prgressbar stop animating when not in use ✅
+
+
+* - Fix window resizing issue
+* - remove anything after FT also remove the contents within first bracket
 * - Add sleep timer functionality
 * - Extract prominent colors from album art and use them for bubble animation
 * - Toggle for new UI
@@ -83,7 +87,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - fix light mode issues
 * - search with other identified artists when no lyrics found
 * - make gap clamp 2-3rem depending on text size calc(var())
-* - 
+* - reel killer
 
 * - The profanity filter toggle does not update the UI immediately after clicking.
 * - Forward and backward buttons do not update the popup UI.

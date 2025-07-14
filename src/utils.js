@@ -118,6 +118,9 @@ export function generateA2ZLyricsUrl(name, channel) {
 	// Remove all non-alphanumeric characters and convert to lowercase for song name
 	let sanitizedName = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
+	// remove all characters between brackets
+	sanitizedName = sanitizedName.replace(/\[.*?\]/g, '').trim();
+
 	return `https://www.azlyrics.com/lyrics/${findA2ZspecificName(sanitizedArtist)}/${sanitizedName}.html`;
 }
 
@@ -131,3 +134,65 @@ function findA2ZspecificName(name) {
 	return a2zNames[name] || name;
 }
 
+export function extractProminentColors(img) {
+	const ctx = canvas.getContext('2d');
+	// Downscale canvas for performance
+	const scale = Math.min(100 / img.width, 100 / img.height);
+	canvas.width = img.width * scale;
+	canvas.height = img.height * scale;
+
+	ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+	const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+	const colorCounts = {};
+
+	// This value determines the granularity of color grouping.
+	// A higher value means fewer groups and faster processing.
+	const colorQuantization = 8;
+
+	for (let i = 0; i < imageData.length; i += 4) {
+		const r = imageData[i];
+		const g = imageData[i + 1];
+		const b = imageData[i + 2];
+		const a = imageData[i + 3];
+
+		// Ignore transparent or near-transparent pixels
+		if (a < 128) continue;
+
+		// Quantize colors to group similar shades together
+		const r_q = Math.round(r / colorQuantization) * colorQuantization;
+		const g_q = Math.round(g / colorQuantization) * colorQuantization;
+		const b_q = Math.round(b / colorQuantization) * colorQuantization;
+
+		const colorKey = `${r_q},${g_q},${b_q}`;
+		colorCounts[colorKey] = (colorCounts[colorKey] || 0) + 1;
+	}
+
+	const sortedColors = Object.keys(colorCounts)
+		.map(key => ({
+			color: key.split(',').map(Number),
+			count: colorCounts[key]
+		}))
+		.sort((a, b) => b.count - a.count);
+
+	// --- Select the final colors ---
+	const bubbleColors = sortedColors.slice(0, 3).map(c => `rgb(${c.color.join(',')})`);
+
+	// Find a light color for the background
+	let backgroundColor = '#f0f4f8'; // Default fallback
+	const lightestColor = sortedColors.find(c => {
+		const [r, g, b] = c.color;
+		const brightness = (r * 299 + g * 587 + b * 114) / 1000; // Perceived brightness
+		return brightness > 200; // Look for a very light color
+	});
+
+	if (lightestColor) {
+		backgroundColor = `rgb(${lightestColor.color.join(',')})`;
+	} else if (sortedColors.length > 0) {
+		// If no light color is found, create one by lightening the most prominent color
+		const [r, g, b] = sortedColors[0].color;
+		backgroundColor = `rgb(${Math.min(255, r + 80)}, ${Math.min(255, g + 80)}, ${Math.min(255, b + 80)})`;
+	}
+
+	return { bubbleColors, backgroundColor };
+}
