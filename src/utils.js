@@ -1,6 +1,14 @@
-/**
- * Utility functions for Chrome storage and common operations
- */
+
+export function getDefaultUserPrefs(){
+	return {
+		profanity:'true',
+		new_ui:true,
+		kill_shorts:false
+	}
+}
+
+export const fuzzyProfanityDictionary = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
+export const exactProfanityDictionary = []
 
 /**
  * Saves an object to Chrome's local storage
@@ -8,10 +16,21 @@
  * @param {object} obj - Object to store
  * @returns {Promise} Promise that resolves when save is complete
  */
-export function saveObject(uid, obj) {
-	const value = uid === '' ? obj : { [uid]: obj };
+export async function saveObject(uid, obj) {
+	// Get current prefs
+	if (uid === 'yt-userPrefs') {
+		const currentPrefs = await getFromStorage('yt-userPrefs');
+		// Merge obj into currentPrefs['yt-userPrefs']
+		const updatedPrefs = { ...currentPrefs['yt-userPrefs'], ...obj };
+		obj = updatedPrefs;
+
+		console.log('UID: ' + uid + ' obj : ' + obj)
+		console.log(obj)
+	}
+
+	// Save back to storage
 	return new Promise((resolve, reject) => {
-		chrome.storage.local.set(value, () => {
+		chrome.storage.local.set({ [uid]: obj }, () => {
 			if (chrome.runtime.lastError) {
 				reject(chrome.runtime.lastError);
 			}

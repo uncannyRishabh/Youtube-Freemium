@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generateA2ZLyricsUrl } from './utils.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generateA2ZLyricsUrl, getDefaultUserPrefs, fuzzyProfanityDictionary } from './utils.js';
 
 (() => {
     // State management
@@ -35,6 +35,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 					console.error(chrome.runtime.lastError);
 				} else {
 					console.log("Local storage cleared successfully");
+                    saveObject('yt-userPrefs', getDefaultUserPrefs());
 				}
 			});
 			bool = false
@@ -79,14 +80,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				if (currentState.navigation) {
 					currentState.navigation = false
 					currentState.tabTitle = tabInfo.title
-					console.log('CALL !!! MAIN FROM onUPDATE : forward_back')
-					main(tabInfo.title, tabInfo.url, tabId);
+					console.log('CALL !!! MAIN FROM onUPDATE : '+CHANGE_INFO_STATUS_COMPLETE)
+					main(tabInfo.url, tabId);
 				}
 			}
 			if (changeInfo.title) {
 				currentState.tabTitle = tabInfo.title
 				console.log('CALL !!! MAIN FROM onUPDATE')
-				main(tabInfo.title, tabInfo.url, tabId);
+				main(tabInfo.url, tabId);
 			}
 		}
 	});
@@ -106,6 +107,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 			}
 			if (details.transitionQualifiers.includes(TRANSITION_FORWARD_BACK)) {
 				currentState.navigation = true
+                // console.log('CALL !!! MAIN FROM onUPDATE : '+TRANSITION_FORWARD_BACK)
+    			// main(details.url, details.tabId);
 			}
 		}
     });
@@ -127,11 +130,24 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         const { type, val } = obj;
 
         switch (type) {
-            case 'PROFANITY_TOGGLE':
+            case 'PROFANITY_TOGGLE':{
 				currentState.tabList.forEach(async (tabId) => {
 					toggleProfanityFilter(tabId, JSON.parse(val))
 				})
                 break;
+            }
+            case 'KILL_SHORTS':{
+
+                break;
+            }
+            case 'SLEEP_TIMER':{
+
+                break;
+            }
+            case 'NEW_UI':{
+
+                break;
+            }
             default:
                 console.warn('Unknown message type:', type);
         }
@@ -140,7 +156,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
     /**
      * Main processing function for YouTube page changes
      */
-    async function main(title, url, tabId) {
+    async function main(url, tabId) {
 		console.log('TAB ID :: ', tabId)
 
         currentState.process = true;
@@ -150,7 +166,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             currentState.tabList.push(tabId);
         }
 
-        if (currentState.tabList.includes(tabId) && title && title.split(' ').length > 1) {
+        if (currentState.tabList.includes(tabId)
+            //  && title && title.split(' ').length > 1
+            ) {
 			chrome.tabs.sendMessage(tabId, {
 				type: "NEW_SEARCH",
 				'val': getVideoID(currentState.reqUrl)
@@ -163,7 +181,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 						console.log(response);
 					}
 				}
-				runInContext(tabId, title);
+				runInContext(tabId);
 			});
 		}
 
@@ -227,7 +245,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         var profanityCheck = prefs['yt-userPrefs']?.profanity;
         console.log("Profanity : ", profanityCheck)
         if (!profanityCheck || profanityCheck == undefined) {
-            profanityCheck = false
+            profanityCheck = true
         }
 
         await chrome.scripting.executeScript({
@@ -235,7 +253,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             function: (lyrics, message, uid, title, profanityCheck) => {
                 var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
                 var container = ytc?.querySelector('.yf-container')
-                var intermediateContainer = ytc.querySelector('#intermediateContainer')
+                var intermediateContainer = ytc?.querySelector('#intermediateContainer')
 
                 if (container) {
                     if (intermediateContainer) {
@@ -488,13 +506,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 					lyricContainer = document.createElement('div')
                     lyricContainer.id = 'lyricContainer'
                     lyricContainer.className = 'lyricContainer lyric sizeM'
-
-                    if (profanityCheck) {
-                        lyricContainer.setAttribute('data-profanity', profanityCheck)
-                    }
-                    else {
-                        lyricContainer.setAttribute('data-profanity', 'false')
-                    }
+                    lyricContainer.setAttribute('data-profanity', profanityCheck)
+                    
 
                     var localFontSize = localStorage.getItem('fontSize');
                     if (localFontSize)
@@ -519,7 +532,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     lyrics.forEach(l => {
                         var d = document.createElement('span');
                         // var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
-                        if (lyricContainer.getAttribute('data-profanity') === 'true') {
+                        if (lyricContainer.getAttribute('data-profanity') === 'false') {
                             var replacedLine = l.replace(censorRegex, match => match[0] + '*'.repeat(match.length - 1));
                             d.textContent = replacedLine;
                         }
@@ -530,8 +543,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         lyricContainer.appendChild(d);
                     });
 
-					intermediateContainer.appendChild(lyricContainer)
 					intermediateContainer.appendChild(bubblesWrapper)
+					intermediateContainer.appendChild(lyricContainer)
                     
 					// var replacement = lyricContainer.children[0].parentNode
                     if (ytc.querySelector('#notFound')) {
@@ -881,7 +894,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 			var profanity = await getFromStorage('yt-userPrefs')
 			profanity['yt-userPrefs'] = { ...profanity['yt-userPrefs'], profanity: (!bool).toString() }
 			console.log(profanity)
-			saveObject('', profanity)
 
 			if (isEmpty(lyricsObj)) {
 				return
@@ -891,8 +903,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
 			await chrome.scripting.executeScript({
 				target: { tabId },
-				function: (bool, lyrics) => {
-					var container = document.querySelector('#yf-container')
+				function: (bool, lyrics, fuzzyProfanityDictionary) => {
+					var container = document.querySelector('#intermediateContainer')
 					var lyricContainer = container.querySelector('#lyricContainer')
 
 					console.log('PROFANITY CHECKPOINT !!', bool)
@@ -919,9 +931,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 					else {
 						lyricContainer.setAttribute('data-profanity', 'false')
 
-						const fuzzyMatch = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
-						// const exactMatch = ['ass']
-						const censorRegex = new RegExp('\\b(?:' + fuzzyMatch.join('|') + ')\\b', 'gi');
+						const censorRegex = new RegExp('\\b(?:' + fuzzyProfanityDictionary.join('|') + ')\\b', 'gi');
 
 						lyrics.forEach(l => {
 							var d = document.createElement('span');
@@ -934,7 +944,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 					}
 					container.appendChild(lyricContainer)
 				},
-				args: [bool, lyrics]
+				args: [bool, lyrics, fuzzyProfanityDictionary]
 			})
 		}
 

@@ -55,6 +55,17 @@ var primaryInner, secondaryInner
 					break;
 				}
 
+				console.log('DOM State 1 :: '+document.readyState)
+				if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+					document.addEventListener('DOMContentLoaded', () => {
+						console.log('DOM State 2 :: '+document.readyState)
+						let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
+						let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
+						console.log('DOMContentLoaded :::: '+title + " - " + channel)
+
+					}, { once: true });
+				}
+
 				if(isMusic){
 					if (progressbar) {
 						progressbar.style.visibility = 'visible'

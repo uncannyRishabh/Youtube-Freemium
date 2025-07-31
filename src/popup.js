@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage } from './utils.js';
+import { saveObject, getFromStorage, getDefaultUserPrefs } from './utils.js';
 
 /**
  * Sends a message to the background script
@@ -23,34 +23,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     const clearData = document.querySelector('#clearData');
 
     // Load user preferences
-    const userPrefs = await getFromStorage('yt-userPrefs');
-    const profanityCheck = userPrefs['yt-userPrefs']?.profanity;
-    
-    // Set initial UI state
-    toggleExplicitText.textContent = profanityCheck === 'true' 
-        ? 'Disable profanity filter'
-        : 'Enable profanity filter';
+    var userPrefs = await getFromStorage('yt-userPrefs');
+    var profanity = userPrefs['yt-userPrefs']?.profanity;
     
     if (!userPrefs['yt-userPrefs']) {
-        await saveObject('yt-userPrefs', { profanity: 'false' });
+        profanity = 'false'
+        await saveObject('yt-userPrefs', { profanity });
     }
+
+    // Set initial UI state
+    toggleExplicitText.textContent = profanity === 'true' 
+        ? 'Disable profanity'
+        : 'Enable profanity';
+    
 
     // Handle profanity filter toggle
     toggleExplicit.addEventListener('click', () => {
-        const isEnabled = toggleExplicitText.textContent === 'Disable profanity filter';
-        const newState = !isEnabled;
+        const isEnabled = toggleExplicitText.textContent === 'Enable profanity';
         
-        toggleExplicitText.textContent = newState 
-            ? 'Disable profanity filter'
-            : 'Enable profanity filter';
+        toggleExplicitText.textContent = isEnabled 
+            ? 'Disable profanity'
+            : 'Enable profanity';
             
-        userPrefs['yt-userPrefs'] = {
-            ...userPrefs['yt-userPrefs'],
-            profanity: String(newState)
-        };
+        if(profanity === 'true'){
+            profanity = 'false'
+        }
+        else if(profanity === 'false'){
+            profanity = 'true'
+        }
         
-        saveObject('', userPrefs);
-        messageHandler('PROFANITY_TOGGLE', String(newState));
+        saveObject('yt-userPrefs', {'profanity' : profanity});
+        messageHandler('PROFANITY_TOGGLE', profanity);
     });
 
     // Handle clear data button
@@ -60,6 +63,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 console.error('Error clearing storage:', chrome.runtime.lastError);
             } else {
                 console.log("Local storage cleared successfully");
+                saveObject('yt-userPrefs', getDefaultUserPrefs());
             }
         });
     });
@@ -78,7 +82,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Make prgressbar stop animating when not in use ✅
 
 
-* - Fix window resizing issue
+* - Fix enable disable profanity UI defaulting to previous option ✅
+* - Fix window resizing issue ✅
+* - reel killer
 * - remove anything after FT also remove the contents within first bracket
 * - Add sleep timer functionality
 * - Extract prominent colors from album art and use them for bubble animation
@@ -87,8 +93,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - fix light mode issues
 * - search with other identified artists when no lyrics found
 * - make gap clamp 2-3rem depending on text size calc(var())
-* - reel killer
 
+* - Profanity logic when not found 
 * - The profanity filter toggle does not update the UI immediately after clicking.
 * - Forward and backward buttons do not update the popup UI.
 * - Make bubble animation efficient - only run animation when tab is in focus
@@ -96,6 +102,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Bubbles reacting to song beats
 * - Bubbles spinning when in searching mode
 * - Bubbles to spread out evenly and morph shape. 
-* - 
+* - Search functionality with - is this correct lyrics ❌ / ✅ options
+* - Font Size not updating in local storage - intermittently
 
 */
