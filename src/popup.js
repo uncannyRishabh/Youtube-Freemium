@@ -20,14 +20,18 @@ function messageHandler(type, val) {
 document.addEventListener("DOMContentLoaded", async () => {
     const toggleExplicit = document.querySelector('#explicitFilter');
     const toggleExplicitText = document.querySelector('#explicitFilter > .yf-menuText');
+    const killShorts = document.querySelector('#killShorts');
+    const killShortsText = document.querySelector('#killShorts > .yf-menuText');
     const clearData = document.querySelector('#clearData');
-
+    
     // Load user preferences
     var userPrefs = await getFromStorage('yt-userPrefs');
     var profanity = userPrefs['yt-userPrefs']?.profanity;
+    var kill_shorts = userPrefs['yt-userPrefs']?.kill_shorts;
     
     if (!userPrefs['yt-userPrefs']) {
         profanity = 'false'
+        kill_shorts = false
         await saveObject('yt-userPrefs', { profanity });
     }
 
@@ -35,7 +39,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     toggleExplicitText.textContent = profanity === 'true' 
         ? 'Disable profanity'
         : 'Enable profanity';
-    
+
+    killShortsText.textContent = kill_shorts 
+        ? 'Enable Shorts'
+        : 'Disable Shorts'
 
     // Handle profanity filter toggle
     toggleExplicit.addEventListener('click', () => {
@@ -56,6 +63,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         messageHandler('PROFANITY_TOGGLE', profanity);
     });
 
+    //Handle kill shorts button
+    killShorts.addEventListener('click', async() => {
+        kill_shorts = !kill_shorts
+
+        killShortsText.textContent = kill_shorts 
+        ? 'Enable Shorts'
+        : 'Disable Shorts'
+
+        saveObject('yt-userPrefs', {'kill_shorts' : kill_shorts});
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        messageHandler('KILL_SHORTS',kill_shorts);
+    })
+
     // Handle clear data button
     clearData.addEventListener('click', () => {
         chrome.storage.local.clear(() => {
@@ -68,7 +88,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     });
 });
-
 
 /**ISSUES
 * - Popup Menu z-index issue ✅
@@ -84,17 +103,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 * - Fix enable disable profanity UI defaulting to previous option ✅
 * - Fix window resizing issue ✅
-* - reel killer
+* - reel killer✅
+* - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
+* - make gap clamp 2-3rem depending on text size calc(var())
+* - Profanity logic when not found 
 * - remove anything after FT also remove the contents within first bracket
-* - Add sleep timer functionality
 * - Extract prominent colors from album art and use them for bubble animation
 * - Toggle for new UI
-* - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
 * - fix light mode issues
 * - search with other identified artists when no lyrics found
-* - make gap clamp 2-3rem depending on text size calc(var())
 
-* - Profanity logic when not found 
+* - Add sleep timer functionality
 * - The profanity filter toggle does not update the UI immediately after clicking.
 * - Forward and backward buttons do not update the popup UI.
 * - Make bubble animation efficient - only run animation when tab is in focus
@@ -104,5 +123,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Bubbles to spread out evenly and morph shape. 
 * - Search functionality with - is this correct lyrics ❌ / ✅ options
 * - Font Size not updating in local storage - intermittently
+* - Page refresh on clear data - on all open youtube tabs
+* - Re-render popup.js on clear data
 
 */
+
+// document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer')[0].style.display = 'none'
+// document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer')[0].style.display='unset'

@@ -3,6 +3,18 @@ var primaryInner, secondaryInner
 
 (async () => {
 	console.log('Script Injected')
+	// Load user preferences
+	var userPrefs = await getFromStorage('yt-userPrefs');
+
+	chrome.runtime.sendMessage({ type: 'GET_STORAGE', key: 'yt-userPrefs' }, (response) => {
+		if (response && response.value) {
+			// Use response.value here
+			console.log('yt-userPrefs:', response.value);
+			userPrefs = response.value
+		}
+	});
+	var kill_shorts = userPrefs['yt-userPrefs']?.kill_shorts;
+
 	var preconnect1 = document.createElement("link");
 	preconnect1.rel = "preconnect";
 	preconnect1.href = "https://fonts.googleapis.com";
@@ -14,8 +26,8 @@ var primaryInner, secondaryInner
 	preconnect2.crossOrigin = "";
 	document.head.appendChild(preconnect2);
 
-	moveRequired = document.querySelector(window.innerWidth < 1000 
-		? '#primary > #primary-inner > #below > #yf-container' 
+	moveRequired = document.querySelector(window.innerWidth < 1000
+		? '#primary > #primary-inner > #below > #yf-container'
 		: '#secondary > #secondary-inner > #yf-container') == null;
 
 	// player = document.querySelector('#primary video')
@@ -25,6 +37,34 @@ var primaryInner, secondaryInner
 	// if(player != null){
 	// observer.observe(player, { attributes: true, attributeFilter: ['style'] });
 	// }
+
+	// Watch for new elements being added
+	// const observer = new MutationObserver(() => {
+	// 	console.log('FROM Mutation Observer')
+	// 	hideShelfRenderer();
+	// });
+
+	// observer.observe(document.querySelector('#contents'), {
+	// 	childList: true,
+	// 	subtree: true
+	// });
+
+	//KILL_SHORTS_PRESET
+
+
+	const style = document.createElement('style');
+	style.textContent = `
+		.hide-youtube-shelves ytd-rich-shelf-renderer,
+		.hide-youtube-shelves ytd-reel-shelf-renderer {
+			display: none !important;
+		}
+	`;
+
+	document.head.appendChild(style);
+	if (!kill_shorts) {
+		document.documentElement.classList.toggle("hide-youtube-shelves");
+	}
+
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		//NEW_SEARCH
@@ -55,21 +95,21 @@ var primaryInner, secondaryInner
 					break;
 				}
 
-				console.log('DOM State 1 :: '+document.readyState)
+				console.log('DOM State 1 :: ' + document.readyState)
 				if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
 					document.addEventListener('DOMContentLoaded', () => {
-						console.log('DOM State 2 :: '+document.readyState)
+						console.log('DOM State 2 :: ' + document.readyState)
 						let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 						let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-						console.log('DOMContentLoaded :::: '+title + " - " + channel)
+						console.log('DOMContentLoaded :::: ' + title + " - " + channel)
 
 					}, { once: true });
 				}
 
-				if(isMusic){
+				if (isMusic) {
 					if (progressbar) {
 						progressbar.style.visibility = 'visible'
-                    	progressbar.classList.add("pure-material-progress-linear");
+						progressbar.classList.add("pure-material-progress-linear");
 						progressbar.classList.remove("no-animate")
 						// progressbar.setAttriprogressbar.style.backgroundColor = '#00000000'
 					}
@@ -77,7 +117,7 @@ var primaryInner, secondaryInner
 				}
 				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-				console.log('Content.js :::: '+title + " - " + channel)
+				console.log('Content.js :::: ' + title + " - " + channel)
 
 				if (title && channel) {
 					res({ 'name': title, 'channel': channel })
@@ -94,6 +134,12 @@ var primaryInner, secondaryInner
 				// }
 				break;
 			}
+			case 'KILL_SHORTS': {
+				console.log('KILL SHORTS')
+				console.log(obj)
+				document.documentElement.classList.toggle("hide-youtube-shelves");
+				break;
+			}
 			default: {
 				console.log('cjs : Unknown command')
 			}
@@ -103,6 +149,15 @@ var primaryInner, secondaryInner
 
 })();
 
+function hideShelfRenderer() {
+	const elements = document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer');
+	elements.forEach(el => {
+		el.style.display = 'none';
+	});
+}
+
+// // Initial check in case it's already loaded
+// hideShelfRenderer();
 
 // function observePlayer() {
 // 	if(lyricContainer == null){
@@ -115,11 +170,11 @@ var primaryInner, secondaryInner
 
 function windowResize() {
 	insidePrimary = document.querySelector('#primary > #primary-inner > #below > #yf-container')
-	moveRequired = document.querySelector(window.innerWidth < 1000 
-		? '#primary > #primary-inner > #below > #yf-container' 
+	moveRequired = document.querySelector(window.innerWidth < 1000
+		? '#primary > #primary-inner > #below > #yf-container'
 		: '#secondary > #secondary-inner > #yf-container') == null;
-	
-	if(moveRequired){
+
+	if (moveRequired) {
 		if (insidePrimary) {
 			moveDivToSecondary();
 		}
