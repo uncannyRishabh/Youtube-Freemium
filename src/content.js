@@ -6,13 +6,6 @@ var primaryInner, secondaryInner
 	// Load user preferences
 	var userPrefs = await getFromStorage('yt-userPrefs');
 
-	chrome.runtime.sendMessage({ type: 'GET_STORAGE', key: 'yt-userPrefs' }, (response) => {
-		if (response && response.value) {
-			// Use response.value here
-			console.log('yt-userPrefs:', response.value);
-			userPrefs = response.value
-		}
-	});
 	var kill_shorts = userPrefs['yt-userPrefs']?.kill_shorts;
 
 	var preconnect1 = document.createElement("link");
@@ -61,7 +54,7 @@ var primaryInner, secondaryInner
 	`;
 
 	document.head.appendChild(style);
-	if (!kill_shorts) {
+	if (kill_shorts) {
 		document.documentElement.classList.toggle("hide-youtube-shelves");
 	}
 
@@ -134,18 +127,48 @@ var primaryInner, secondaryInner
 				// }
 				break;
 			}
-			case 'KILL_SHORTS': {
-				console.log('KILL SHORTS')
-				console.log(obj)
-				document.documentElement.classList.toggle("hide-youtube-shelves");
-				break;
-			}
 			default: {
 				console.log('cjs : Unknown command')
 			}
 		}
 
 	})
+
+	
+	/**
+	 * Retrieves data from Chrome's local storage
+	 * @param {string} uid - Unique identifier to retrieve
+	 * @returns {Promise<object>} Promise that resolves with retrieved data
+	 */
+	function getFromStorage(uid) {
+		return new Promise((resolve) => {
+			chrome.storage.local.get(uid, (result) => {
+				if (chrome.runtime.lastError) {
+					console.error('Error getting from storage:', chrome.runtime.lastError);
+					resolve({});
+					return;
+				}
+	
+				// Update last accessed time for video entries
+				if (!isEmpty(result) && result[uid]?.title) {
+					result[uid].lastAccessed = Date.now();
+					chrome.storage.local.set({ [uid]: result[uid] });
+				}
+	
+				resolve(result || {});
+			});
+		});
+	}
+
+	/**
+	 * Checks if an object is empty or null
+	 * @param {object} obj - Object to check
+	 * @returns {boolean} True if object is empty or null
+	 */
+	function isEmpty(obj) {
+		return obj == null || Object.keys(obj).length === 0;
+	}
+
 
 })();
 

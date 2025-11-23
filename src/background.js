@@ -13,6 +13,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
     const ONINSTALL_REASON_INSTALL = 'install';
     const ONINSTALL_REASON_UPDATE = 'update';
     const YOUTUBE_WATCH_URL = "youtube.com/watch";
+    const YOUTUBE_URL = "youtube.com";
     const CHANGE_INFO_STATUS_LOADING = 'loading';
     const CHANGE_INFO_STATUS_COMPLETE = 'complete';
     const TRANSITION_FORWARD_BACK = 'forward_back';
@@ -90,6 +91,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				main(tabInfo.url, tabId);
 			}
 		}
+        else if (tabInfo.url.includes(YOUTUBE_URL)) {
+            if (!currentState.tabList.includes(tabId)) {
+                currentState.tabList.push(tabId);
+            }
+        }
+
 	});
 
     /**
@@ -126,7 +133,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
     /**
      * Handles messages from content script
      */
-    chrome.runtime.onMessage.addListener((obj, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener(async(obj, sender, sendResponse) => {
         const { type, val } = obj;
 
         switch (type) {
@@ -136,10 +143,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				})
                 break;
             }
-            case 'KILL_SHORTS':{
-
-                break;
-            }
+            case 'KILL_SHORTS': {
+                console.log('KILL SHORTS')
+                console.log(obj)
+                saveObject('yt-userPrefs', { 'kill_shorts': val });
+                currentState.tabList.forEach(async (tabId) => {
+                    await killShort(tabId,val)
+                })
+				break;
+			}
             case 'SLEEP_TIMER':{
 
                 break;
@@ -688,6 +700,24 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             }
         });
         return isMusic[0].result;
+    }
+
+    async function killShort(tabId, val) {
+        await chrome.scripting.executeScript({
+			target: { tabId },
+			function: (val) => {
+				if (val) {
+                    console.log("FREEMIUM : KILLSHORT" + val)
+                    document.documentElement.classList.toggle("hide-youtube-shelves", true);
+                }
+                else {
+                    console.log("FREEMIUM : KILLSHORT" + val)
+                    document.documentElement.classList.toggle("hide-youtube-shelves", false);
+                }
+            }
+            ,
+            args: [val]
+		});
     }
 
     async function findSongAndArtist(tabId) {
