@@ -3,6 +3,11 @@ var primaryInner, secondaryInner
 
 (async () => {
 	console.log('Script Injected')
+	// Load user preferences
+	var userPrefs = await getFromStorage('yt-userPrefs');
+
+	var kill_shorts = userPrefs['yt-userPrefs']?.kill_shorts;
+
 	var preconnect1 = document.createElement("link");
 	preconnect1.rel = "preconnect";
 	preconnect1.href = "https://fonts.googleapis.com";
@@ -14,8 +19,8 @@ var primaryInner, secondaryInner
 	preconnect2.crossOrigin = "";
 	document.head.appendChild(preconnect2);
 
-	moveRequired = document.querySelector(window.innerWidth < 1000 
-		? '#primary > #primary-inner > #below > #yf-container' 
+	moveRequired = document.querySelector(window.innerWidth < 1000
+		? '#primary > #primary-inner > #below > #yf-container'
 		: '#secondary > #secondary-inner > #yf-container') == null;
 
 	// player = document.querySelector('#primary video')
@@ -25,6 +30,34 @@ var primaryInner, secondaryInner
 	// if(player != null){
 	// observer.observe(player, { attributes: true, attributeFilter: ['style'] });
 	// }
+
+	// Watch for new elements being added
+	// const observer = new MutationObserver(() => {
+	// 	console.log('FROM Mutation Observer')
+	// 	hideShelfRenderer();
+	// });
+
+	// observer.observe(document.querySelector('#contents'), {
+	// 	childList: true,
+	// 	subtree: true
+	// });
+
+	//KILL_SHORTS_PRESET
+
+
+	const style = document.createElement('style');
+	style.textContent = `
+		.hide-youtube-shelves ytd-rich-shelf-renderer,
+		.hide-youtube-shelves ytd-reel-shelf-renderer {
+			display: none !important;
+		}
+	`;
+
+	document.head.appendChild(style);
+	if (kill_shorts) {
+		document.documentElement.classList.toggle("hide-youtube-shelves");
+	}
+
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		//NEW_SEARCH
@@ -55,13 +88,29 @@ var primaryInner, secondaryInner
 					break;
 				}
 
-				if(isMusic){
-					if (progressbar) progressbar.style.visibility = 'visible'
+				console.log('DOM State 1 :: ' + document.readyState)
+				if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+					document.addEventListener('DOMContentLoaded', () => {
+						console.log('DOM State 2 :: ' + document.readyState)
+						let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
+						let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
+						console.log('DOMContentLoaded :::: ' + title + " - " + channel)
+
+					}, { once: true });
+				}
+
+				if (isMusic) {
+					if (progressbar) {
+						progressbar.style.visibility = 'visible'
+						progressbar.classList.add("pure-material-progress-linear");
+						progressbar.classList.remove("no-animate")
+						// progressbar.setAttriprogressbar.style.backgroundColor = '#00000000'
+					}
 					if (nowPlaying) nowPlaying.textContent = 'Searching -'
 				}
 				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
 				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-				console.log(title + " - " + channel)
+				console.log('Content.js :::: ' + title + " - " + channel)
 
 				if (title && channel) {
 					res({ 'name': title, 'channel': channel })
@@ -85,8 +134,53 @@ var primaryInner, secondaryInner
 
 	})
 
+	
+	/**
+	 * Retrieves data from Chrome's local storage
+	 * @param {string} uid - Unique identifier to retrieve
+	 * @returns {Promise<object>} Promise that resolves with retrieved data
+	 */
+	function getFromStorage(uid) {
+		return new Promise((resolve) => {
+			chrome.storage.local.get(uid, (result) => {
+				if (chrome.runtime.lastError) {
+					console.error('Error getting from storage:', chrome.runtime.lastError);
+					resolve({});
+					return;
+				}
+	
+				// Update last accessed time for video entries
+				if (!isEmpty(result) && result[uid]?.title) {
+					result[uid].lastAccessed = Date.now();
+					chrome.storage.local.set({ [uid]: result[uid] });
+				}
+	
+				resolve(result || {});
+			});
+		});
+	}
+
+	/**
+	 * Checks if an object is empty or null
+	 * @param {object} obj - Object to check
+	 * @returns {boolean} True if object is empty or null
+	 */
+	function isEmpty(obj) {
+		return obj == null || Object.keys(obj).length === 0;
+	}
+
+
 })();
 
+function hideShelfRenderer() {
+	const elements = document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer');
+	elements.forEach(el => {
+		el.style.display = 'none';
+	});
+}
+
+// // Initial check in case it's already loaded
+// hideShelfRenderer();
 
 // function observePlayer() {
 // 	if(lyricContainer == null){
@@ -99,11 +193,11 @@ var primaryInner, secondaryInner
 
 function windowResize() {
 	insidePrimary = document.querySelector('#primary > #primary-inner > #below > #yf-container')
-	moveRequired = document.querySelector(window.innerWidth < 1000 
-		? '#primary > #primary-inner > #below > #yf-container' 
+	moveRequired = document.querySelector(window.innerWidth < 1000
+		? '#primary > #primary-inner > #below > #yf-container'
 		: '#secondary > #secondary-inner > #yf-container') == null;
-	
-	if(moveRequired){
+
+	if (moveRequired) {
 		if (insidePrimary) {
 			moveDivToSecondary();
 		}
@@ -147,4 +241,24 @@ function moveDivToSecondary() {
 
 }
 
+// function getAlbumArtColors() {
+//   const colorThief = new ColorThief();
+//   const img = document.querySelector("#items > yt-video-attribute-view-model > div > a > div.yt-video-attribute-view-model__hero-section > img");
+
+//   if (img) {
+//     img.crossOrigin = "Anonymous";
+//     if (img.complete) {
+//       const palette = colorThief.getPalette(img, 3);
+//       console.log(palette);
+//     } else {
+//       img.addEventListener('load', function() {
+//         const palette = colorThief.getPalette(img, 3);
+//         console.log(palette);
+//       });
+//     }
+//   }
+// }
+
 window.onresize = windowResize;
+
+// getAlbumArtColors();
