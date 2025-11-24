@@ -91,11 +91,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				main(tabInfo.url, tabId);
 			}
 		}
-        else if (tabInfo.url.includes(YOUTUBE_URL)) {
-            if (!currentState.tabList.includes(tabId)) {
-                currentState.tabList.push(tabId);
-            }
-        }
 
 	});
 
@@ -147,6 +142,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 console.log('KILL SHORTS')
                 console.log(obj)
                 saveObject('yt-userPrefs', { 'kill_shorts': val });
+
+                chrome.tabs.query({ url: "*://*.youtube.com/*" }, function (tabs) {
+                    tabs.forEach(async tab => {
+                        await killShort(tab.id, val)
+                    });
+
+                });
+
                 currentState.tabList.forEach(async (tabId) => {
                     await killShort(tabId,val)
                 })
