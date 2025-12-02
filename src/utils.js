@@ -7,7 +7,7 @@ export function getDefaultUserPrefs(){
 	}
 }
 
-export const fuzzyProfanityDictionary = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
+export const fuzzyProfanityDictionary = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'whore']
 export const exactProfanityDictionary = []
 
 /**
@@ -131,14 +131,17 @@ export function generateA2ZLyricsUrl(name, channel) {
 	//remove all characters after first comma
 	let sanitizedArtist = channel.includes(',') ? channel.split(',')[0] : channel;
 
+	//replace all $ with s
+	sanitizedArtist = sanitizedArtist.replace('$', 's').trim();
+
 	// Remove all non-alphanumeric characters and convert to lowercase for channel
 	sanitizedArtist = sanitizedArtist.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-	// Remove all non-alphanumeric characters and convert to lowercase for song name
-	let sanitizedName = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
 	// remove all characters between brackets
-	sanitizedName = sanitizedName.replace(/\[.*?\]/g, '').trim();
+	let sanitizedName = name.replace(/\[.*?\]/g, '').trim();
+	
+	// Remove all non-alphanumeric characters and convert to lowercase for song name
+	sanitizedName = sanitizedName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
 	return `https://www.azlyrics.com/lyrics/${findA2ZspecificName(sanitizedArtist)}/${sanitizedName}.html`;
 }
@@ -147,7 +150,8 @@ function findA2ZspecificName(name) {
 	const a2zNames = {
 		'theweeknd': 'weeknd',
 		'thewanted': 'wanted',
-		'thechainsmokers': 'chainsmokers'
+		'thechainsmokers': 'chainsmokers',
+		
 	};
 
 	return a2zNames[name] || name;

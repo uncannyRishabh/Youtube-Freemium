@@ -265,7 +265,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck) => {
+            function: (lyrics, message, uid, title, profanityCheck, fuzzyProfanityDictionary) => {
                 var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
                 var container = ytc?.querySelector('.yf-container')
                 var intermediateContainer = ytc?.querySelector('#intermediateContainer')
@@ -528,10 +528,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     if (localFontSize)
                        	lyricContainer.style.fontSize = localFontSize
 
-                    const fuzzyMatch = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
-                    // const exactMatch = ['ass']
-                    const censorRegex = new RegExp('\\b(?:' + fuzzyMatch.join('|') + ')\\b', 'gi');
-
 					// Add blurred bubbles background
 					let bubblesWrapper = container.querySelector('.bubbles-wrapper')
 					if (!bubblesWrapper) {
@@ -543,12 +539,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 							<div id="bubble-3" class="bubble"></div>
 						`;
 					}
+                    
+                    const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                    const re = new RegExp(`(${pattern})`, 'giu');
 
                     lyrics.forEach(l => {
                         var d = document.createElement('span');
                         // var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
                         if (lyricContainer.getAttribute('data-profanity') === 'false') {
-                            var replacedLine = l.replace(censorRegex, match => match[0] + '*'.repeat(match.length - 1));
+                            var replacedLine = l.replace(re, match => {
+                                if (match.length <= 1) return '*';
+                                return match.charAt(0) + '*'.repeat(match.length - 1);
+                            });
                             d.textContent = replacedLine;
                         }
                         else {
@@ -621,7 +623,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     progressbar.classList.add("no-animate");
                 }
             },
-            args: [lyrics, message, uid, title, profanityCheck]
+            args: [lyrics, message, uid, title, profanityCheck, fuzzyProfanityDictionary]
         });
 
 		await chrome.scripting.executeScript({
@@ -874,7 +876,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         }
 
         var url = generateA2ZLyricsUrl(name, channel)
-	    console.log('searching A2Z : ', url)
+	    console.log('searching A2Z : ', url) 
         var response = await fetch(encodeURI(url), requestOptions)
         var page = await response.text()
 
@@ -964,14 +966,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 					else {
 						lyricContainer.setAttribute('data-profanity', 'false')
 
-						const censorRegex = new RegExp('\\b(?:' + fuzzyProfanityDictionary.join('|') + ')\\b', 'gi');
+						// const censorRegex = new RegExp('\\b(?:' + fuzzyProfanityDictionary.join('|') + ')\\b', 'gi');
+                        const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                        const re = new RegExp(`(${pattern})`, 'giu');
 
-						lyrics.forEach(l => {
-							var d = document.createElement('span');
-							// var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
-							var replacedLine = l.replace(censorRegex, match => match[0] + '*'.repeat(match.length - 1));
-							d.textContent = replacedLine;
-							lyricContainer.appendChild(d);
+                        lyrics.forEach(l => {
+                            var d = document.createElement('span');
+                            var replacedLine = l.replace(re, match => {
+                                if (match.length <= 1) return '*';
+                                return match.charAt(0) + '*'.repeat(match.length - 1);
+                            });
+                            d.textContent = replacedLine;
+                            lyricContainer.appendChild(d);
 						});
 
 					}

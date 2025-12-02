@@ -90,31 +90,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 /**ISSUES
-* - Popup Menu z-index issue ✅
-* - Bubble wandering outside container ✅
-* - Make lyrics text bigger and clearer (like apple music) ✅
-* - Issue with Take me back to LA song - for a2z theweeknd is weeknd ✅ alternatively add google search 
-* - remove feat/ft from name ✅
-* - menu blur background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12); ✅
-* - Fix not found not displaying when no lyrics found ✅
-* - Make progressbar color match the header bg color when not in use ✅
-* - Make prgressbar stop animating when not in use ✅
-
-
-* - Fix enable disable profanity UI defaulting to previous option ✅
-* - Fix window resizing issue ✅
-* - reel killer✅
 * - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
 * - make gap clamp 2-3rem depending on text size calc(var())
-* - Profanity logic when not found 
+* - Profanity toggle logic when not found - bug/edge
 * - remove anything after FT also remove the contents within first bracket
-* - Extract prominent colors from album art and use them for bubble animation
+* - Extract prominent colors from album art and use them for LAVA LAMP animation
 * - Toggle for new UI
 * - fix light mode issues
 * - search with other identified artists when no lyrics found
 
 * - Add sleep timer functionality
-* - The profanity filter toggle does not update the UI immediately after clicking.
 * - Forward and backward buttons do not update the popup UI.
 * - Make bubble animation efficient - only run animation when tab is in focus
 * - Make bubble animation take colors from album art
@@ -126,7 +111,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Page refresh on clear data - on all open youtube tabs
 * - Re-render popup.js on clear data
 
-*/
+* - fix main called multiple times for same page
 
-// document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer')[0].style.display = 'none'
-// document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer')[0].style.display='unset'
+*/
