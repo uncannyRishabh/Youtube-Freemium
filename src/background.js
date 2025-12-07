@@ -771,9 +771,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 break;
             }
             default: {
-                result = await searchBing(tabId, val, channel)
+                result = await searchA2Z(tabId, val, channel)
                 if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
-                    result = await searchA2Z(tabId, val, channel)
+                    result = await searchBing(tabId, val, channel)
                 }
             }
         }
