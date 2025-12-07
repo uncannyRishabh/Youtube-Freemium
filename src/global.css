@@ -45,7 +45,7 @@
 	bottom: 0;
 	min-height: 0;
 	max-height: var(--ytd-watch-flexy-panel-max-height);
-	filter: blur(60px);
+	filter: blur(50px);
 	z-index: 0;
 	pointer-events: none;
 }
