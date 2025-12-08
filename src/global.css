@@ -27,16 +27,6 @@
 	border-bottom-left-radius: 12px;
 }
 
-.lyricContainer {
-	display: flex;
-	flex-direction: column;
-	padding: 24px 3vw 120px 3vw;
-	gap: 2rem;
-	overflow-y: scroll;
-	scroll-behavior: smooth;
-	/* scroll-timeline-name: --squareTimeline; */
-}
-
 .bubbles-wrapper {
 	position: absolute;
 	top: 0;
@@ -57,10 +47,51 @@
 	opacity: 0.7;
 }
 
+.lyricContainer {
+	display: flex;
+	flex-direction: column;
+	padding: 24px 3vw 120px 3vw;
+	gap: 2rem;
+	overflow-y: scroll;
+	scroll-behavior: smooth;
+	/* scroll-timeline-name: --squareTimeline; */
+}
+
 .lyricContainer>span,
 .lyricContainer>div:not(.bubbles-wrapper) {
 	position: relative;
 	z-index: 1;
+}
+
+.lyric {
+	font-family: "Roboto", "Arial", sans-serif;
+	/* font-weight: 400; */
+	font-style: normal;
+	text-align: center;
+	overflow-wrap: break-word;
+	scroll-snap-align: center;
+	transition: font-size 0.4s cubic-bezier(0.4,0,0.2,1), font-weight 0.4s cubic-bezier(0.4,0,0.2,1), color 0.4s cubic-bezier(0.4,0,0.2,1);;
+	/* animation-name: custom;
+	animation-duration: 1ms; 
+	animation-direction: alternate;
+	animation-timeline: --squareTimeline;
+    animation-timeline: scroll(block nearest);
+	animation-range: entry 25% cover 50%; */
+
+	/* animation: custom linear both;
+	animation-timeline: view();
+	animation-range: entry 50% cover 50%; */
+}
+
+.lyric-line {
+    transition: font-size 0.4s cubic-bezier(0.4,0,0.2,1), color 0.4s cubic-bezier(0.4,0,0.2,1), font-weight 0.4s cubic-bezier(0.4,0,0.2,1);
+    font-weight: 500;
+}
+
+.active-lyric{
+	font-weight: 600;
+	font-size: larger;
+    mix-blend-mode: overlay;
 }
 
 .sizeS {
@@ -86,26 +117,6 @@
 .sizeL {
 	font-size: 16px;
 	line-height: 1.65em;
-}
-
-.lyric {
-	font-family: "Roboto", "Arial", sans-serif;
-	font-weight: 600;
-	/* font-weight: 400; */
-	font-style: normal;
-	text-align: center;
-	overflow-wrap: break-word;
-	scroll-snap-align: center;
-	/* animation-name: custom;
-	animation-duration: 1ms; 
-	animation-direction: alternate;
-	animation-timeline: --squareTimeline;
-    animation-timeline: scroll(block nearest);
-	animation-range: entry 25% cover 50%; */
-
-	/* animation: custom linear both;
-	animation-timeline: view();
-	animation-range: entry 50% cover 50%; */
 }
 
 @keyframes textGrow {

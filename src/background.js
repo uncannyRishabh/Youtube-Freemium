@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generateA2ZLyricsUrl, getDefaultUserPrefs, fuzzyProfanityDictionary } from './utils.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generateA2ZLyricsUrl, getDefaultUserPrefs, fuzzyProfanityDictionary, searchLrclibdotnet } from './utils.js';
 
 (() => {
     // State management
@@ -210,7 +210,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         var uid = getVideoID(currentState.reqUrl);
         var obj = await getFromStorage(uid);
         let isMusic = await musicCheck(tabId);
-		let lyrics, message, title, source = ''
+		let lyrics, message, title, source = '';
+        let synced = false;
 		
         if (isMusic) {
 			let result = await findSongAndArtist(tabId);
@@ -232,13 +233,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     lyrics = resultObject.lyrics ? resultObject.lyrics : '';
                     message = resultObject.message ? resultObject.message : '';
                     source = resultObject.source ? resultObject.source : '';
+                    synced = resultObject.synced ? resultObject.synced : synced;
                 }
                 var scroll = 0
                 var timeCreated = Date.now()
                 title = val
 
                 if (message === 'OK' && lyrics && lyrics.length > 0) {
-                    saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source })
+                    saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source, synced })
                 }
                 else if (message === 'NOK') {
                     ;
@@ -248,12 +250,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : '';
                 message = obj[uid]?.message ? obj[uid].message : "NOK";
                 title = obj[uid]?.title ?  obj[uid].title : '';
+                synced = obj[uid]?.synced ? obj[uid].synced : false
             }
         }
         else {
             lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : ''
             message = obj[uid]?.message ? obj[uid].message : "NOK"
             title = obj[uid]?.title ?  obj[uid].title : ''
+            synced = obj[uid]?.synced ? obj[uid].synced : false
         }
 
         var prefs = await getFromStorage('yt-userPrefs')
@@ -265,10 +269,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, fuzzyProfanityDictionary) => {
+            function: (lyrics, message, uid, title, profanityCheck, synced, fuzzyProfanityDictionary) => {
                 var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
                 var container = ytc?.querySelector('.yf-container')
                 var intermediateContainer = ytc?.querySelector('#intermediateContainer')
+                var lyricElements = []
+                const mediaElem = document.querySelector('video')
 
                 if (container) {
                     if (intermediateContainer) {
@@ -544,21 +550,37 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     const re = new RegExp(`(${pattern})`, 'giu');
 
                     lyrics.forEach(l => {
+                        var timestamp; 
+                        if(synced && Array.isArray(l)){
+                            timestamp = l[0]
+                            l = l[1]
+                            
+                        }
                         var d = document.createElement('span');
+                        d.setAttribute('data-timestamp', timestamp)
+                        d.className = 'lyric-line'
                         // var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
                         if (lyricContainer.getAttribute('data-profanity') === 'false') {
                             var replacedLine = l.replace(re, match => {
                                 if (match.length <= 1) return '*';
                                 return match.charAt(0) + '*'.repeat(match.length - 1);
                             });
+                            console.log('line : ',l)
+                            console.log('replacedLine',replacedLine)
                             d.textContent = replacedLine;
                         }
                         else {
                             d.textContent = l;
                         }
 
+                        lyricElements.push(d)
                         lyricContainer.appendChild(d);
                     });
+
+                    if(synced){
+                        var lyricsElem = ytc.querySelectorAll('.lyric-line')
+                        attachLyricsSync(mediaElem, lyrics, lyricContainer, lyricElements);
+                    }
 
 					intermediateContainer.appendChild(bubblesWrapper)
 					intermediateContainer.appendChild(lyricContainer)
@@ -603,6 +625,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                             container.appendChild(notFoundDiv);
                         }
                     }
+                    detachLyricsSync(mediaElem);
                 }
                 else {
                     if (npt) npt.placeholder = title
@@ -615,6 +638,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     if (lc) {
                         c.removeChild(c.lastChild)
                     }
+                    detachLyricsSync(mediaElem);
                 }
 
                 var progressbar = container.querySelector('#ytf-progressbar')
@@ -622,8 +646,95 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     progressbar.classList.remove("pure-material-progress-linear");
                     progressbar.classList.add("no-animate");
                 }
+
+
+                /**
+                 * Converts a timestamp string (e.g., '03:24.56') to total seconds (float).
+                 */
+                function timestampToSeconds(ts) {
+                    const match = ts.match(/^(\d{2}):(\d{2})\.(\d{2})$/);
+                    if (!match) return 0;
+                    const [, min, sec, ms] = match;
+                    return parseInt(min, 10) * 60 + parseInt(sec, 10) + parseInt(ms, 10) / 100;
+                }
+
+                /**
+                 * Finds the index of the lyric line whose timestamp is <= currentTime and closest to it.
+                 * Assumes lyricsArr is sorted by timestamp ascending.
+                 */
+                function findActiveLyricIndex(lyricsArr, currentTime) {
+                    let left = 0, right = lyricsArr.length - 1, result = 0;
+                    while (left <= right) {
+                        const mid = Math.floor((left + right) / 2);
+                        const lyricTime = timestampToSeconds(lyricsArr[mid][0]);
+                        if (lyricTime <= currentTime) {
+                            result = mid;
+                            left = mid + 1;
+                        } else {
+                            right = mid - 1;
+                        }
+                    }
+                    return result;
+                }
+
+                /**
+                 * Synchronizes lyrics display with media playback.
+                 * Highlights and scrolls the active lyric line.
+                 */
+                function syncLyricsDisplay(lyricsArr, currentTime, lyricElements) {
+                    const activeIdx = findActiveLyricIndex(lyricsArr, currentTime);
+                    lyricElements[activeIdx]
+                    lyricElements.forEach((el, idx) => {
+                        if (idx === activeIdx) {
+                            el.classList.add('active-lyric');
+                            const parent = el.parentElement;
+                            if (parent && parent.classList.contains('lyricContainer')) {
+                                const parentRect = parent.getBoundingClientRect();
+                                const elRect = el.getBoundingClientRect();
+                                const scrollTop = parent.scrollTop;
+                                const offset = elRect.top - parentRect.top;
+                                // Center the element
+                                parent.scrollTo({
+                                    top: scrollTop + offset - parent.clientHeight / 2 + el.clientHeight / 2,
+                                    behavior: 'smooth'
+                                });
+                            } else {
+                                // fallback
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        } else {
+                            el.classList.remove('active-lyric');
+                        }
+                    });
+                }
+
+                /**
+                 * Attaches the timeupdate event listener for lyrics sync.
+                 */
+                function attachLyricsSync(mediaElem, lyricsArr, lyricsContainer, lyricElements) {
+                    if (!mediaElem || !lyricsArr || !lyricsContainer) return;
+                    // Prevent multiple listeners
+                    detachLyricsSync(mediaElem);
+
+                    mediaElem._lyricsSyncHandler = function () {
+                        syncLyricsDisplay(lyricsArr, mediaElem.currentTime, lyricElements);
+                    };
+                    mediaElem.addEventListener('timeupdate', mediaElem._lyricsSyncHandler);
+                }
+
+                /**
+                 * Detaches the timeupdate event listener for lyrics sync.
+                 */
+                function detachLyricsSync(mediaElem) {
+                    if (mediaElem && mediaElem._lyricsSyncHandler) {
+                        mediaElem.removeEventListener('timeupdate', mediaElem._lyricsSyncHandler);
+                        delete mediaElem._lyricsSyncHandler;
+                    }
+                }
+
+
             },
-            args: [lyrics, message, uid, title, profanityCheck, fuzzyProfanityDictionary]
+            args: [lyrics, message, uid, title, profanityCheck, synced, fuzzyProfanityDictionary]
         });
 
 		await chrome.scripting.executeScript({
@@ -761,13 +872,17 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
     async function findLyricsfromSources(tabId, source, val, channel) {
         var result;
 
-        switch (source) {
+        switch ('LRCLIB') {
             case 'BING': {
                 result = await searchBing(tabId, val, channel)
                 break;
             }
             case 'A2Z': {
                 result = await searchA2Z(tabId, val, channel)
+                break;
+            }
+            case 'LRCLIB': {
+                result = await searchLRCLIB(tabId, val, channel)
                 break;
             }
             default: {
@@ -779,6 +894,50 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         }
 
         return result;
+    }
+
+    async function searchLRCLIB(tabId, name, channel) {
+
+        if(name.includes(channel)){
+            name = name.replace(channel,'')
+        }
+        
+        var response = await (await searchLrclibdotnet(name, channel)).text()
+        return await chrome.scripting.executeScript({
+            target: { tabId },
+            function: (resp) => {
+                var resp = JSON.parse(resp)
+                var lyrics = []
+                var message = 'NOK'
+                var source = 'LRCLIB'
+                var synced = false
+                var name = resp?.name
+                
+                /**
+                 * {
+                        "message": "Failed to find specified track",
+                        "name": "TrackNotFound",
+                        "statusCode": 404
+                    }
+                */
+    
+                if(name && name != 'TrackNotFound'){
+                    message = 'OK'
+                    synced = resp.syncedLyrics != null
+                }
+                if(message == 'OK' && synced) {
+                    lyrics = resp.syncedLyrics?.replaceAll('[','').split('\n').map(line => line.split(']'))
+                }
+                else if(message == 'OK' && !synced) {
+                    lyrics = resp.plainLyrics.split('\n')
+                }
+    
+                var r = {lyrics, message, source, synced}
+                return JSON.stringify(r)
+                
+            },
+            args: [response]
+        });
     }
 
     async function searchBing(tabId, name, channel) {
@@ -820,6 +979,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var lyrics = []
                 var message = ''
                 var source = 'BING'
+                var synced = false
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(resp, 'text/html');
                 // const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
@@ -857,7 +1017,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
 
                 //VALIDATE HERE
-                var r = { lyrics, message, source }
+                var r = { lyrics, message, source, synced}
                 // console.log(r)
                 return JSON.stringify(r)
             },
@@ -887,6 +1047,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var lyrics = []
                 var message = ''
                 var source = 'A2Z'
+                var synced = false
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(resp, 'text/html');
 
@@ -906,7 +1067,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
 
                 message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK"
-                var r = { lyrics, message, source }
+                var r = { lyrics, message, source, synced }
                 // console.log(r)
                 return JSON.stringify(r)
             },

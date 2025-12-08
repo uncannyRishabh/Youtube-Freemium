@@ -157,6 +157,30 @@ function findA2ZspecificName(name) {
 	return a2zNames[name] || name;
 }
 
+export async function searchLrclibdotnet(track, artist) {
+	const requestOptions = {
+		method: "GET",
+		redirect: "follow"
+	};
+
+
+	var url = generateLRCLIBUrl(track, artist)
+	console.log('searching LRCLIB : ', url) 
+	return await fetch(url, requestOptions)
+}
+
+function generateLRCLIBUrl(track, artist){
+	track = track.replace(' ','+');
+	artist = artist.replace(' ','+');
+
+	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
+}
+
+/**
+ * Accepts image and outputs 3 prominent colors (Unused)
+ * @param {*} img 
+ * @returns 
+ */
 export function extractProminentColors(img) {
 	const ctx = canvas.getContext('2d');
 	// Downscale canvas for performance
