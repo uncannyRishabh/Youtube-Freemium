@@ -50,10 +50,11 @@
 .lyricContainer {
 	display: flex;
 	flex-direction: column;
+	align-items: center;
 	padding: 24px 3vw 120px 3vw;
 	gap: 2rem;
 	overflow-y: scroll;
-	scroll-behavior: smooth;
+	scroll-behavior: smooth !important;
 	/* scroll-timeline-name: --squareTimeline; */
 }
 
@@ -70,7 +71,7 @@
 	text-align: center;
 	overflow-wrap: break-word;
 	scroll-snap-align: center;
-	transition: font-size 0.4s cubic-bezier(0.4,0,0.2,1), font-weight 0.4s cubic-bezier(0.4,0,0.2,1), color 0.4s cubic-bezier(0.4,0,0.2,1);;
+	transition: font-size 0.4s cubic-bezier(0.4,0,0.2,1), font-weight 0.4s cubic-bezier(0.4,0,0.2,1), color 0.4s cubic-bezier(0.4,0,0.2,1);
 	/* animation-name: custom;
 	animation-duration: 1ms; 
 	animation-direction: alternate;
@@ -84,14 +85,30 @@
 }
 
 .lyric-line {
-    transition: font-size 0.4s cubic-bezier(0.4,0,0.2,1), color 0.4s cubic-bezier(0.4,0,0.2,1), font-weight 0.4s cubic-bezier(0.4,0,0.2,1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 6em; /* enough for up to 4 lines at 1.3em each, adjust as needed */
+    line-height: 1.3em;
     font-weight: 500;
+    color: var(--yt-spec-text-primary);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    will-change: transform, font-size;
+    text-align: center;
+    overflow: visible;
+    white-space: pre-line;
+    word-break: break-word;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.5em 0;
+	opacity: .55;
 }
 
-.active-lyric{
-	font-weight: 600;
-	font-size: larger;
-    mix-blend-mode: overlay;
+.active-lyric {
+	opacity: 1;
+    transform: scale(1.15);
+    font-weight: 600;
+    z-index: 1;
 }
 
 .sizeS {

@@ -677,35 +677,39 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     return result;
                 }
 
+                var currentActive
                 /**
                  * Synchronizes lyrics display with media playback.
                  * Highlights and scrolls the active lyric line.
                  */
                 function syncLyricsDisplay(lyricsArr, currentTime, lyricElements) {
                     const activeIdx = findActiveLyricIndex(lyricsArr, currentTime);
-                    lyricElements[activeIdx]
-                    lyricElements.forEach((el, idx) => {
-                        if (idx === activeIdx) {
-                            el.classList.add('active-lyric');
-                            const parent = el.parentElement;
-                            if (parent && parent.classList.contains('lyricContainer')) {
-                                const parentRect = parent.getBoundingClientRect();
-                                const elRect = el.getBoundingClientRect();
-                                const scrollTop = parent.scrollTop;
-                                const offset = elRect.top - parentRect.top;
-                                // Center the element
-                                parent.scrollTo({
-                                    top: scrollTop + offset - parent.clientHeight / 2 + el.clientHeight / 2,
-                                    behavior: 'smooth'
-                                });
-                            } else {
-                                // fallback
-                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                        } else {
-                            el.classList.remove('active-lyric');
+
+                    var el = lyricElements[activeIdx]
+                    if (el != currentActive) {
+                        if (currentActive) {
+                            var prevActive = currentActive
+                            prevActive.classList.remove('active-lyric');
                         }
-                    });
+                        currentActive = el
+                        el.classList.add('active-lyric');
+                        const parent = el.parentElement;
+                        if (parent && parent.classList.contains('lyricContainer')) {
+                            const parentRect = parent.getBoundingClientRect();
+                            const elRect = el.getBoundingClientRect();
+                            const scrollTop = parent.scrollTop;
+                            const offset = elRect.top - parentRect.top;
+                            // Center the element
+                            parent.scrollTo({
+                                top: scrollTop + offset,
+                                behavior: 'smooth'
+                            });
+                        } else {
+                            // fallback
+                            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }
+
                 }
 
                 /**
