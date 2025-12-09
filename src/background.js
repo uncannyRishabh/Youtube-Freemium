@@ -550,15 +550,31 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     const re = new RegExp(`(${pattern})`, 'giu');
 
                     lyrics.forEach(l => {
-                        var timestamp; 
-                        if(synced && Array.isArray(l)){
-                            timestamp = l[0]
-                            l = l[1]
-                            
+                        var timestamp;
+                        if (synced && Array.isArray(l)) {
+                            timestamp = l[0];
+                            l = l[1];
                         }
                         var d = document.createElement('span');
-                        d.setAttribute('data-timestamp', timestamp)
-                        d.className = 'lyric-line'
+                        if (timestamp) {
+                            d.setAttribute('data-timestamp', timestamp);
+                            d.className = 'lyric-line';
+                            d.addEventListener('click', function() {
+                                // Parse timestamp (format: mm:ss.xx or m:ss.xx)
+                                const ts = this.getAttribute('data-timestamp');
+                                let seconds = 0;
+                                if (ts) {
+                                    const parts = ts.split(':');
+                                    if (parts.length === 2) {
+                                        const min = parseInt(parts[0], 10);
+                                        const sec = parseFloat(parts[1]);
+                                        seconds = min * 60 + sec;
+                                    }
+                                }
+                                const video = document.querySelector('video');
+                                if (video) video.currentTime = seconds;
+                            });
+                        }
                         // var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
                         if (lyricContainer.getAttribute('data-profanity') === 'false') {
                             var replacedLine = l.replace(re, match => {

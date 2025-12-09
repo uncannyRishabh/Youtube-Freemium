@@ -173,6 +173,16 @@ function generateLRCLIBUrl(track, artist){
 	track = track.replace(' ','+');
 	artist = artist.replace(' ','+');
 
+	// remove commas
+	track = track.replace(',', '').trim();
+	// remove all characters between brackets ()
+	track = track.replace(/\(.*?\)/g, '').trim();
+	
+	// remove commas
+	artist = artist.replace(',', '').trim();
+	// remove all characters between brackets
+	artist = artist.replace(/\(.*?\)/g, '').trim();
+	
 	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
 }
 
