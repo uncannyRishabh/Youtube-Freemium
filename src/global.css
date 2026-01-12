@@ -72,6 +72,8 @@
 	overflow-wrap: break-word;
 	scroll-snap-align: center;
 	transition: font-size 0.4s cubic-bezier(0.4,0,0.2,1), font-weight 0.4s cubic-bezier(0.4,0,0.2,1), color 0.4s cubic-bezier(0.4,0,0.2,1);
+	cursor: pointer;
+	user-select: none;
 	/* animation-name: custom;
 	animation-duration: 1ms; 
 	animation-direction: alternate;
@@ -88,7 +90,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
+	/*
     min-height: 6em; /* enough for up to 4 lines at 1.3em each, adjust as needed */
+	margin-top: .5em;
+	margin-bottom: .5em;
     line-height: 1.3em;
     font-weight: 500;
     color: var(--yt-spec-text-primary);
@@ -100,7 +105,6 @@
     word-break: break-word;
     width: 100%;
     box-sizing: border-box;
-    padding: 0.5em 0;
 	opacity: .55;
 }
 
@@ -109,6 +113,40 @@
     transform: scale(1.15);
     font-weight: 600;
     z-index: 1;
+}
+
+.yf-clearInput {
+    padding: 6px 8px;
+    border: 1px solid var(--yt-spec-text-secondary);
+    border-radius: 4px;
+    background-color: rgb(255 255 255 / 0%);
+    color: var(--yt-spec-text-primary);
+    text-align: center;
+    min-width: 50px;
+	width: 50px;
+	height: 30px;
+    box-sizing: border-box;
+    font-family: "Roboto", "Arial", sans-serif;
+    font-weight: 200;
+    outline: none;
+    cursor: text;
+}
+
+.yf-clearInput:hover:not(:focus) {
+    border-color: var(--yt-spec-text-primary);
+    background-color: var(--yt-spec-10-percent-layer);
+}
+
+/* Remove spinner buttons from number input */
+.yf-clearInput::-webkit-outer-spin-button,
+.yf-clearInput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.yf-clearInput[type=number] {
+	appearance: textfield;
+    -moz-appearance: textfield;
 }
 
 .sizeS {
@@ -496,8 +534,8 @@
 
 .yf-dropdown {
 	z-index: 4;
-	backdrop-filter: blur(4px);
-	background-color: rgb(from var(--yt-spec-brand-background-primary) r g b / .6);
+	backdrop-filter: blur(12px);
+	background-color: rgb(from var(--yt-spec-brand-background-primary) r g b / .8);
 	color: var(--yt-spec-text-primary);
 	fill: var(--yt-spec-text-primary);
 	display: none;

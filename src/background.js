@@ -1,6 +1,9 @@
 import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generateA2ZLyricsUrl, getDefaultUserPrefs, fuzzyProfanityDictionary, searchLrclibdotnet } from './utils.js';
 
 (() => {
+
+    let currentSearchController = null;
+
     // State management
     let currentState = {
         tabTitle: undefined,
@@ -8,15 +11,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         complete: false,
         process: false,
         navigation: false,
-        tabList: []
+        tabList: [],
+        uid: ''
     };
+
     const ONINSTALL_REASON_INSTALL = 'install';
     const ONINSTALL_REASON_UPDATE = 'update';
-    const YOUTUBE_WATCH_URL = "youtube.com/watch";
     const YOUTUBE_URL = "youtube.com";
+    const YOUTUBE_WATCH_URL = YOUTUBE_URL+"/watch";
     const CHANGE_INFO_STATUS_LOADING = 'loading';
     const CHANGE_INFO_STATUS_COMPLETE = 'complete';
     const TRANSITION_FORWARD_BACK = 'forward_back';
+    
 
 
     /**
@@ -25,10 +31,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 	 * Clear local storage on update
      */
     chrome.runtime.onInstalled.addListener(function (details) {
-        let bool
 		if (details.reason == ONINSTALL_REASON_INSTALL) {
-			console.log("I installed the goated extension")
-			bool = true
+            reloadRelevantTabs();
+
 		} else if (details.reason == ONINSTALL_REASON_UPDATE) {
 			console.log("Goated extension just got updated")
 			chrome.storage.local.clear(function () {
@@ -39,25 +44,28 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     saveObject('yt-userPrefs', getDefaultUserPrefs());
 				}
 			});
-			bool = false
+
+            reloadRelevantTabs();
 		}
 
-		chrome.tabs.query({ url: "*://*.youtube.com/watch?*" }, function (tabs) {
-			tabs.forEach(tab => {
-				var tabId = tab.id
-				chrome.scripting.executeScript({
-					target: { tabId },
-					function: (bool) => {
-						window.location.reload(JSON.parse(bool));
-					},
-					args: [bool]
-				});
-			});
-
-		});
-
 	});
-	
+
+    function reloadRelevantTabs() {
+        chrome.tabs.query({ url: "*://*.youtube.com/watch?*" }, function (tabs) {
+            tabs.forEach(tab => {
+                console.log(tab);
+                var tabId = tab.id;
+                chrome.scripting.executeScript({
+                    target: { tabId },
+                    function: () => {
+                        window.location.reload();
+                    }
+                });
+            });
+
+        });
+    }
+
 
     /**
      * Handles tab updates 
@@ -81,13 +89,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				if (currentState.navigation) {
 					currentState.navigation = false
 					currentState.tabTitle = tabInfo.title
-					console.log('CALL !!! MAIN FROM onUPDATE : '+CHANGE_INFO_STATUS_COMPLETE)
+                    currentState.uid = getVideoID(tabInfo.url);
+					console.log('CALL !!! MAIN FROM onUPDATE : '+CHANGE_INFO_STATUS_COMPLETE,changeInfo)
 					main(tabInfo.url, tabId);
 				}
 			}
 			if (changeInfo.title) {
 				currentState.tabTitle = tabInfo.title
-				console.log('CALL !!! MAIN FROM onUPDATE')
+                currentState.uid = getVideoID(tabInfo.url);
+				console.log('CALL !!! MAIN FROM onUPDATE url : '+ currentState.uid +' title : ',changeInfo)
 				main(tabInfo.url, tabId);
 			}
 		}
@@ -212,7 +222,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         let isMusic = await musicCheck(tabId);
 		let lyrics, message, title, source = '';
         let synced = false;
+        let offset = 0;
 		
+        // Cancel previous search if still pending
+        if (currentSearchController) {
+            currentSearchController.abort('🥀🥀GIRL_CHILD🥀🥀');
+        }
+        currentSearchController = new AbortController();
+
         if (isMusic) {
 			let result = await findSongAndArtist(tabId);
 			let { val, channel } = result && result[0]?.result ? JSON.parse(result[0].result) : { val: '', channel: '' };
@@ -221,7 +238,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 			console.log(obj)
 
             if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
-                let result = await findLyricsfromSources(tabId, "", val, channel)
+                let result = await findLyricsfromSources(tabId, "", val, channel, currentSearchController.signal)
 
                 let resultObject = JSON.parse(result[0]?.result);
                 console.log('search result : ', resultObject)
@@ -234,13 +251,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     message = resultObject.message ? resultObject.message : '';
                     source = resultObject.source ? resultObject.source : '';
                     synced = resultObject.synced ? resultObject.synced : synced;
+                    offset = resultObject.offset ? resultObject.offset : 0
                 }
                 var scroll = 0
                 var timeCreated = Date.now()
                 title = val
 
                 if (message === 'OK' && lyrics && lyrics.length > 0) {
-                    saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source, synced })
+                    saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source, synced, offset })
                 }
                 else if (message === 'NOK') {
                     ;
@@ -251,13 +269,16 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 message = obj[uid]?.message ? obj[uid].message : "NOK";
                 title = obj[uid]?.title ?  obj[uid].title : '';
                 synced = obj[uid]?.synced ? obj[uid].synced : false
+                offset = obj[uid]?.offset ? obj[uid].offset : 0
             }
         }
         else {
+            console.log('Not a music video')
             lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : ''
             message = obj[uid]?.message ? obj[uid].message : "NOK"
             title = obj[uid]?.title ?  obj[uid].title : ''
             synced = obj[uid]?.synced ? obj[uid].synced : false
+            offset = obj[uid]?.offset ? obj[uid].offset : 0
         }
 
         var prefs = await getFromStorage('yt-userPrefs')
@@ -269,13 +290,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, synced, fuzzyProfanityDictionary) => {
+            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary) => {
                 var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
                 var container = ytc?.querySelector('.yf-container')
                 var intermediateContainer = ytc?.querySelector('#intermediateContainer')
                 var lyricElements = []
                 const mediaElem = document.querySelector('video')
-
+                
+                mediaElem.setAttribute('ytf-data-offset',offset)
+                
                 if (container) {
                     if (intermediateContainer) {
                         container.removeChild(container.lastChild)
@@ -364,9 +387,54 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                     const ul = document.createElement('ul');
 
-                    ['Font Size', 'Report'].forEach((optionText, index) => {
+                    ['Font Size', 'Lyric Offset', 'Report'].forEach((optionText, index) => {
                         const li = ul.appendChild(document.createElement('li'));
                         li.className = 'yf-dd-list';
+                        
+                        function isEmpty(obj) {
+                            return obj == null || Object.keys(obj).length === 0;
+                        }
+                        
+                        function getFromStorage(uid) {
+                            return new Promise((resolve) => {
+                                chrome.storage.local.get(uid, (result) => {
+                                    if (chrome.runtime.lastError) {
+                                        console.error('Error getting from storage:', chrome.runtime.lastError);
+                                        resolve({});
+                                        return;
+                                    }
+
+                                    // Update last accessed time for video entries
+                                    if (!isEmpty(result) && result[uid]?.title) {
+                                        result[uid].lastAccessed = Date.now();
+                                        chrome.storage.local.set({ [uid]: result[uid] });
+                                    }
+
+                                    resolve(result || {});
+                                });
+                            });
+                        }
+
+                        async function saveObject(uid, obj) {
+                            // Get current prefs
+                            const currentPrefs = await getFromStorage(uid);
+                            // Merge obj into currentPrefs['yt-userPrefs']
+                            const updatedPrefs = { ...currentPrefs[uid], ...obj };
+                            obj = updatedPrefs;
+
+                            console.log('UID: ' + uid + ' obj : ' + obj)
+                            console.log(obj)
+
+                            // Save back to storage
+                            return new Promise((resolve, reject) => {
+                                chrome.storage.local.set({ [uid]: obj }, () => {
+                                    if (chrome.runtime.lastError) {
+                                        reject(chrome.runtime.lastError);
+                                    }
+                                    resolve();
+                                });
+                            });
+                        }
 
                         switch (optionText) {
                             case 'Font Size': {
@@ -453,7 +521,109 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 });
                                 break;
                             }
+                            case 'Lyric Offset': {
+                                //Size Icon
+                                var svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("viewBox", "0 -960 960 960");
+                                svgElement.setAttribute("width", "24");
+                                svgElement.classList.add('material-symbols-outlined')
+                                svgElement.classList.add('yf-dd-list-icon')
+                                var pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                                pathElement.setAttribute("d","M252.31-400v60h-80q-29.92 0-51.12-21.24Q100-382.48 100-412.31v-375.38q0-29.83 21.24-51.07Q142.48-860 172.31-860h375.38q29.83 0 51.07 21.24Q620-817.52 620-787.69v80h-60v-80q0-5.39-3.46-8.85t-8.85-3.46H172.31q-5.39 0-8.85 3.46t-3.46 8.85v375.38q0 5.39 3.46 8.85t8.85 3.46h80Zm160 300q-29.83 0-51.07-21.24Q340-142.48 340-172.31v-375.38q0-29.83 21.24-51.07Q382.48-620 412.31-620h375.38q29.83 0 51.07 21.24Q860-577.52 860-547.69v375.38q0 29.83-21.24 51.07Q817.52-100 787.69-100H412.31Z");
+                                svgElement.appendChild(pathElement);
+                                li.appendChild(svgElement)
 
+
+                                li.appendChild(document.createElement('span')).className = 'yf-dd-item-cont';
+                                li.lastChild.textContent = optionText;
+
+
+                                //Decrease Icon
+                                svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("viewBox", "0 -960 960 960");
+                                svgElement.setAttribute("width", "24");
+                                svgElement.classList.add('sFont')
+                                svgElement.classList.add('material-symbols-outlined')
+                                pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                                pathElement.setAttribute("d", "M609.975-454.001q-11.033 0-18.657-7.418-7.625-7.418-7.625-18.384 0-10.966 7.463-18.581t18.496-7.615h215.757q11.033 0 18.658 7.418 7.624 7.418 7.624 18.384 0 10.966-7.463 18.581t-18.495 7.615H609.975Zm-403.58 79.846-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Z");
+                                svgElement.appendChild(pathElement);
+                                li.appendChild(svgElement);
+
+                                li.lastChild.addEventListener('click',async () => {
+                                    var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    offset = Math.round((offset - 0.25) * 100) / 100;
+                                    fontSizeElement.value = offset.toFixed(2)
+                                    mediaElem.setAttribute('ytf-data-offset',offset)
+                                    await saveObject(uid, {'offset':offset})
+                                });
+
+                                li.appendChild(document.createElement('input')).className = 'yf-fontSize yf-clearInput';
+                                
+                                li.lastChild.id = 'yf-offset-text';
+                                li.lastChild.type = 'number';
+                                li.lastChild.step = '0.25';
+                                li.lastChild.value = '0.00';
+                                
+                                if (offset)
+                                    li.lastChild.value = offset
+                                else
+                                    li.lastChild.value = '0.00'
+
+                                let offsetTimeout;
+                                let lastOffsetValue = offset ? offset : 0;
+
+                                li.lastChild.addEventListener('change', (e) => {
+                                    let val = parseFloat(e.target.value);
+                                    
+                                    // Skip if invalid or unchanged
+                                    if (isNaN(val) || val === '') {
+                                        e.target.value = '0.00';
+                                        return;
+                                    }
+                                    
+                                    val = Math.round(val * 100) / 100;
+                                    e.target.value = val.toFixed(2)
+                                    mediaElem.setAttribute('ytf-data-offset',val)
+                                    
+                                    if (val === lastOffsetValue) return;
+                                    
+                                    lastOffsetValue = val;
+                                    
+                                    // Clear previous timeout
+                                    clearTimeout(offsetTimeout);
+                                    
+                                    // Set new timeout
+                                    offsetTimeout = setTimeout(async () => {
+                                        await saveObject(uid, {'offset':val})
+                                    }, 500);
+                                });
+
+                                //Increase Icon
+                                svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                svgElement.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("viewBox", "0 -960 960 960");
+                                svgElement.setAttribute("width", "24");
+                                svgElement.classList.add('sFont');
+                                svgElement.classList.add('material-symbols-outlined');
+                                pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                                pathElement.setAttribute("d", "m206.395-374.155-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Zm468.617-32.253h-82.001q-11.05 0-18.524-7.503-7.475-7.503-7.475-18.492t7.475-18.41q7.474-7.42 18.524-7.42h82.001v-81.689q0-10.984 7.418-18.609 7.418-7.624 18.384-7.624 10.966 0 18.455 7.475 7.49 7.474 7.49 18.524v82.001h82.168q11.086 0 18.585 7.478 7.498 7.479 7.498 18.534 0 11.056-7.498 18.521-7.499 7.465-18.585 7.465H743.44V-372q0 11.05-7.503 18.524-7.503 7.475-18.258 7.475-11.056 0-18.521-7.499-7.465-7.499-7.465-18.584v-82.168Z");
+                                svgElement.appendChild(pathElement);
+                                li.appendChild(svgElement);
+
+                                li.lastChild.addEventListener('click', async () => {
+                                    var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    offset = Math.round((offset + 0.25) * 100) / 100;
+                                    fontSizeElement.value = offset.toFixed(2)
+                                    mediaElem.setAttribute('ytf-data-offset',offset)
+                                    await saveObject(uid, {'offset':offset})
+                                });
+                                break;
+                            }
                             case 'Report': {
                                 //Report Icon
                                 svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -491,7 +661,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         yfDropdown.style.display = (yfDropdown.style.display === 'none' || yfDropdown.style.display === '') ? 'block' : 'none';
                     })
 
-                    ytc.addEventListener('mousedown', (event) => {
+                    ytc?.addEventListener('mousedown', (event) => {
                         if (!yfDropdown.contains(event.target) && event.target !== menuSpan) {
                             yfDropdown.style.display = 'none';
                         }
@@ -512,6 +682,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
 
                 var npt = container.querySelector('.now-playing-text-input')
+
+                //Reset offset after every song
+                var offsetInputElement = container.querySelector('#yf-offset-text')
+                offsetInputElement.value = offset.toFixed(2)
 
                 if (message === 'OK') { 
                     var nowPlaying = container.querySelector('.now-playing')
@@ -545,10 +719,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 							<div id="bubble-3" class="bubble"></div>
 						`;
 					}
-                    
+
                     const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                     const re = new RegExp(`(${pattern})`, 'giu');
 
+                    //Populate lyrics
                     lyrics.forEach(l => {
                         var timestamp;
                         if (synced && Array.isArray(l)) {
@@ -561,13 +736,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                             d.className = 'lyric-line';
                             d.addEventListener('click', function() {
                                 // Parse timestamp (format: mm:ss.xx or m:ss.xx)
+                                const mediaElem = document.querySelector('video')
+                                var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                                 const ts = this.getAttribute('data-timestamp');
                                 let seconds = 0;
                                 if (ts) {
                                     const parts = ts.split(':');
                                     if (parts.length === 2) {
                                         const min = parseInt(parts[0], 10);
-                                        const sec = parseFloat(parts[1]);
+                                        const sec = parseFloat(parts[1]) - offset;
                                         seconds = min * 60 + sec;
                                     }
                                 }
@@ -576,6 +753,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                             });
                         }
                         // var replacedLine = l.replace(censorRegex, match => '*'.repeat(match.length));
+                        checkWhitespace = (str) => (!str || str.trim() === '') ? "..." : str;
+
                         if (lyricContainer.getAttribute('data-profanity') === 'false') {
                             var replacedLine = l.replace(re, match => {
                                 if (match.length <= 1) return '*';
@@ -583,19 +762,22 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                             });
                             console.log('line : ',l)
                             console.log('replacedLine',replacedLine)
-                            d.textContent = replacedLine;
+                            d.textContent = checkWhitespace(replacedLine);
                         }
                         else {
-                            d.textContent = l;
+                            d.textContent = checkWhitespace(l);
                         }
+
 
                         lyricElements.push(d)
                         lyricContainer.appendChild(d);
                     });
 
                     if(synced){
-                        var lyricsElem = ytc.querySelectorAll('.lyric-line')
                         attachLyricsSync(mediaElem, lyrics, lyricContainer, lyricElements);
+                    }
+                    else {
+                        detachLyricsSync(mediaElem)
                     }
 
 					intermediateContainer.appendChild(bubblesWrapper)
@@ -678,11 +860,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                  * Finds the index of the lyric line whose timestamp is <= currentTime and closest to it.
                  * Assumes lyricsArr is sorted by timestamp ascending.
                  */
-                function findActiveLyricIndex(lyricsArr, currentTime) {
+                function findActiveLyricIndex(lyricsArr, currentTime, offset) {
                     let left = 0, right = lyricsArr.length - 1, result = 0;
                     while (left <= right) {
                         const mid = Math.floor((left + right) / 2);
-                        const lyricTime = timestampToSeconds(lyricsArr[mid][0]);
+                        const lyricTime = timestampToSeconds(lyricsArr[mid][0]) - (offset ? offset : 0);
+                        console.log('lyricTime'+lyricTime)
                         if (lyricTime <= currentTime) {
                             result = mid;
                             left = mid + 1;
@@ -693,28 +876,31 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     return result;
                 }
 
-                var currentActive
+                var currentLyricIndex = 0;
+                var currentActiveElement;
                 /**
                  * Synchronizes lyrics display with media playback.
                  * Highlights and scrolls the active lyric line.
                  */
-                function syncLyricsDisplay(lyricsArr, currentTime, lyricElements) {
-                    const activeIdx = findActiveLyricIndex(lyricsArr, currentTime);
+                function syncLyricsDisplay(lyricsArr, currentTime, offset, lyricElements) {
+                    const activeIdx = findActiveLyricIndex(lyricsArr, currentTime, offset);
 
-                    var el = lyricElements[activeIdx]
-                    if (el != currentActive) {
-                        if (currentActive) {
-                            var prevActive = currentActive
+                    if (currentLyricIndex != activeIdx) {
+                        var el = lyricElements[activeIdx]
+                        if (currentActiveElement) {
+                            var prevActive = currentActiveElement
                             prevActive.classList.remove('active-lyric');
                         }
-                        currentActive = el
+                        currentLyricIndex = activeIdx
+                        currentActiveElement = el
                         el.classList.add('active-lyric');
+
                         const parent = el.parentElement;
                         if (parent && parent.classList.contains('lyricContainer')) {
                             const parentRect = parent.getBoundingClientRect();
                             const elRect = el.getBoundingClientRect();
                             const scrollTop = parent.scrollTop;
-                            const offset = elRect.top - parentRect.top;
+                            const offset = elRect.top - parentRect.top * 1.40;
                             // Center the element
                             parent.scrollTo({
                                 top: scrollTop + offset,
@@ -735,9 +921,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     if (!mediaElem || !lyricsArr || !lyricsContainer) return;
                     // Prevent multiple listeners
                     detachLyricsSync(mediaElem);
-
                     mediaElem._lyricsSyncHandler = function () {
-                        syncLyricsDisplay(lyricsArr, mediaElem.currentTime, lyricElements);
+                        var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
+                        syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements);
                     };
                     mediaElem.addEventListener('timeupdate', mediaElem._lyricsSyncHandler);
                 }
@@ -754,7 +940,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
 
             },
-            args: [lyrics, message, uid, title, profanityCheck, synced, fuzzyProfanityDictionary]
+            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary]
         });
 
 		await chrome.scripting.executeScript({
@@ -861,7 +1047,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             target: { tabId },
             function: () => {
                 //Fallback for fetching song/artist
-                let val, channel = ''
+                let val, channel
                 let musicCard = document.querySelectorAll('#header-container #title')
 
                 if (musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')) {
@@ -889,26 +1075,26 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         });
     }
 
-    async function findLyricsfromSources(tabId, source, val, channel) {
+    async function findLyricsfromSources(tabId, source, val, channel, signal) {
         var result;
 
         switch ('LRCLIB') {
             case 'BING': {
-                result = await searchBing(tabId, val, channel)
+                result = await searchBing(tabId, val, channel, signal)
                 break;
             }
             case 'A2Z': {
-                result = await searchA2Z(tabId, val, channel)
+                result = await searchA2Z(tabId, val, channel, signal)
                 break;
             }
             case 'LRCLIB': {
-                result = await searchLRCLIB(tabId, val, channel)
+                result = await searchLRCLIB(tabId, val, channel, signal)
                 break;
             }
             default: {
-                result = await searchA2Z(tabId, val, channel)
+                result = await searchA2Z(tabId, val, channel, signal)
                 if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
-                    result = await searchBing(tabId, val, channel)
+                    result = await searchBing(tabId, val, channel, signal)
                 }
             }
         }
@@ -916,13 +1102,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         return result;
     }
 
-    async function searchLRCLIB(tabId, name, channel) {
+    async function searchLRCLIB(tabId, name, channel, signal) {
 
         if(name.includes(channel)){
             name = name.replace(channel,'')
         }
         
-        var response = await (await searchLrclibdotnet(name, channel)).text()
+        var response = await (await searchLrclibdotnet(name, channel, signal)).text()
+        //Todo : fallback logic when multiple artists search with all artists, if not found search with first
         return await chrome.scripting.executeScript({
             target: { tabId },
             function: (resp) => {
@@ -941,7 +1128,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     }
                 */
     
-                if(name && name != 'TrackNotFound'){
+                if((name && name != 'TrackNotFound') && resp?.plainLyrics != null){
                     message = 'OK'
                     synced = resp.syncedLyrics != null
                 }
@@ -960,7 +1147,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         });
     }
 
-    async function searchBing(tabId, name, channel) {
+    async function searchBing(tabId, name, channel, signal) {
         var myHeaders = {
             'accept-language': 'en-US,en-IN;q=0.9,en;q=0.8',
             'cache-control': 'no-cache',
@@ -1169,21 +1356,5 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 		}
 
 	}
-
-    function removeView(tabId) {
-        chrome.scripting.executeScript({
-            target: { tabId },
-            function: () => {
-                console.log('Removing..')
-                var ytc = document.querySelector('#secondary > #secondary-inner')
-                var c = ytc.querySelector('.yf-container')
-                var lc = ytc.querySelector('#lyricContainer')
-                if (lc) {
-                    c.removeChild(c.lastChild)
-                }
-            },
-            args: []
-        });
-    }
 
 })();

@@ -132,16 +132,16 @@ export function generateA2ZLyricsUrl(name, channel) {
 	let sanitizedArtist = channel.includes(',') ? channel.split(',')[0] : channel;
 
 	//replace all $ with s
-	sanitizedArtist = sanitizedArtist.replace('$', 's').trim();
+	sanitizedArtist = sanitizedArtist.replaceAll('$', 's').trim();
 
 	// Remove all non-alphanumeric characters and convert to lowercase for channel
-	sanitizedArtist = sanitizedArtist.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+	sanitizedArtist = sanitizedArtist.replaceAll(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
 	// remove all characters between brackets
-	let sanitizedName = name.replace(/\[.*?\]/g, '').trim();
+	let sanitizedName = name.replaceAll(/\[.*?\]/g, '').trim();
 	
 	// Remove all non-alphanumeric characters and convert to lowercase for song name
-	sanitizedName = sanitizedName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+	sanitizedName = sanitizedName.replaceAll(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
 	return `https://www.azlyrics.com/lyrics/${findA2ZspecificName(sanitizedArtist)}/${sanitizedName}.html`;
 }
@@ -157,31 +157,52 @@ function findA2ZspecificName(name) {
 	return a2zNames[name] || name;
 }
 
-export async function searchLrclibdotnet(track, artist) {
-	const requestOptions = {
-		method: "GET",
-		redirect: "follow"
-	};
+export async function searchLrclibdotnet(track, artist, signal) {
+	try {
+		const myHeaders = new Headers();
+		myHeaders.append("Referer", "Freemium by - @uncannyRishabh");
+		
+		const requestOptions = {
+			method: "GET",
+			redirect: "follow",
+			headers: myHeaders,
+			signal
+		};
 
-
-	var url = generateLRCLIBUrl(track, artist)
-	console.log('searching LRCLIB : ', url) 
-	return await fetch(url, requestOptions)
+		var url = generateLRCLIBUrl(track, artist)
+		console.log('searching LRCLIB : ', url)
+		return await fetch(url, requestOptions)
+	} catch (error) {
+		console.log('LRCLIB fetch aborted - previous search cancelled', error);
+        
+        return new Response(JSON.stringify({
+            "message": "Failed to find specified track",
+            "name": "TrackNotFound",
+            "statusCode": 404
+        }), {
+            status: 404,
+            statusText: "Not Found",
+            headers: { 'Content-Type': 'application/json' }
+        });
+    }
 }
 
 function generateLRCLIBUrl(track, artist){
-	track = track.replace(' ','+');
-	artist = artist.replace(' ','+');
-
 	// remove commas
-	track = track.replace(',', '').trim();
-	// remove all characters between brackets ()
-	track = track.replace(/\(.*?\)/g, '').trim();
+	track = track.replaceAll(',', '').trim();
+	// // remove all special characters between brackets ()
+	// track = track.replaceAll(/\(.*?\)/g, '').trim();
 	
 	// remove commas
-	artist = artist.replace(',', '').trim();
-	// remove all characters between brackets
-	artist = artist.replace(/\(.*?\)/g, '').trim();
+	artist = artist.replaceAll(',', '').trim();
+	// remove all special characters between brackets
+	artist = artist.replaceAll(/\(.*?\)/g, '').trim();
+	
+	track = track.replaceAll(' ','+');
+	artist = artist.replaceAll(' ','+');
+
+	track = encodeURI(track)
+	artist = encodeURI(artist)
 	
 	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
 }

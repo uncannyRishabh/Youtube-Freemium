@@ -109,8 +109,37 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Search functionality with - is this correct lyrics ❌ / ✅ options
 * - Font Size not updating in local storage - intermittently
 * - Page refresh on clear data - on all open youtube tabs
-* - Re-render popup.js on clear data
+* - Re-render popup.js on clear data when open
+
+* - clear data after this update(for existing users) ✅
+* - adjust lyrics size dynamically to avoid overlapping and remove extra space ✅
+* - for only plain lyric disable video timestamp listener ✅
+* - tab2 playing non music video displays lyrics (fixed ig ✅)
+* - adjust lyrics to display previous lyric also ✅
+* - no music card - should show no lyrics found - http://youtube.com/watch?v=0_3HVeHinDg&list=RD0_3HVeHinDg&start_radio=1
+p ✅
+
+* - rename to lyric offset ✅
+* - make offset input box ✅
+* - reset offset counter for next video on increment/decrement
+* - fix offset input and increment decrement holding diff values
+* - long press listener on increment/decrement offset
+
+* - add source - powered by stuff
+* - add fallbacks
+
+* - remove - now playing
 
 * - fix main called multiple times for same page
+* - re search if (source=lrclib && lastAccessed > 15 days && sync != true)
+* - add bottom margin for lyrics
+* - add youtube music distinction
+* - fix first install issue
+
+* - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
+* - whatsnew + icon dot + 
+* - remove clgs
+
 
 */
+
