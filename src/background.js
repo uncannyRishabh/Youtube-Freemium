@@ -222,7 +222,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         let isMusic = await musicCheck(tabId);
 		let lyrics, message, title, source = '';
         let synced = false;
-        let offset = 0;
+        let offset = 0.0;
 		
         // Cancel previous search if still pending
         if (currentSearchController) {
@@ -546,6 +546,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 svgElement.setAttribute("height", "24");
                                 svgElement.setAttribute("viewBox", "0 -960 960 960");
                                 svgElement.setAttribute("width", "24");
+                                svgElement.id = 'ytf-offset-decrement'
                                 svgElement.classList.add('sFont')
                                 svgElement.classList.add('material-symbols-outlined')
                                 pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -555,6 +556,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click',async () => {
                                     var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    console.log('dec. offset : '+offset)
                                     offset = Math.round((offset - 0.25) * 100) / 100;
                                     fontSizeElement.value = offset.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',offset)
@@ -586,6 +588,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                     }
                                     
                                     val = Math.round(val * 100) / 100;
+                                    offset = val
                                     e.target.value = val.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',val)
                                     
@@ -610,6 +613,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 svgElement.setAttribute("width", "24");
                                 svgElement.classList.add('sFont');
                                 svgElement.classList.add('material-symbols-outlined');
+                                svgElement.id = 'ytf-offset-increment'
                                 pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "m206.395-374.155-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Zm468.617-32.253h-82.001q-11.05 0-18.524-7.503-7.475-7.503-7.475-18.492t7.475-18.41q7.474-7.42 18.524-7.42h82.001v-81.689q0-10.984 7.418-18.609 7.418-7.624 18.384-7.624 10.966 0 18.455 7.475 7.49 7.474 7.49 18.524v82.001h82.168q11.086 0 18.585 7.478 7.498 7.479 7.498 18.534 0 11.056-7.498 18.521-7.499 7.465-18.585 7.465H743.44V-372q0 11.05-7.503 18.524-7.503 7.475-18.258 7.475-11.056 0-18.521-7.499-7.465-7.499-7.465-18.584v-82.168Z");
                                 svgElement.appendChild(pathElement);
@@ -617,6 +621,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click', async () => {
                                     var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    console.log('inc. offset : '+offset)
                                     offset = Math.round((offset + 0.25) * 100) / 100;
                                     fontSizeElement.value = offset.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',offset)
@@ -765,8 +770,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 if (match.length <= 1) return '*';
                                 return match.charAt(0) + '*'.repeat(match.length - 1);
                             });
-                            console.log('line : ',l)
-                            console.log('replacedLine',replacedLine)
                             d.textContent = checkWhitespace(replacedLine);
                         }
                         else {
@@ -870,7 +873,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     while (left <= right) {
                         const mid = Math.floor((left + right) / 2);
                         const lyricTime = timestampToSeconds(lyricsArr[mid][0]) - (offset ? offset : 0);
-                        console.log('lyricTime'+lyricTime)
+                        // console.log('lyricTime'+lyricTime)
                         if (lyricTime <= currentTime) {
                             result = mid;
                             left = mid + 1;
@@ -948,6 +951,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary]
         });
 
+        //bubble logic
 		await chrome.scripting.executeScript({
 			target: { tabId },
 			function: () => {

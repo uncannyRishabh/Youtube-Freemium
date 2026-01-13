@@ -190,8 +190,8 @@ export async function searchLrclibdotnet(track, artist, signal) {
 function generateLRCLIBUrl(track, artist){
 	// remove commas
 	track = track.replaceAll(',', '').trim();
-	// // remove all special characters between brackets ()
-	// track = track.replaceAll(/\(.*?\)/g, '').trim();
+	// remove all special characters between brackets ()
+	track = track.replaceAll(/\(.*?\)/g, '').trim();
 	
 	// remove commas
 	artist = artist.replaceAll(',', '').trim();

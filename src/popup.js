@@ -119,8 +119,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - no music card - should show no lyrics found - http://youtube.com/watch?v=0_3HVeHinDg&list=RD0_3HVeHinDg&start_radio=1p ✅
 * - rename to lyric offset ✅
 * - make offset input box ✅
-* - reset offset counter for next video on increment/decrement
-* - fix offset input and increment decrement holding diff values
+* - reset offset counter for next video on increment/decrement ✅
+* - fix offset input and increment decrement holding diff values ✅
 * - long press listener on increment/decrement offset
 
 * - add source - powered by stuff
@@ -138,7 +138,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - first line not highlighted when in sync
 * - when in primary container; lyrics not syncing wrt to container height
 * - keep () contents - https://www.youtube.com/watch?v=NyTkaQHdySM&list=RDbMtxZLbBkmc&index=2 - Input box
-* -  
+* - 
 * - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
 * - whatsnew + icon dot + 
 * - remove clgs
