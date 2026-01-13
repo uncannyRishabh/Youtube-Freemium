@@ -1201,7 +1201,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         var requestOptions = {
             method: 'GET',
             headers: myHeaders,
-            redirect: 'follow'
+            redirect: 'follow',
+            signal
         };
 
         var mq = encodeURIComponent(queryBuilder(name, channel))
@@ -1263,10 +1264,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         });
     }
 
-    async function searchA2Z(tabId, name, channel) {
+    async function searchA2Z(tabId, name, channel, signal) {
         const requestOptions = {
             method: "GET",
-            redirect: "follow"
+            redirect: "follow",
+            signal
         };
 
         if(name.includes(channel)){
@@ -1333,8 +1335,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				return
 			}
 
-            console.log('toggleProfanity : lyrics : ', lyricsObj)
-
 			var lyrics = lyricsObj[uid[0]?.result]?.lyrics
             var synced = lyricsObj[uid[0]?.result]?.synced
 
@@ -1372,7 +1372,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 if (match.length <= 1) return '*';
                                 return match.charAt(0) + '*'.repeat(match.length - 1);
                             });
-                            console.log(replacedLine)
                             l.textContent = replacedLine
                         })
 					}
