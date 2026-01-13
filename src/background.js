@@ -474,7 +474,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
 
                                 li.appendChild(document.createElement('span')).className = 'yf-dd-item-cont';
-                                li.lastChild.textContent = optionText;
+                                li.lastChild.textContent = optionText+'\u00A0\u00A0\u00A0\u00A0';
 
 
                                 //Decrease Icon
@@ -928,13 +928,13 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                         const parent = el.parentElement;
                         if (parent && parent.classList.contains('lyricContainer')) {
-                            const parentRect = parent.getBoundingClientRect();
-                            const elRect = el.getBoundingClientRect();
-                            const scrollTop = parent.scrollTop;
-                            const offset = elRect.top - parentRect.top * 1.40;
-                            // Center the element
+                            const elOffsetTop = el.offsetTop;
+                            const parentHeight = parent.clientHeight;
+                            
+                            const scrollPosition = elOffsetTop - (parentHeight * 0.14);
+                            
                             parent.scrollTo({
-                                top: scrollTop + offset,
+                                top: scrollPosition,
                                 behavior: 'smooth'
                             });
                         } else {
