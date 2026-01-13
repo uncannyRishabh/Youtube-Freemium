@@ -577,6 +577,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click',async () => {
                                     var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    offset = parseFloat(mediaElem.getAttribute('ytf-data-offset'))
                                     console.log('dec. offset : '+offset)
                                     offset = Math.round((offset - 0.25) * 100) / 100;
                                     fontSizeElement.value = offset.toFixed(2)
@@ -610,7 +611,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                     }
                                     
                                     val = Math.round(val * 100) / 100;
-                                    offset = val
                                     e.target.value = val.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',val)
                                     
@@ -643,6 +643,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click', async () => {
                                     var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    offset = parseFloat(mediaElem.getAttribute('ytf-data-offset'))
                                     console.log('inc. offset : '+offset)
                                     offset = Math.round((offset + 0.25) * 100) / 100;
                                     fontSizeElement.value = offset.toFixed(2)
