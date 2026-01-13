@@ -60,7 +60,6 @@ var primaryInner, secondaryInner
 
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
-		//NEW_SEARCH
 		const { type, val } = obj;
 		// console.log(obj)
 

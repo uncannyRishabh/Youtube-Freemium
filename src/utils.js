@@ -158,7 +158,7 @@ function findA2ZspecificName(name) {
 }
 
 export async function searchLrclibdotnet(track, artist, signal) {
-	try {
+	// try {
 		const myHeaders = new Headers();
 		myHeaders.append("Referer", "Freemium by - @uncannyRishabh");
 		
@@ -172,19 +172,19 @@ export async function searchLrclibdotnet(track, artist, signal) {
 		var url = generateLRCLIBUrl(track, artist)
 		console.log('searching LRCLIB : ', url)
 		return await fetch(url, requestOptions)
-	} catch (error) {
-		console.log('LRCLIB fetch aborted - previous search cancelled', error);
+	// } catch (error) {
+	// 	console.log('LRCLIB fetch aborted - previous search cancelled', error);
         
-        return new Response(JSON.stringify({
-            "message": "Failed to find specified track",
-            "name": "TrackNotFound",
-            "statusCode": 404
-        }), {
-            status: 404,
-            statusText: "Not Found",
-            headers: { 'Content-Type': 'application/json' }
-        });
-    }
+    //     return new Response(JSON.stringify({
+    //         "message": "Failed to find specified track",
+    //         "name": "TrackNotFound",
+    //         "statusCode": 404
+    //     }), {
+    //         status: 404,
+    //         statusText: "Not Found",
+    //         headers: { 'Content-Type': 'application/json' }
+    //     });
+    // }
 }
 
 function generateLRCLIBUrl(track, artist){

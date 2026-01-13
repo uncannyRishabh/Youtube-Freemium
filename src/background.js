@@ -182,7 +182,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
      * Main processing function for YouTube page changes
      */
     async function main(url, tabId) {
-		console.log('TAB ID :: ', tabId)
+		console.log('TAB ID :: ', tabId, url)
 
         currentState.process = true;
         currentState.reqUrl = url;
@@ -206,7 +206,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 						console.log(response);
 					}
 				}
-				runInContext(tabId);
+                try{
+                    runInContext(url, tabId);
+                }
+                catch(e) {
+                    console.error(e)
+                }
 			});
 		}
 
@@ -215,18 +220,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         // }
     }
 
-    const runInContext = async (tabId) => {
+    const runInContext = async (url,tabId) => {
 
-        var uid = getVideoID(currentState.reqUrl);
+        var uid = getVideoID(url);
         var obj = await getFromStorage(uid);
         let isMusic = await musicCheck(tabId);
 		let lyrics, message, title, source = '';
         let synced = false;
         let offset = 0.0;
-		
+		console.log('!!! uid - '+uid+' ',url)
         // Cancel previous search if still pending
         if (currentSearchController) {
-            currentSearchController.abort('🥀🥀GIRL_CHILD🥀🥀');
+            currentSearchController.abort('🥀🥀🥀🥀');
         }
         currentSearchController = new AbortController();
 
@@ -238,6 +243,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 			console.log(obj)
 
             if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
+                //Fetch lyrics from web, when not in cache
                 let result = await findLyricsfromSources(tabId, "", val, channel, currentSearchController.signal)
 
                 let resultObject = JSON.parse(result[0]?.result);
@@ -265,6 +271,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
             }
             else if (!isEmpty(obj)) {
+                //Fetch cached lyrics
                 lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : '';
                 message = obj[uid]?.message ? obj[uid].message : "NOK";
                 title = obj[uid]?.title ?  obj[uid].title : '';
@@ -296,6 +303,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var intermediateContainer = ytc?.querySelector('#intermediateContainer')
                 var lyricElements = []
                 const mediaElem = document.querySelector('video')
+
+                console.log('UID :::::: '+uid)
                 
                 mediaElem.setAttribute('ytf-data-offset',offset)
                 
@@ -305,6 +314,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     }
                 }
                 else {
+                    // Created once, values from current state would not reflect as video change
+                    // Use dynamic method for fetching URL, uid, etc.
                     var header = document.createElement('div')
                     var progressbar = document.createElement("progress");
                     container = document.createElement('div')
@@ -413,6 +424,16 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                     resolve(result || {});
                                 });
                             });
+                        }
+
+                        function getVideoID(url) {
+                            try {
+                                const urlObject = new URL(url);
+                                const searchParams = new URLSearchParams(urlObject.search);
+                                return searchParams.get('v');
+                            } catch (e) {
+                                return '';
+                            }
                         }
 
                         async function saveObject(uid, obj) {
@@ -560,7 +581,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                     offset = Math.round((offset - 0.25) * 100) / 100;
                                     fontSizeElement.value = offset.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',offset)
-                                    await saveObject(uid, {'offset':offset})
+
+                                    await saveObject(getVideoID(document.URL), {'offset':offset})
                                 });
 
                                 li.appendChild(document.createElement('input')).className = 'yf-fontSize yf-clearInput';
@@ -601,7 +623,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                     
                                     // Set new timeout
                                     offsetTimeout = setTimeout(async () => {
-                                        await saveObject(uid, {'offset':val})
+                                        await saveObject(getVideoID(document.URL), {'offset':val})
                                     }, 500);
                                 });
 
@@ -625,7 +647,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                     offset = Math.round((offset + 0.25) * 100) / 100;
                                     fontSizeElement.value = offset.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',offset)
-                                    await saveObject(uid, {'offset':offset})
+                                    await saveObject(getVideoID(document.URL), {'offset':offset})
                                 });
                                 break;
                             }
@@ -766,7 +788,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         checkWhitespace = (str) => (!str || str.trim() === '') ? "..." : str;
 
                         if (lyricContainer.getAttribute('data-profanity') === 'false') {
-                            var replacedLine = l.replace(re, match => {
+                            var replacedLine = l.replaceAll(re, match => {
                                 if (match.length <= 1) return '*';
                                 return match.charAt(0) + '*'.repeat(match.length - 1);
                             });
@@ -1219,7 +1241,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     lContainer.forEach(verse => raw += verse.innerHTML)
                     // console.log(raw)
                     if (raw.length > 0) {
-                        var wd = raw.replace(/<\/?div[^>]*>/g, '');
+                        var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
                         lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
                     }
                     else {
@@ -1278,7 +1300,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                             raw = refDiv.textContent
                         }
                     }
-                    var wd = raw.replace(/<\/?div[^>]*>/g, '');
+                    var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
                     var lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean)
                 }
 
@@ -1311,21 +1333,18 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				return
 			}
 
+            console.log('toggleProfanity : lyrics : ', lyricsObj)
+
 			var lyrics = lyricsObj[uid[0]?.result]?.lyrics
+            var synced = lyricsObj[uid[0]?.result]?.synced
 
 			await chrome.scripting.executeScript({
 				target: { tabId },
-				function: (bool, lyrics, fuzzyProfanityDictionary) => {
+				function: (bool, lyrics, synced, fuzzyProfanityDictionary) => {
 					var container = document.querySelector('#intermediateContainer')
 					var lyricContainer = container.querySelector('#lyricContainer')
 
 					console.log('PROFANITY CHECKPOINT !!', bool)
-
-					container.removeChild(container.lastChild)
-
-					lyricContainer = document.createElement('div')
-					lyricContainer.id = 'lyricContainer'
-					lyricContainer.className = 'lyricContainer lyric sizeM'
 
 					var localFontSize = localStorage.getItem('fontSize');
 					if (localFontSize)
@@ -1334,11 +1353,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 					if (bool) {
 						lyricContainer.setAttribute('data-profanity', 'true')
 
-						lyrics.forEach(l => {
-							var d = document.createElement('span');
-							d.textContent = l;
-							lyricContainer.appendChild(d);
-						});
+                        for(var i=0;i<lyricContainer.childNodes.length;i++){
+                            lyricContainer.childNodes[i].textContent = synced ? lyrics[i][1] : lyrics[i]
+                        }
+
 					}
 					else {
 						lyricContainer.setAttribute('data-profanity', 'false')
@@ -1347,20 +1365,19 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                         const re = new RegExp(`(${pattern})`, 'giu');
 
-                        lyrics.forEach(l => {
-                            var d = document.createElement('span');
-                            var replacedLine = l.replace(re, match => {
+                        lyricContainer.childNodes.forEach(l => {
+                            console.log(l.textContent)
+
+                            var replacedLine = l.textContent.replaceAll(re, match => {
                                 if (match.length <= 1) return '*';
                                 return match.charAt(0) + '*'.repeat(match.length - 1);
                             });
-                            d.textContent = replacedLine;
-                            lyricContainer.appendChild(d);
-						});
-
+                            console.log(replacedLine)
+                            l.textContent = replacedLine
+                        })
 					}
-					container.appendChild(lyricContainer)
 				},
-				args: [bool, lyrics, fuzzyProfanityDictionary]
+				args: [bool, lyrics, synced, fuzzyProfanityDictionary]
 			})
 		}
 
