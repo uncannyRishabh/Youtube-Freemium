@@ -116,9 +116,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - for only plain lyric disable video timestamp listener ✅
 * - tab2 playing non music video displays lyrics (fixed ig ✅)
 * - adjust lyrics to display previous lyric also ✅
-* - no music card - should show no lyrics found - http://youtube.com/watch?v=0_3HVeHinDg&list=RD0_3HVeHinDg&start_radio=1
-p ✅
-
+* - no music card - should show no lyrics found - http://youtube.com/watch?v=0_3HVeHinDg&list=RD0_3HVeHinDg&start_radio=1p ✅
 * - rename to lyric offset ✅
 * - make offset input box ✅
 * - reset offset counter for next video on increment/decrement
@@ -136,6 +134,11 @@ p ✅
 * - add youtube music distinction
 * - fix first install issue
 
+* - when large screen - put container bw (secondary & secondary-inner) else (primary and primary-inner) ✅
+* - first line not highlighted when in sync
+* - when in primary container; lyrics not syncing wrt to container height
+* - keep () contents - https://www.youtube.com/watch?v=NyTkaQHdySM&list=RDbMtxZLbBkmc&index=2 - Input box
+* -  
 * - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
 * - whatsnew + icon dot + 
 * - remove clgs

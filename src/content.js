@@ -21,7 +21,7 @@ var primaryInner, secondaryInner
 
 	moveRequired = document.querySelector(window.innerWidth < 1000
 		? '#primary > #primary-inner > #below > #yf-container'
-		: '#secondary > #secondary-inner > #yf-container') == null;
+		: '#secondary > #yf-container') == null;
 
 	// player = document.querySelector('#primary video')
 	// lyricContainer = document.querySelector('#columns #yf-container');
@@ -64,7 +64,7 @@ var primaryInner, secondaryInner
 		const { type, val } = obj;
 		// console.log(obj)
 
-		var ytc = document.querySelector('#secondary > #secondary-inner')
+    	var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner' : '#secondary');
 
 		switch (type) {
 			case 'NEW_SEARCH': {
@@ -192,10 +192,13 @@ function hideShelfRenderer() {
 // }
 
 function windowResize() {
-	insidePrimary = document.querySelector('#primary > #primary-inner > #below > #yf-container')
+	insidePrimary = document.querySelector('#primary > #primary-inner > #yf-container')
 	moveRequired = document.querySelector(window.innerWidth < 1000
-		? '#primary > #primary-inner > #below > #yf-container'
-		: '#secondary > #secondary-inner > #yf-container') == null;
+		? 
+		'#primary > #primary-inner > #yf-container'
+		:
+		'#secondary > #yf-container'
+	) == null;
 
 	if (moveRequired) {
 		if (insidePrimary) {
@@ -209,14 +212,14 @@ function windowResize() {
 }
 
 function moveDivToPrimary() {
-	lyricContainer = document.querySelector('#secondary > #secondary-inner > #yf-container');
+	lyricContainer = document.querySelector('#secondary > #yf-container');
 
 	if (lyricContainer) {
 		lyricContainer.classList.add('ytf-container-marginTop');
 		if (primaryInner == null) {
-			primaryInner = document.querySelector('#primary > #primary-inner > #below');
+			primaryInner = document.querySelector('#primary > #primary-inner');
 		}
-		const firstChild = primaryInner.children[2];
+		const firstChild = primaryInner.children[1];
 
 		if (firstChild) {
 			primaryInner.insertBefore(lyricContainer, firstChild);
@@ -225,12 +228,12 @@ function moveDivToPrimary() {
 }
 
 function moveDivToSecondary() {
-	lyricContainer = document.querySelector('#primary > #primary-inner > #below > #yf-container');
+	lyricContainer = document.querySelector('#primary > #primary-inner > #yf-container');
 
 	if (lyricContainer) {
 		lyricContainer.classList.remove('ytf-container-marginTop');
 		if (secondaryInner == null) {
-			secondaryInner = document.querySelector('#secondary > #secondary-inner');
+			secondaryInner = document.querySelector('#secondary');
 		}
 		const firstChild = secondaryInner.firstChild;
 

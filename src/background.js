@@ -291,7 +291,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         await chrome.scripting.executeScript({
             target: { tabId },
             function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary) => {
-                var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below' : '#secondary > #secondary-inner');
+                var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner' : '#secondary');
                 var container = ytc?.querySelector('.yf-container')
                 var intermediateContainer = ytc?.querySelector('#intermediateContainer')
                 var lyricElements = []
@@ -678,7 +678,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     progressbar.className = "pure-material-progress-linear";
                     container.appendChild(progressbar);
 
-                    ytc.insertBefore(container, ytc.firstChild)
+                    if(window.innerWidth < 1000){
+                        ytc.insertBefore(container, ytc.children[1])
+                    }
+                    else {
+                        ytc.insertBefore(container, ytc.firstChild)
+                    }
                 }
 
                 var npt = container.querySelector('.now-playing-text-input')
