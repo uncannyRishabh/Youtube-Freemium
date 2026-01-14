@@ -90,31 +90,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 /**ISSUES
-* - Popup Menu z-index issue ✅
-* - Bubble wandering outside container ✅
-* - Make lyrics text bigger and clearer (like apple music) ✅
-* - Issue with Take me back to LA song - for a2z theweeknd is weeknd ✅ alternatively add google search 
-* - remove feat/ft from name ✅
-* - menu blur background-color: rgba(var(--pure-material-primary-rgb, 33, 150, 243), 0.12); ✅
-* - Fix not found not displaying when no lyrics found ✅
-* - Make progressbar color match the header bg color when not in use ✅
-* - Make prgressbar stop animating when not in use ✅
-
-
-* - Fix enable disable profanity UI defaulting to previous option ✅
-* - Fix window resizing issue ✅
-* - reel killer✅
 * - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
 * - make gap clamp 2-3rem depending on text size calc(var())
-* - Profanity logic when not found 
+* - Profanity toggle logic when not found - bug/edge
 * - remove anything after FT also remove the contents within first bracket
-* - Extract prominent colors from album art and use them for bubble animation
+* - Extract prominent colors from album art and use them for LAVA LAMP animation
 * - Toggle for new UI
 * - fix light mode issues
 * - search with other identified artists when no lyrics found
 
 * - Add sleep timer functionality
-* - The profanity filter toggle does not update the UI immediately after clicking.
 * - Forward and backward buttons do not update the popup UI.
 * - Make bubble animation efficient - only run animation when tab is in focus
 * - Make bubble animation take colors from album art
@@ -124,9 +109,40 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - Search functionality with - is this correct lyrics ❌ / ✅ options
 * - Font Size not updating in local storage - intermittently
 * - Page refresh on clear data - on all open youtube tabs
-* - Re-render popup.js on clear data
+* - Re-render popup.js on clear data when open
+
+* - clear data after this update(for existing users) ✅
+* - adjust lyrics size dynamically to avoid overlapping and remove extra space ✅
+* - for only plain lyric disable video timestamp listener ✅
+* - tab2 playing non music video displays lyrics (fixed ig ✅)
+* - adjust lyrics to display previous lyric also ✅
+* - no music card - should show no lyrics found - http://youtube.com/watch?v=0_3HVeHinDg&list=RD0_3HVeHinDg&start_radio=1p ✅
+* - rename to lyric offset ✅
+* - make offset input box ✅
+* - reset offset counter for next video on increment/decrement ✅
+* - fix offset input and increment decrement holding diff values ✅
+* - long press listener on increment/decrement offset
+
+* - add source - powered by stuff
+* - add fallbacks
+
+* - remove - now playing
+
+* - fix main called multiple times for same page
+* - re search if (source=lrclib && lastAccessed > 15 days && sync != true)
+* - add bottom margin for lyrics
+* - add youtube music distinction
+* - fix first install issue
+
+* - when large screen - put container bw (secondary & secondary-inner) else (primary and primary-inner) ✅
+* - first line not highlighted when in sync
+* - when in primary container; lyrics not syncing wrt to container height
+* - keep () contents - https://www.youtube.com/watch?v=NyTkaQHdySM&list=RDbMtxZLbBkmc&index=2 - Input box ✅
+* - 
+* - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
+* - whatsnew + icon dot + 
+* - remove clgs
+
 
 */
 
-// document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer')[0].style.display = 'none'
-// document.querySelectorAll('ytd-rich-section-renderer ytd-rich-shelf-renderer')[0].style.display='unset'

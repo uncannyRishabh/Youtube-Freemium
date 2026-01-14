@@ -1,12 +1,13 @@
 {
 	"manifest_version": 3,
 	"name": "Youtube Freemium",
-	"version": "2.0.0",
+	"version": "2.2.0",
 	"description": "Enable lyrics for youtube music videos",
 	"host_permissions": [
 		"https://www.bing.com/*",
 		"https://www.azlyrics.com/*",
-		"https://www.youtube.com/*"
+		"https://www.youtube.com/*",
+		"https://lrclib.net/"
 	],
 	"content_security_policy": {
 		"extension_pages": "script-src 'self'; img-src 'self'"
@@ -14,7 +15,6 @@
 	},
 	"permissions": [
 		"tabs",
-		"history",
 		"scripting",
 		"storage",
 		"webNavigation"

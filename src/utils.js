@@ -7,7 +7,7 @@ export function getDefaultUserPrefs(){
 	}
 }
 
-export const fuzzyProfanityDictionary = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'hoe', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'tit', 'whore', 'wanker']
+export const fuzzyProfanityDictionary = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'whore']
 export const exactProfanityDictionary = []
 
 /**
@@ -131,14 +131,17 @@ export function generateA2ZLyricsUrl(name, channel) {
 	//remove all characters after first comma
 	let sanitizedArtist = channel.includes(',') ? channel.split(',')[0] : channel;
 
-	// Remove all non-alphanumeric characters and convert to lowercase for channel
-	sanitizedArtist = sanitizedArtist.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+	//replace all $ with s
+	sanitizedArtist = sanitizedArtist.replaceAll('$', 's').trim();
 
-	// Remove all non-alphanumeric characters and convert to lowercase for song name
-	let sanitizedName = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+	// Remove all non-alphanumeric characters and convert to lowercase for channel
+	sanitizedArtist = sanitizedArtist.replaceAll(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
 	// remove all characters between brackets
-	sanitizedName = sanitizedName.replace(/\[.*?\]/g, '').trim();
+	let sanitizedName = name.replaceAll(/\[.*?\]/g, '').trim();
+	
+	// Remove all non-alphanumeric characters and convert to lowercase for song name
+	sanitizedName = sanitizedName.replaceAll(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
 	return `https://www.azlyrics.com/lyrics/${findA2ZspecificName(sanitizedArtist)}/${sanitizedName}.html`;
 }
@@ -147,12 +150,68 @@ function findA2ZspecificName(name) {
 	const a2zNames = {
 		'theweeknd': 'weeknd',
 		'thewanted': 'wanted',
-		'thechainsmokers': 'chainsmokers'
+		'thechainsmokers': 'chainsmokers',
+		
 	};
 
 	return a2zNames[name] || name;
 }
 
+export async function searchLrclibdotnet(track, artist, signal) {
+	// try {
+		const myHeaders = new Headers();
+		myHeaders.append("Referer", "Freemium by - @uncannyRishabh");
+		
+		const requestOptions = {
+			method: "GET",
+			redirect: "follow",
+			headers: myHeaders,
+			signal
+		};
+
+		var url = generateLRCLIBUrl(track, artist)
+		console.log('searching LRCLIB : ', url)
+		return await fetch(url, requestOptions)
+	// } catch (error) {
+	// 	console.log('LRCLIB fetch aborted - previous search cancelled', error);
+        
+    //     return new Response(JSON.stringify({
+    //         "message": "Failed to find specified track",
+    //         "name": "TrackNotFound",
+    //         "statusCode": 404
+    //     }), {
+    //         status: 404,
+    //         statusText: "Not Found",
+    //         headers: { 'Content-Type': 'application/json' }
+    //     });
+    // }
+}
+
+function generateLRCLIBUrl(track, artist){
+	// remove commas
+	track = track.replaceAll(',', '').trim();
+	// remove all special characters between brackets ()
+	track = track.replaceAll(/\(.*?\)/g, '').trim();
+	
+	// remove commas
+	artist = artist.replaceAll(',', '').trim();
+	// remove all special characters between brackets
+	artist = artist.replaceAll(/\(.*?\)/g, '').trim();
+	
+	track = track.replaceAll(' ','+');
+	artist = artist.replaceAll(' ','+');
+
+	track = encodeURI(track)
+	artist = encodeURI(artist)
+	
+	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
+}
+
+/**
+ * Accepts image and outputs 3 prominent colors (Unused)
+ * @param {*} img 
+ * @returns 
+ */
 export function extractProminentColors(img) {
 	const ctx = canvas.getContext('2d');
 	// Downscale canvas for performance
