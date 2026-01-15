@@ -45,6 +45,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				}
 			});
 
+            // Set badge to notify users of update
+            chrome.action.setBadgeText({ text: ' ' });
+            chrome.action.setBadgeBackgroundColor({ color: '#ffffffff' });
+
             reloadRelevantTabs();
 		}
 
@@ -139,8 +143,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
      * Handles messages from content script
      */
     chrome.runtime.onMessage.addListener(async(obj, sender, sendResponse) => {
-        const { type, val } = obj;
-
+        const { type, val, action } = obj;
+        
+        if (action === 'clearUpdateBadge') {
+            chrome.action.setBadgeText({ text: '' });
+        }
+        
         switch (type) {
             case 'PROFANITY_TOGGLE':{
 				currentState.tabList.forEach(async (tabId) => {
