@@ -209,8 +209,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 try{
                     runInContext(url, tabId);
                 }
-                catch(e) {
-                    console.error(e)
+                catch(error) {
+                    console.log(error)
                 }
 			});
 		}
@@ -1110,7 +1110,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
     async function findLyricsfromSources(tabId, source, val, channel, signal) {
         var result;
 
-        switch ('LRCLIB') {
+        switch (source) {
             case 'BING': {
                 result = await searchBing(tabId, val, channel, signal)
                 break;
@@ -1124,9 +1124,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 break;
             }
             default: {
-                result = await searchA2Z(tabId, val, channel, signal)
+                result = await searchLRCLIB(tabId, val, channel, signal)
                 if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
-                    result = await searchBing(tabId, val, channel, signal)
+                    result = await searchA2Z(tabId, val, channel, signal)
+                    if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
+                        result = await searchBing(tabId, val, channel, signal)
+                    }
                 }
             }
         }

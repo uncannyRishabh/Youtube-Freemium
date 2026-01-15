@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, getDefaultUserPrefs } from './utils.js';
+import { saveObject, getFromStorage, getDefaultUserPrefs, carouselData } from './utils.js';
 
 /**
  * Sends a message to the background script
@@ -87,7 +87,62 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
         });
     });
+
+    initWhatsNewCarousel()
 });
+
+function initWhatsNewCarousel() {
+    const box = document.getElementById('carouselBox');
+    const line = document.getElementById('progressLine');
+    if (!box || !line || !carouselData.length) return;
+
+    // 1. Dynamic Injection
+    box.innerHTML = carouselData.map(item => `
+        <a href="${item.link}" target="_blank" class="slide-link">
+            <div class="slide-content-minimal">
+                <span class="slide-header">${item.header}</span>
+                <p class="slide-subtext">${item.subtext}</p>
+            </div>
+        </a>
+    `).join('');
+
+    // 2. Setup Progress Line Width
+    const itemWidthPct = 100 / carouselData.length;
+    line.style.width = `${itemWidthPct}%`;
+
+    // 3. Optimized Scroll Listener
+    const updateProgress = () => {
+        // Calculate how far the user has scrolled as a ratio (0 to 1)
+        const scrollRatio = box.scrollLeft / (box.scrollWidth - box.clientWidth);
+        
+        // The line can only move as far as the remaining width of the container
+        const maxTranslate = box.clientWidth - line.clientWidth;
+        const translateX = scrollRatio * maxTranslate;
+        
+        line.style.transform = `translateX(${translateX}px)`;
+    };
+
+    box.addEventListener('scroll', updateProgress);
+
+    // 4. Managed Auto-slide
+    let index = 0;
+    let isPaused = false;
+
+    const autoSlide = setInterval(() => {
+        if (isPaused) return;
+        
+        index = (index + 1) % carouselData.length;
+        box.scrollTo({
+            left: index * box.clientWidth,
+            behavior: 'smooth'
+        });
+    }, 5000);
+
+    // Pause auto-slide when user interacts
+    box.addEventListener('mouseenter', () => isPaused = true);
+    box.addEventListener('mouseleave', () => isPaused = false);
+    box.addEventListener('touchstart', () => isPaused = true);
+}
 
 /**ISSUES
 * - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
@@ -119,12 +174,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - no music card - should show no lyrics found - http://youtube.com/watch?v=0_3HVeHinDg&list=RD0_3HVeHinDg&start_radio=1p ✅
 * - rename to lyric offset ✅
 * - make offset input box ✅
+* - when large screen - put container bw (secondary & secondary-inner) else (primary and primary-inner) ✅
+* - keep () contents - https://www.youtube.com/watch?v=NyTkaQHdySM&list=RDbMtxZLbBkmc&index=2 - Input box ✅
 * - reset offset counter for next video on increment/decrement ✅
 * - fix offset input and increment decrement holding diff values ✅
 * - long press listener on increment/decrement offset
 
 * - add source - powered by stuff
-* - add fallbacks
 
 * - remove - now playing
 
@@ -134,13 +190,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 * - add youtube music distinction
 * - fix first install issue
 
-* - when large screen - put container bw (secondary & secondary-inner) else (primary and primary-inner) ✅
 * - first line not highlighted when in sync
-* - when in primary container; lyrics not syncing wrt to container height
-* - keep () contents - https://www.youtube.com/watch?v=NyTkaQHdySM&list=RDbMtxZLbBkmc&index=2 - Input box ✅
 * - 
-* - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
+* - add fallbacks
 * - whatsnew + icon dot + 
+* - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
 * - remove clgs
 
 
