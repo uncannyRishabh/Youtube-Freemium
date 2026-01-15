@@ -7,6 +7,24 @@ export function getDefaultUserPrefs(){
 	}
 }
 
+export const carouselData = [
+    {
+        header: "Lyrics Sync",
+        subtext: "Real-time scrolling for your favorite tracks.",
+        link: "https://www.youtube.com/watch?v=xiZUf98A1Ts&list=RDxiZUf98A1Ts&t=47"
+    },
+    {
+        header: "Disable Shorts",
+        subtext: "Clean your feed with a single toggle.",
+        link: "https://github.com/sponsors/uncannyRishabh"
+    },
+    {
+        header: "Adjust Offset",
+        subtext: "Millisecond precision for perfect sync.",
+        link: "https://github.com/sponsors/uncannyRishabh"
+    }
+];
+
 export const fuzzyProfanityDictionary = ['ass', 'bitch', 'bullshit', 'cunt', 'cock', 'dick', 'faggot', 'fuck', 'nigga', 'nigger', 'motherfuck', 'pussy', 'slut', 'shit', 'whore']
 export const exactProfanityDictionary = []
 

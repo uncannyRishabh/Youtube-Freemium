@@ -1,47 +1,81 @@
 @import url('https://fonts.googleapis.com/css2?family=Oswald&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Oswald&display=swap');
 
-body {
-	height: 340px;
-	width: 340px;
-	margin: 0;
-	padding: 0;
-	background: none;
-}
-
+/* --- Variable Definitions --- */
 @media (prefers-color-scheme: dark) {
-	body {
-		--yf-text-color: #b0b0b0;
-		--yf-primary-bg-color: #101010;
-		--yf-secondary-bg-color: #212121;
-		background-color: #101010;
-	}
-}
-
-@media (prefers-color-scheme: light) {
-    body {
-		--yf-text-color: #262525;
-		--yf-primary-bg-color: #f8f8f8;
-		--yf-secondary-bg-color: #f1f1f1;
-		background-color: #f8f8f8;
+    :root {
+        --yf-bg-outer: #0f0f0f;
+        --yf-bg-container: #161616;
+        --yf-card-bg: #1c1c1c;
+        --yf-card-hover: #222222;
+        --yf-text-main: #d1d1d1;
+        --yf-text-muted: #888888;
+        --yf-border: rgba(255, 255, 255, 0.05);
+        --yf-border-subtle: rgba(255, 255, 255, 0.03);
+        --yf-accent: #e21;
+        --yf-status-bg: rgba(76, 175, 80, 0.1);
+        --yf-status-text: #4CAF50;
+        --yf-icon-box: rgba(255, 255, 255, 0.03);
     }
 }
 
-
-.dynamic-container {
-	height: 340px;
-	display: flex;
-	flex-direction: column;
-	box-sizing: border-box;
+@media (prefers-color-scheme: light) {
+    :root {
+        --yf-bg-outer: #f0f0f0;
+        --yf-bg-container: #ffffff;
+        --yf-card-bg: #f8f8f8;
+        --yf-card-hover: #f1f1f1;
+        --yf-text-main: #262525;
+        --yf-text-muted: #666666;
+        --yf-border: rgba(0, 0, 0, 0.05);
+        --yf-border-subtle: rgba(0, 0, 0, 0.03);
+        --yf-accent: #e21;
+        --yf-status-bg: rgba(76, 175, 80, 0.15);
+        --yf-status-text: #2e7d32;
+        --yf-icon-box: rgba(0, 0, 0, 0.03);
+    }
 }
 
+/* --- Base & Container --- */
+body {
+    height: 440px; 
+    width: 340px;
+    margin: 0;
+    background-color: var(--yf-bg-outer);
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+}
+
+.dynamic-container {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--yf-bg-container);
+    border: 1px solid var(--yf-border);
+    overflow: hidden;
+}
+
+/* --- Header Section --- */
 .navbar {
-	display: flex;
-	flex-direction: column;
-	position: relative;
-	box-sizing: border-box;
-	padding: 8px 16px 0 16px;
-    background-color: var(--yf-secondary-bg-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    background: linear-gradient(to bottom, var(--yf-card-bg), var(--yf-bg-container));
+    border-bottom: 1px solid var(--yf-border-subtle);
+}
+
+.status-badge {
+    font-size: 9px;
+    color: var(--yf-status-text);
+    background: var(--yf-status-bg);
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+	text-decoration: none;
 }
 
 .yf-logo-container {
@@ -51,7 +85,6 @@ body {
 	--height: 20px;
 	--width: 20px;
 }
-
 
 .yf-youtube {
 	display: grid;
@@ -99,7 +132,7 @@ body {
 	-webkit-line-clamp: 1;
 	-webkit-box-orient: vertical;
 	text-overflow: ellipsis;
-    color: var(--yf-text-color);
+	color: var(--yf-text-main);
 	font-size: 1.25rem;
 	transform: scaleX(1.05) scaleY(1);
 	word-spacing: -5px;
@@ -110,52 +143,117 @@ body {
 	margin-bottom: 1px;
 }
 
-.now-playing-div {
-	display: flex;
-}
-
-.now-playing-text {
-	text-overflow: ellipsis;
-	padding-right: 14px;
-	white-space: nowrap;
-	overflow: hidden;
-}
-
-.yf-menu {
-	top: calc(50% - 2px);
-	right: 5%;
-	font-size: 23px;
-	font-weight: 500;
-	position: absolute;
-	color: var(--yf-text-color);
-	transform: rotate(90deg) translate(-50%, -50%);
-	user-select: none;
-}
-
+/* --- List Items --- */
 .replaceable-container {
-	height: 100%;
-	padding-inline: 6px;
-	background-color: var(--yf-primary-bg-color);
+    flex-grow: 1;
+    padding: 10px 4px;
 }
 
 .yf-listMenu {
-	box-sizing: border-box;
-	width: 100%;
-	padding: 10px 4%;
-    border: 1px solid var(--yf-primary-bg-color);
-	border-radius: 6px;
-	margin-top: 8px;
-	display: flex;
-	align-items: center;
-	column-gap: 12px;
-	background-color: var(--yf-secondary-bg-color);
-	transition: border .2s linear;
-	user-select: none;
+    margin: 6px 10px;
+    padding: 10px;
+    background: var(--yf-card-bg);
+    border: 1px solid var(--yf-border);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    column-gap: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
 }
 
 .yf-listMenu:hover {
-	border: 1px solid #e21;
+    background: var(--yf-card-hover);
+    border-color: var(--yf-accent);
 }
+
+.icon-wrapper {
+    width: 32px;
+    height: 32px;
+    background: var(--yf-icon-box);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+}
+
+.yf-menuText {
+    color: var(--yf-text-main);
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.yf-svg {
+    fill: var(--yf-text-main);
+}
+
+.yf-coming-soon {
+    filter: grayscale(1) opacity(0.5);
+    cursor: not-allowed;
+}
+
+/* --- What's New Carousel --- */
+.whats-new-wrapper.minimal {
+    margin: 10px 14px 6px 14px;
+    display: flex;
+    flex-direction: column;
+}
+
+.carousel-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--yf-accent);
+    margin-bottom: 6px;
+    font-weight: 600;
+}
+
+.carousel-box {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    gap: 10px;
+}
+
+.carousel-box::-webkit-scrollbar { display: none; }
+
+.slide-link {
+    text-decoration: none;
+    min-width: 100%;
+    scroll-snap-align: start;
+    display: block;
+}
+
+.slide-header {
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    color: var(--yf-text-main);
+    text-transform: uppercase;
+}
+
+.slide-subtext {
+    font-size: 11px;
+    color: var(--yf-text-muted);
+    margin: 2px 0 0;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 2px;
+    background: var(--yf-border);
+    border-radius: 2px;
+    margin-top: 8px;
+    position: relative;
+}
+
+.progress-line {
+    position: absolute;
+    height: 100%;
+    background: var(--yf-accent);
+    transition: transform 0.3s ease;
+    transform-origin: left;
+}
+
 
 .yf-tooltip {
 	--scale: 0;
@@ -188,57 +286,55 @@ body {
 	--scale: 1;
 }
 
-.yf-menuText {
-	color: var(--yf-text-color);
-	user-select: none;
-	font-size: 14px;
+
+.support-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 9px 12px;
+	background-color: rgb(238 34 17 / 0.1);
+	border: 1px solid rgb(238 34 17 / 0.2);
+	border-radius: 9999px;
+	text-decoration: none;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	cursor: pointer;
 }
 
-.yf-coming-soon {
-	filter: blur(1.5px);
+.support-chip span {
+	font-size: 10px;
+	font-weight: 700;
+	color: var(--yf-accent);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	line-height: 1;
 }
 
-.buyMeKofi {
-	font-family: "Nanum Pen Script", cursive;
-    font-size: 20px;
-    position: absolute;
-    color: #f1f1f1;
-    text-decoration: none;
-    bottom: 10px;
-    left: 50%;
-    transform: translate(-50%, 0%);
-	background: conic-gradient(from 180deg at 50% 50%, #9fa3ff 0deg, #f94f4f 181.8deg, #ffa55f 360deg);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: hue 20s infinite linear;
-    -webkit-animation: hue 20s infinite linear;
+.support-chip svg {
+	width: 10px;
+	height: 10px;
+	fill: var(--yf-accent);
+	color: var(--yf-accent);
+	transition: all 0.3s ease;
 }
 
-@keyframes hue {
-	from {
-		filter: hue-rotate(0deg);
-		-webkit-filter: hue-rotate(0deg);
-	}
-
-	to {
-		filter: hue-rotate(-360deg);
-		-webkit-filter: hue-rotate(-360deg);
-	}
+/* --- HOVER STATE --- */
+.support-chip:hover {
+	background: var(--yf-accent);
+	border-color: var(--yf-accent);
+	box-shadow: 0 0 15px rgba(226, 34, 17, 0.4);
 }
 
-.buyMeKofi:visited {
-	color: #f1f1f1;
+.support-chip:hover span {
+	color: #ffffff;
 }
 
-.yf-svg {
-	fill: var(--yf-text-color);
+.support-chip:hover svg {
+	fill: #ffffff;
+	color: #ffffff;
+	transform: scale(1.1);
 }
 
-.material-symbols-outlined {
-	font-variation-settings:
-		'FILL' 0,
-		'wght' 300,
-		'GRAD' -25,
-		'opsz' 24
+/* Active/Click effect */
+.support-chip:active {
+	transform: scale(0.95);
 }
