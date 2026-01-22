@@ -20,8 +20,8 @@ var primaryInner, secondaryInner
 	document.head.appendChild(preconnect2);
 
 	moveRequired = document.querySelector(window.innerWidth < 1000
-		? '#primary > #primary-inner > #below > #yf-container'
-		: '#secondary > #yf-container') == null;
+		? '#primary > #primary-inner'
+		: '#secondary') == null;
 
 	// player = document.querySelector('#primary video')
 	// lyricContainer = document.querySelector('#columns #yf-container');

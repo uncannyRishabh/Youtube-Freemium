@@ -36,14 +36,16 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
 		} else if (details.reason == ONINSTALL_REASON_UPDATE) {
 			console.log("Goated extension just got updated")
-			chrome.storage.local.clear(function () {
-				if (chrome.runtime.lastError) {
-					console.error(chrome.runtime.lastError);
-				} else {
-					console.log("Local storage cleared successfully");
-                    saveObject('yt-userPrefs', getDefaultUserPrefs());
-				}
-			});
+			
+            //Clear local storage after update
+            // chrome.storage.local.clear(function () {
+			// 	if (chrome.runtime.lastError) {
+			// 		console.error(chrome.runtime.lastError);
+			// 	} else {
+			// 		console.log("Local storage cleared successfully");
+            //         saveObject('yt-userPrefs', getDefaultUserPrefs());
+			// 	}
+			// });
 
             // Set badge to notify users of update
             chrome.action.setBadgeText({ text: ' ' });
@@ -540,7 +542,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector('#yf-font-size');
                                     var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
-                                    if (currentFontSize < 24) {
+                                    if (currentFontSize < 32) {
                                         var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
                                         localStorage.setItem('fontSize', fontSize);
                                         if (fontSizeElement) {
@@ -584,11 +586,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 li.appendChild(svgElement);
 
                                 li.lastChild.addEventListener('click',async () => {
-                                    var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    var offsetValueElement = li.querySelector('#yf-offset-text')
                                     offset = parseFloat(mediaElem.getAttribute('ytf-data-offset'))
                                     console.log('dec. offset : '+offset)
                                     offset = Math.round((offset - 0.25) * 100) / 100;
-                                    fontSizeElement.value = offset.toFixed(2)
+                                    offsetValueElement.value = offset.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',offset)
 
                                     await saveObject(getVideoID(document.URL), {'offset':offset})
@@ -650,11 +652,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 li.appendChild(svgElement);
 
                                 li.lastChild.addEventListener('click', async () => {
-                                    var fontSizeElement = li.querySelector('#yf-offset-text')
+                                    var offsetValueElement = li.querySelector('#yf-offset-text')
                                     offset = parseFloat(mediaElem.getAttribute('ytf-data-offset'))
                                     console.log('inc. offset : '+offset)
                                     offset = Math.round((offset + 0.25) * 100) / 100;
-                                    fontSizeElement.value = offset.toFixed(2)
+                                    offsetValueElement.value = offset.toFixed(2)
                                     mediaElem.setAttribute('ytf-data-offset',offset)
                                     await saveObject(getVideoID(document.URL), {'offset':offset})
                                 });
@@ -764,12 +766,20 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                     const re = new RegExp(`(${pattern})`, 'giu');
 
+                    lyrics = lyrics.reduce((acc, item) => {
+                        if (item.length >= 2) {
+                            acc.push(item);
+                        }
+                        return acc;
+                    }, []);
+
                     //Populate lyrics
                     lyrics.forEach(l => {
+                        console.log('Lyrics ::::: ',l)
                         var timestamp;
-                        if (synced && Array.isArray(l)) {
+                        if (Array.isArray(l)) {
                             timestamp = l[0];
-                            l = l[1];
+                            l = l[1] ? l[1] : '';
                         }
                         var d = document.createElement('span');
                         if (timestamp) {
@@ -911,6 +921,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                         } else {
                             right = mid - 1;
                         }
+                        // console.log('lyricTime : '+lyricTime+' currentTime : '+ currentTime+' result + '+result)
                     }
                     return result;
                 }

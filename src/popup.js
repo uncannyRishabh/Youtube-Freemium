@@ -183,6 +183,10 @@ function initWhatsNewCarousel() {
 * - first line not highlighted when in sync
 * - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
 
+* - make it collapsible/accordion
+* - implement apple search UI for search
+* - Share your experience bottom of lyric view
+* - bug : lyriccontainer vanishes on 2nd simultaneous  tab
 
 */
 
