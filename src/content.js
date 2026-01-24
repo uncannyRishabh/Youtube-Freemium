@@ -20,8 +20,8 @@ var primaryInner, secondaryInner
 	document.head.appendChild(preconnect2);
 
 	moveRequired = document.querySelector(window.innerWidth < 1000
-		? '#primary > #primary-inner'
-		: '#secondary') == null;
+		? 'ytd-watch-flexy #primary > #primary-inner'
+		: 'ytd-watch-flexy #secondary') == null;
 
 	// player = document.querySelector('#primary video')
 	// lyricContainer = document.querySelector('#columns #yf-container');
@@ -63,7 +63,7 @@ var primaryInner, secondaryInner
 		const { type, val } = obj;
 		// console.log(obj)
 
-    	var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner' : '#secondary');
+    	var ytc = document.querySelector(window.innerWidth < 1000 ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
 
 		switch (type) {
 			case 'NEW_SEARCH': {
@@ -191,12 +191,12 @@ function hideShelfRenderer() {
 // }
 
 function windowResize() {
-	insidePrimary = document.querySelector('#primary > #primary-inner > #yf-container')
+	insidePrimary = document.querySelector('ytd-watch-flexy #primary > #primary-inner > #yf-container')
 	moveRequired = document.querySelector(window.innerWidth < 1000
 		? 
-		'#primary > #primary-inner > #yf-container'
+		'ytd-watch-flexy #primary > #primary-inner > #yf-container'
 		:
-		'#secondary > #yf-container'
+		'ytd-watch-flexy #secondary > #yf-container'
 	) == null;
 
 	if (moveRequired) {
@@ -211,12 +211,12 @@ function windowResize() {
 }
 
 function moveDivToPrimary() {
-	lyricContainer = document.querySelector('#secondary > #yf-container');
+	lyricContainer = document.querySelector('ytd-watch-flexy #secondary > #yf-container');
 
 	if (lyricContainer) {
 		lyricContainer.classList.add('ytf-container-marginTop');
 		if (primaryInner == null) {
-			primaryInner = document.querySelector('#primary > #primary-inner');
+			primaryInner = document.querySelector('ytd-watch-flexy #primary > #primary-inner');
 		}
 		const firstChild = primaryInner.children[1];
 
@@ -227,12 +227,12 @@ function moveDivToPrimary() {
 }
 
 function moveDivToSecondary() {
-	lyricContainer = document.querySelector('#primary > #primary-inner > #yf-container');
+	lyricContainer = document.querySelector('ytd-watch-flexy #primary > #primary-inner > #yf-container');
 
 	if (lyricContainer) {
 		lyricContainer.classList.remove('ytf-container-marginTop');
 		if (secondaryInner == null) {
-			secondaryInner = document.querySelector('#secondary');
+			secondaryInner = document.querySelector('ytd-watch-flexy #secondary');
 		}
 		const firstChild = secondaryInner.firstChild;
 

@@ -54,6 +54,7 @@ body {
     background: var(--yf-bg-container);
     border: 1px solid var(--yf-border);
     overflow: hidden;
+    user-select: none;
 }
 
 /* --- Header Section --- */
@@ -113,12 +114,12 @@ body {
 	width: var(--width);
 	color: #fff;
 	text-align: center;
-	font-family: sans-serif;
+	font-family: 'Oswald',sans-serif;
 	font-optical-sizing: auto;
 	font-weight: 700;
 	font-size: .87rem;
 	z-index: 1;
-	/* transform: translateY(-1px); */
+    transform: translateY(-1px) scaleX(1.5);
 }
 
 .freemium {

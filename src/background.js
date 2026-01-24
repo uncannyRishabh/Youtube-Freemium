@@ -308,7 +308,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         await chrome.scripting.executeScript({
             target: { tabId },
             function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary) => {
-                var ytc = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner' : '#secondary');
+                var ytc = document.querySelector(window.innerWidth < 1000 ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
                 var container = ytc?.querySelector('.yf-container')
                 var intermediateContainer = ytc?.querySelector('#intermediateContainer')
                 var lyricElements = []
@@ -775,7 +775,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                     //Populate lyrics
                     lyrics.forEach(l => {
-                        console.log('Lyrics ::::: ',l)
+                        // console.log('Lyrics ::::: ',l)
                         var timestamp;
                         if (Array.isArray(l)) {
                             timestamp = l[0];
@@ -879,7 +879,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     container.removeAttribute('data-uid')
 
                     console.log('Removing..')
-                    var ytc = document.querySelector('#secondary > #secondary-inner')
+                    var ytc = document.querySelector('ytd-watch-flexy #secondary > #secondary-inner')
                     var c = ytc.querySelector('.yf-container')
                     var lc = ytc.querySelector('#lyricContainer')
                     if (lc) {

@@ -54,6 +54,7 @@
 	padding: 24px 3vw 120px 3vw;
 	gap: 2rem;
 	overflow-y: scroll;
+	scrollbar-gutter: stable;
 	scroll-behavior: smooth !important;
 	/* scroll-timeline-name: --squareTimeline; */
 }
@@ -245,10 +246,11 @@
 	width: var(--width);
 	color: #fff;
 	text-align: center;
-	font-family: "Roboto", "Arial";
+	font-family: "Oswald", "Arial";
 	font-weight: 600;
 	font-size: 1.4rem;
 	z-index: 1;
+	transform: translateY(-1px) scaleX(1.5);
 }
 
 .freemium {
