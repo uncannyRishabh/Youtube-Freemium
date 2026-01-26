@@ -681,7 +681,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 reportLink.setAttribute("id", "report");
                                 reportLink.setAttribute("class", "yf-reportLink")
                                 reportLink.setAttribute("href", "mailto:uncannyrishabh@gmail.com?subject=REPORT%20%7C%20YTF&body=%3Cdescribe_issue_here%3E%0A%3Cattach_screenshot%3E");
-                                reportLink.innerText = optionText;
+                                reportLink.innerText = 'Report an issue';
 
                                 reportLinkContainer.appendChild(reportLink);
 

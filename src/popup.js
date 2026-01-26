@@ -185,7 +185,7 @@ function initWhatsNewCarousel() {
 
 * - make it collapsible/accordion
 * - implement apple search UI for search
-* - Share your experience bottom of lyric view
-* - bug : lyriccontainer vanishes on 2nd simultaneous  tab
+* - Share your experience bottom of lyric view (rating)
+* - bug : progressbar
 */
 

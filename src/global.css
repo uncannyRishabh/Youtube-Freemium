@@ -195,10 +195,9 @@
 	max-height: var(--ytd-watch-flexy-panel-max-height);
 	display: flex;
 	flex-direction: column;
-	border: 1px solid var(--yt-spec-10-percent-layer);
+	border: 1px solid var(--yt-spec-outline);
 	margin-bottom: 24px;
 	box-sizing: border-box;
-
 }
 
 .yf-header {
@@ -209,7 +208,7 @@
 	box-sizing: border-box;
 	padding: 12px 16px 0 16px;
 	border-radius: 12px 12px 0px 0px;
-	background-color: var(--yt-spec-brand-background-primary);
+	background-color: var(--yt-spec-raised-background);
 }
 
 .yf-logo-container {
@@ -466,7 +465,7 @@
 	height: 2px;
 	width: 100%;
 	color: #e21;
-	background-color: var(--yt-spec-brand-background-primary);
+	background-color: var(--yt-spec-raised-background);
 	font-size: 16px;
 }
 
@@ -496,7 +495,7 @@
 .no-animate:indeterminate {
 	min-height: 2px !important;
 	height: 2px !important;
-	background-color: var(--yt-spec-brand-background-primary) !important;
+	background-color: var(--yt-spec-raised-background) !important;
 	appearance: auto !important;
     box-sizing: unset !important;
     display: inline-block !important;
@@ -505,7 +504,6 @@
     vertical-align: unset !important;
 	animation: none !important;
 	background-image: none !important;
-	background-color: var(--yt-spec-brand-background-primary);
 }
 
 @keyframes pure-material-progress-linear {
@@ -536,8 +534,7 @@
 
 .yf-dropdown {
 	z-index: 4;
-	backdrop-filter: blur(12px);
-	background-color: rgb(from var(--yt-spec-brand-background-primary) r g b / .8);
+	backdrop-filter: blur(8px);
 	color: var(--yt-spec-text-primary);
 	fill: var(--yt-spec-text-primary);
 	display: none;
@@ -555,6 +552,8 @@
 	line-height: 2rem;
 	font-weight: 200;
 	user-select: none;
+    background-color: rgb(from var(--yt-spec-base-background) r g b / 0.9);
+    border: 1px solid var(--yt-spec-outline);
 }
 
 .yf-dd-list {
@@ -588,7 +587,7 @@
 
 .yf-fontSize {
 	font-size: 13px;
-	padding: 4px;
+	padding: 4px 10px;
 	border: 1px solid;
 	border-radius: 4px;
 }
