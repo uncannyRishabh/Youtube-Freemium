@@ -175,6 +175,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 })
 				break;
 			}
+            case 'SKIP_AD':{
+                //save object
+            }
             case 'SLEEP_TIMER':{
 
                 break;
@@ -244,6 +247,71 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             currentSearchController.abort('🥀🥀🥀🥀');
         }
         currentSearchController = new AbortController();
+
+        chrome.scripting.executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            args: [],
+            func: () => {
+                'use strict';
+
+                if (window.__ytfAdBlockerInjected) {
+                    console.log(':::Ad blocker already injected, skipping:::');
+                    return;
+                }
+
+                function isInIframe() {
+                    try {
+                        console.log(':::Checking if in iframe:::');
+                        return window.self !== window.top;
+                    }
+                    catch (e) {
+                        console.log(':::Error In Iframe logic:::');
+                        return true;
+                    }
+                }
+
+                const skipButtonClasses = [
+                    "videoAdUiSkipButton",
+                    "ytp-ad-skip-button ytp-button",
+                    "ytp-ad-skip-button-modern ytp-button",
+                    "ytp-skip-ad-button",
+                ];
+
+                const getEventHandler = (listener) => function handleEvent(e) {
+                    const handler = {
+                        get(_, prop) {
+                            console.log(':::Proxy get handler invoked:::');
+                            if (prop === "isTrusted") {
+                                return true;
+                            }
+                            if (typeof e[prop] === "function") {
+                                return function (...args) {
+                                    return e[prop](...args);
+                                };
+                            }
+                            return e[prop];
+                        },
+                    };
+                    return listener(new Proxy({}, handler));
+                };
+                function overrideAddEventListener() {
+                    const originalAddEventListener = HTMLElement.prototype.addEventListener;
+                    HTMLElement.prototype.addEventListener = function (type, listener, options) {
+                        if (type === "click" && skipButtonClasses.includes(this.className)) {
+                            return originalAddEventListener.call(this, type, getEventHandler(listener), options);
+                        }
+                        return originalAddEventListener.call(this, type, listener, options);
+                    };
+                }
+                if (!isInIframe()) {
+                    console.log(':::Youtube trusted click override injected:::')
+                    overrideAddEventListener();
+                }
+            
+                window.__ytfAdBlockerInjected = true;
+            }
+        });
 
         if (isMusic) {
 			let result = await findSongAndArtist(tabId);
@@ -503,9 +571,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector('#yf-font-size');
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
                                     var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize - 1) + 'px';
-                                    if (currentFontSize > 8) {
+                                    if (currentFontSize > 11) {
                                         console.log(fontSizeElement.textContent)
                                         console.log(fontSize)
                                         localStorage.setItem('fontSize', fontSize);
@@ -522,7 +590,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 if (localFontSize)
                                     li.lastChild.textContent = localFontSize
                                 else
-                                    li.lastChild.textContent = '14px'
+                                    li.lastChild.textContent = '20px'
 
 
                                 //Increase Icon
@@ -541,7 +609,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector('#yf-font-size');
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
                                     if (currentFontSize < 32) {
                                         var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
                                         localStorage.setItem('fontSize', fontSize);

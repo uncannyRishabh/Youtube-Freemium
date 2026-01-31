@@ -186,6 +186,11 @@ function initWhatsNewCarousel() {
 * - make it collapsible/accordion
 * - implement apple search UI for search
 * - Share your experience bottom of lyric view (rating)
-* - bug : progressbar
+* - save time saved & ads skipped count
+* - rename and obfuscate override code
+* - (beta) Do not use with ad blocker
+* - Description - this is an ad skipper & ! ad blocker. Youtube may update their site which can make it not so useful, in that case just disable it.
+* - 3 step ad skipper
+
 */
 

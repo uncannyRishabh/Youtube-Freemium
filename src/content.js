@@ -42,6 +42,50 @@ var primaryInner, secondaryInner
 	// 	subtree: true
 	// });
 
+	const video = document.querySelector('video');
+	var movie_player = document.querySelector('#movie_player');
+	if (movie_player) {
+		observer = new MutationObserver(() => {
+			var adOverlay = movie_player.querySelector('.ytp-ad-player-overlay-layout');
+			if (adOverlay) {
+				console.log('Ad overlay detected & muted');
+				video.muted = true;
+				if(video.paused){
+					video.play
+				}
+				let adAttempts = 0;
+				const adCheckInterval = setInterval(() => {
+					adOverlay = document.querySelector('.ytp-ad-player-overlay-layout');
+
+					if (adOverlay && adAttempts < 4) {
+						if (video) {
+							video.currentTime = video.duration - 0.5;
+							console.log('ad duration ::: '+video.duration)
+							setTimeout(() => {
+								const skipButton = document.querySelector('.ytp-skip-ad-button');
+								if (skipButton) {
+									skipButton.click();
+									console.log('Skip ad button clicked');
+								}
+							}, 600);
+						}
+						adAttempts++;
+					} else {
+						clearInterval(adCheckInterval);
+					}
+				}, 900);
+			}
+			else{
+				video.muted = false
+			}
+		});
+		console.log(':::Observer injected:::')
+		observer.observe(movie_player, {
+			childList: true,
+			subtree: true
+		});
+	}
+
 	//KILL_SHORTS_PRESET
 
 
@@ -87,16 +131,16 @@ var primaryInner, secondaryInner
 					break;
 				}
 
-				console.log('DOM State 1 :: ' + document.readyState)
-				if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
-					document.addEventListener('DOMContentLoaded', () => {
-						console.log('DOM State 2 :: ' + document.readyState)
-						let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
-						let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-						console.log('DOMContentLoaded :::: ' + title + " - " + channel)
+				// console.log('DOM State 1 :: ' + document.readyState)
+				// if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+					// document.addEventListener('DOMContentLoaded', () => {
+					// 	console.log('DOM State 2 :: ' + document.readyState)
+					// 	let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
+					// 	let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
+					// 	console.log('DOMContentLoaded :::: ' + title + " - " + channel)
 
-					}, { once: true });
-				}
+					// }, { once: true });
+				// }
 
 				if (isMusic) {
 					if (progressbar) {
