@@ -994,7 +994,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     return result;
                 }
 
-                var currentLyricIndex = 0;
+                var currentLyricIndex = -1;
                 var currentActiveElement;
                 /**
                  * Synchronizes lyrics display with media playback.
@@ -1025,7 +1025,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 behavior: 'smooth'
                             });
                         } else {
-                            // fallback
                             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                     }

@@ -67,7 +67,7 @@ var primaryInner, secondaryInner
 									skipButton.click();
 									console.log('Skip ad button clicked');
 								}
-							}, 600);
+							}, 1000);
 						}
 						adAttempts++;
 					} else {

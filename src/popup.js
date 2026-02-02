@@ -79,6 +79,50 @@ document.addEventListener("DOMContentLoaded", async () => {
         messageHandler('KILL_SHORTS',kill_shorts);
     })
 
+    // Handle skip ads 3-state switch
+    const skipAdsMenu = document.querySelector('#skipAds');
+    const skipAdsSubText = skipAdsMenu.querySelector('.yf-menuSubText');
+    const switchButtons = skipAdsMenu.querySelectorAll('.yf-switch');
+    
+    const stateDescriptions = {
+        'OFF': 'Watch ads normally',
+        'PARTIAL': 'Mute & reach end',
+        'FULL': 'Auto-skip ads'
+    };
+    
+    let skipAdsState = 'OFF'; // OFF, PARTIAL, FULL
+    
+    // Load saved state
+    const savedSkipAdsState = userPrefs['yt-userPrefs']?.skipAdsState || 'OFF';
+    skipAdsState = savedSkipAdsState;
+    updateSkipAdsUI();
+    
+    function updateSkipAdsUI() {
+        // Update active button
+        switchButtons.forEach((btn, idx) => {
+            const states = ['OFF', 'PARTIAL', 'FULL'];
+            if (states[idx] === skipAdsState) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // Update subtext with description
+        skipAdsSubText.textContent = stateDescriptions[skipAdsState];
+    }
+    
+    switchButtons.forEach((button, index) => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const states = ['OFF', 'PARTIAL', 'FULL'];
+            skipAdsState = states[index];
+            updateSkipAdsUI();
+            saveObject('yt-userPrefs', {'skipAdsState': skipAdsState});
+            messageHandler('SKIP_ADS', skipAdsState);
+        });
+    });
+
     // Handle clear data button
     clearData.addEventListener('click', () => {
         chrome.storage.local.clear(() => {
@@ -180,7 +224,6 @@ function initWhatsNewCarousel() {
 * - add youtube music distinction
 * - fix first install issue
 
-* - first line not highlighted when in sync
 * - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
 
 * - make it collapsible/accordion
@@ -190,7 +233,8 @@ function initWhatsNewCarousel() {
 * - rename and obfuscate override code
 * - (beta) Do not use with ad blocker
 * - Description - this is an ad skipper & ! ad blocker. Youtube may update their site which can make it not so useful, in that case just disable it.
-* - 3 step ad skipper
+* - reload on disable/uninstall
+* - 
 
 */
 
