@@ -238,80 +238,23 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         var uid = getVideoID(url);
         var obj = await getFromStorage(uid);
         let isMusic = await musicCheck(tabId);
+        var prefs = await getFromStorage('yt-userPrefs')
+        var profanityCheck = prefs['yt-userPrefs']?.profanity;
 		let lyrics, message, title, source = '';
         let synced = false;
         let offset = 0.0;
-		console.log('!!! uid - '+uid+' ',url)
+        var adSkipMode = ''
+
+		console.log('!!! uid - '+uid+' tabId - '+tabId + ' ',url)
         // Cancel previous search if still pending
         if (currentSearchController) {
             currentSearchController.abort('🥀🥀🥀🥀');
         }
         currentSearchController = new AbortController();
 
-        chrome.scripting.executeScript({
-            target: { tabId },
-            world: 'MAIN',
-            args: [],
-            func: () => {
-                'use strict';
-
-                if (window.__ytfAdBlockerInjected) {
-                    console.log(':::Ad blocker already injected, skipping:::');
-                    return;
-                }
-
-                function isInIframe() {
-                    try {
-                        console.log(':::Checking if in iframe:::');
-                        return window.self !== window.top;
-                    }
-                    catch (e) {
-                        console.log(':::Error In Iframe logic:::');
-                        return true;
-                    }
-                }
-
-                const skipButtonClasses = [
-                    "videoAdUiSkipButton",
-                    "ytp-ad-skip-button ytp-button",
-                    "ytp-ad-skip-button-modern ytp-button",
-                    "ytp-skip-ad-button",
-                ];
-
-                const getEventHandler = (listener) => function handleEvent(e) {
-                    const handler = {
-                        get(_, prop) {
-                            console.log(':::Proxy get handler invoked:::');
-                            if (prop === "isTrusted") {
-                                return true;
-                            }
-                            if (typeof e[prop] === "function") {
-                                return function (...args) {
-                                    return e[prop](...args);
-                                };
-                            }
-                            return e[prop];
-                        },
-                    };
-                    return listener(new Proxy({}, handler));
-                };
-                function overrideAddEventListener() {
-                    const originalAddEventListener = HTMLElement.prototype.addEventListener;
-                    HTMLElement.prototype.addEventListener = function (type, listener, options) {
-                        if (type === "click" && skipButtonClasses.includes(this.className)) {
-                            return originalAddEventListener.call(this, type, getEventHandler(listener), options);
-                        }
-                        return originalAddEventListener.call(this, type, listener, options);
-                    };
-                }
-                if (!isInIframe()) {
-                    console.log(':::Youtube trusted click override injected:::')
-                    overrideAddEventListener();
-                }
-            
-                window.__ytfAdBlockerInjected = true;
-            }
-        });
+        if(adSkipMode == 'FULL'){
+            injectClickValidator()
+        }
 
         if (isMusic) {
 			let result = await findSongAndArtist(tabId);
@@ -366,8 +309,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             offset = obj[uid]?.offset ? obj[uid].offset : 0
         }
 
-        var prefs = await getFromStorage('yt-userPrefs')
-        var profanityCheck = prefs['yt-userPrefs']?.profanity;
         console.log("Profanity : ", profanityCheck)
         if (!profanityCheck || profanityCheck == undefined) {
             profanityCheck = true
@@ -1471,5 +1412,129 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 		}
 
 	}
+
+    function injectClickValidator() {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            args: [],
+            func: () => {
+                'use strict';
+
+                if (window.__ytfAdBlockerInjected) {
+                    console.log(':::Ad blocker already injected, skipping:::');
+                    return;
+                }
+
+                function isInIframe() {
+                    try {
+                        console.log(':::Checking if in iframe:::');
+                        return window.self !== window.top;
+                    }
+                    catch (e) {
+                        console.log(':::Error In Iframe logic:::');
+                        return true;
+                    }
+                }
+
+                const skipButtonClasses = [
+                    "videoAdUiSkipButton",
+                    "ytp-ad-skip-button ytp-button",
+                    "ytp-ad-skip-button-modern ytp-button",
+                    "ytp-skip-ad-button",
+                ];
+
+                const getEventHandler = (listener) => function handleEvent(e) {
+                    const handler = {
+                        get(_, prop) {
+                            console.log(':::Proxy get handler invoked:::');
+                            if (prop === "isTrusted") {
+                                return true;
+                            }
+                            if (typeof e[prop] === "function") {
+                                return function (...args) {
+                                    return e[prop](...args);
+                                };
+                            }
+                            return e[prop];
+                        },
+                    };
+                    return listener(new Proxy({}, handler));
+                };
+                function overrideAddEventListener() {
+                    const originalAddEventListener = HTMLElement.prototype.addEventListener;
+                    HTMLElement.prototype.addEventListener = function (type, listener, options) {
+                        if (type === "click" && skipButtonClasses.includes(this.className)) {
+                            return originalAddEventListener.call(this, type, getEventHandler(listener), options);
+                        }
+                        return originalAddEventListener.call(this, type, listener, options);
+                    };
+                }
+                if (!isInIframe()) {
+                    console.log(':::Youtube trusted click override injected:::')
+                    overrideAddEventListener();
+                }
+
+                window.__ytfAdBlockerInjected = true;
+            }
+        });
+    }
+
+    function injectAdDetector() {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            args: [],
+            func: () => {
+                const video = document.querySelector('video');
+                var movie_player = document.querySelector('#movie_player');
+                if (!movie_player) {
+                    return
+                }
+                observer = new MutationObserver(() => {
+                    var adOverlay = movie_player.querySelector('.ytp-ad-player-overlay-layout');
+                    if (!adOverlay) {
+                        video.muted = false
+                        return;
+                    }
+                    console.log('Ad overlay detected & muted');
+                    video.muted = true;
+                    if (video.paused) {
+                        video.play
+                    }
+                    let adAttempts = 0;
+
+                    const adCheckInterval = setInterval(() => {
+                        adOverlay = document.querySelector('.ytp-ad-player-overlay-layout');
+
+                        if (adOverlay && adAttempts < 4) {
+                            if (video) {
+                                video.currentTime = video.duration - 0.5;
+                                console.log('ad duration ::: ' + video.duration)
+                                setTimeout(() => {
+                                    const skipButton = document.querySelector('.ytp-skip-ad-button');
+                                    if (skipButton) {
+                                        skipButton.click();
+                                        console.log('Skip ad button clicked');
+                                    }
+                                }, 1000);
+                            }
+                            adAttempts++;
+                        } else {
+                            clearInterval(adCheckInterval);
+                        }
+                    }, 900);
+
+                });
+                
+                console.log(':::Observer injected:::')
+                observer.observe(movie_player, {
+                    childList: true,
+                    subtree: true
+                });
+
+            }
+        });
+    }
 
 })();
