@@ -243,7 +243,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 		let lyrics, message, title, source = '';
         let synced = false;
         let offset = 0.0;
-        var adSkipMode = ''
+        var skipAdsState = ''
 
 		console.log('!!! uid - '+uid+' tabId - '+tabId + ' ',url)
         // Cancel previous search if still pending
@@ -252,7 +252,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         }
         currentSearchController = new AbortController();
 
-        if(adSkipMode == 'FULL'){
+        if(skipAdsState == 'FULL'){
             injectClickValidator()
         }
 

@@ -2,9 +2,8 @@
 export function getDefaultUserPrefs(){
 	return {
 		profanity:'true',
-		new_ui:true,
 		kill_shorts:false,
-		adSkipMode:'OFF'
+		skipAdsState:'OFF'
 	}
 }
 

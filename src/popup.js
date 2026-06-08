@@ -20,6 +20,7 @@ function messageHandler(type, val) {
 document.addEventListener("DOMContentLoaded", async () => {
     // Clear notification badge when popup opens
     chrome.runtime.sendMessage({ action: 'clearUpdateBadge' });
+    messageHandler('clearUpdateBadge',)
     
     const toggleExplicit = document.querySelector('#explicitFilter');
     const toggleExplicitText = document.querySelector('#explicitFilter > .yf-menuText');
@@ -31,10 +32,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     var userPrefs = await getFromStorage('yt-userPrefs');
     var profanity = userPrefs['yt-userPrefs']?.profanity;
     var kill_shorts = userPrefs['yt-userPrefs']?.kill_shorts;
+    let skipAdsState = userPrefs['yt-userPrefs']?.skipAdsState;
     
     if (!userPrefs['yt-userPrefs']) {
         profanity = 'false'
         kill_shorts = false
+        skipAdsStatev = 'OFF'
         await saveObject('yt-userPrefs', { profanity });
     }
 
@@ -90,36 +93,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         'FULL': 'Auto-skip ads'
     };
     
-    let skipAdsState = 'OFF'; // OFF, PARTIAL, FULL
-    
-    // Load saved state
-    const savedSkipAdsState = userPrefs['yt-userPrefs']?.skipAdsState || 'OFF';
+    const savedSkipAdsState = skipAdsState || 'OFF';
     skipAdsState = savedSkipAdsState;
-    updateSkipAdsUI();
-    
-    function updateSkipAdsUI() {
-        // Update active button
-        switchButtons.forEach((btn, idx) => {
-            const states = ['OFF', 'PARTIAL', 'FULL'];
-            if (states[idx] === skipAdsState) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-        
-        // Update subtext with description
-        skipAdsSubText.textContent = stateDescriptions[skipAdsState];
-    }
-    
+    // updateSkipAdsUI();
+    skipAdsSubText.textContent = stateDescriptions[skipAdsState];
+
     switchButtons.forEach((button, index) => {
         button.addEventListener('click', (e) => {
             e.stopPropagation();
             const states = ['OFF', 'PARTIAL', 'FULL'];
             skipAdsState = states[index];
-            updateSkipAdsUI();
+            updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescriptions);
             saveObject('yt-userPrefs', {'skipAdsState': skipAdsState});
-            messageHandler('SKIP_ADS', skipAdsState);
+            messageHandler('SKIP_AD', skipAdsState);
         });
     });
 
@@ -191,6 +177,22 @@ function initWhatsNewCarousel() {
     box.addEventListener('touchstart', () => isPaused = true);
 }
 
+function updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescriptions) {
+    // Update active button
+    switchButtons.forEach((btn, idx) => {
+        const states = ['OFF', 'PARTIAL', 'FULL'];
+        if (states[idx] === skipAdsState) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Update subtext with description
+    skipAdsSubText.textContent = stateDescriptions[skipAdsState];
+}
+
+
 /**ISSUES
 * - New UI font size : deafault : 26px -ve limit : 20px +ve limit : 36px | gap : 3rem calc(var())
 * - make gap clamp 2-3rem depending on text size calc(var())
@@ -234,7 +236,10 @@ function initWhatsNewCarousel() {
 * - (beta) Do not use with ad blocker
 * - Description - this is an ad skipper & ! ad blocker. Youtube may update their site which can make it not so useful, in that case just disable it.
 * - reload on disable/uninstall
-* - 
+* - fix incorrect lyric tagging on nav music -> non music - intermittent
+* - feat : add album color based lamp 
+* - feat : update artist and song name fetching method
+
 
 */
 
