@@ -229,42 +229,13 @@
 .yf-logo-container {
 	display: flex;
 	align-items: center;
-	--height: 20px;
-	--width: 20px;
+	gap: 8px;
 }
 
-.yf-youtube {
-	display: grid;
-	place-items: center;
-	position: relative;
-	width: var(--width);
-	height: var(--height);
-	background-color: #e21;
-	padding: 0 3px;
-	user-select: none;
-	border-radius: 35% / 11%;
-}
-
-.yf-youtube::before {
-	content: "";
-	position: absolute;
-	background: inherit;
-	top: 10%;
-	bottom: 10%;
-	right: -5%;
-	left: -4.5%;
-	border-radius: 5% / 50%;
-}
-
-.yf-f {
-	width: var(--width);
-	color: #fff;
-	text-align: center;
-	font-family: "Oswald", "Arial";
-	font-weight: 600;
-	font-size: 1.4rem;
-	z-index: 1;
-	transform: translateY(-1px) scaleX(1.5);
+.yf-logo-svg {
+	width: 40px;
+	height: 40px;
+	flex-shrink: 0;
 }
 
 .freemium {

@@ -1,7 +1,7 @@
 {
 	"manifest_version": 3,
 	"name": "Youtube Freemium",
-	"version": "2.3.0",
+	"version": "2.3.5",
 	"description": "Enable lyrics for youtube music videos",
 	"author": "uncannyRishabh",
 	"host_permissions": [
@@ -23,8 +23,8 @@
 		"default_title": "Youtube Freemium",
 		"default_popup": "popup.html",
 		"default_icon": {
-            "38": "asset/ytf_38.png",
-            "19": "asset/ytf_19.png"
+            "38": "asset/Freeemium-Logo-38.png",
+            "19": "asset/Freeemium-Logo-19.png"
         }
 	},
 	"background": {
