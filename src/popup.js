@@ -239,7 +239,8 @@ function updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescr
 * - fix incorrect lyric tagging on nav music -> non music - intermittent
 * - feat : add album color based lamp 
 * - feat : update artist and song name fetching method
-
+* - feat : remove lyrics when searching
+* - feat : fix search(slow) before UI render
 
 */
 

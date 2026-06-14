@@ -175,6 +175,14 @@ function findA2ZspecificName(name) {
 	return a2zNames[name] || name;
 }
 
+function findLRCLibspecificName(name) {
+	const lrcLibNames = {
+		'TYDOLLA$IGN': 'Ty Dolla $ign'	
+	};
+
+	return lrcLibNames[name] || name;
+}
+
 export async function searchLrclibdotnet(track, artist, signal) {
 	// try {
 		const myHeaders = new Headers();
@@ -208,8 +216,15 @@ export async function searchLrclibdotnet(track, artist, signal) {
 function generateLRCLIBUrl(track, artist){
 	// remove commas
 	track = track.replaceAll(',', '').trim();
+
+	// remove contents within []
+	track = track.replace(/\[[^\]]*\]/g, '');
+
 	// remove all special characters between brackets ()
 	track = track.replaceAll(/\(.*?\)/g, '').trim();
+
+	track = track.replaceAll('feat','')
+	track = track.replaceAll('featuring','')
 	
 	// remove commas
 	artist = artist.replaceAll(',', '').trim();
@@ -220,7 +235,7 @@ function generateLRCLIBUrl(track, artist){
 	artist = artist.replaceAll(' ','+');
 
 	track = encodeURI(track)
-	artist = encodeURI(artist)
+	artist = encodeURI(findLRCLibspecificName(artist))
 	
 	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
 }

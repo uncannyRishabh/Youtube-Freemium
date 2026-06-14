@@ -216,7 +216,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				}
 				if (response) {
 					if (response.name && response.channel) {
-						console.log(response);
+						console.log('NEW_SEARCH : response : ',response);
 					}
 				}
                 try{
@@ -1119,14 +1119,23 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 let val, channel
                 let musicCard = document.querySelectorAll('#header-container #title')
 
-                if (musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')) {
-                    val = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(1)').textContent.trim();
-                    channel = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(2)').textContent.trim();
+                const musicCardSelectors = [
+                    '.yt-video-attribute-view-model__metadata'
+                    ,'.ytVideoAttributeViewModelContentContainer'
+                ]
+
+                var musicCardSelectorFound = musicCardSelectors.find(selector => {
+                    return document.querySelector(selector) !== null
+                })
+
+                if (musicCard && musicCardSelectorFound) {
+                    val = document.querySelector(musicCardSelectorFound + ' > .ytVideoAttributeViewModelMetadata > :nth-child(1)').textContent.trim();
+                    channel = document.querySelector(musicCardSelectorFound + ' > .ytVideoAttributeViewModelMetadata > :nth-child(2)').textContent.trim();
                     
                     val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
 	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
 
-                    console.log('getSongAndArtistFromCard => Title : ' + val + ' Channel : ' + channel)
+                    console.log('getSongAndArtistFromCard => Title : ' + val + ' Artist : ' + channel)
                 }
 
                 if (val == undefined || channel == undefined) {
@@ -1136,7 +1145,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
 	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
 
-                    console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Channel : ' + channel)
+                    console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Artist : ' + channel)
                 }
 
                 return JSON.stringify({ val, channel });
@@ -1261,7 +1270,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var source = 'BING'
                 var synced = false
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(resp, 'text/html');
+                // Remove <base> tag to avoid CSP violation
+                const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+                const doc = parser.parseFromString(sanitizedResp, 'text/html');
                 // const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
                 var lyricBody = doc.querySelector('.lyric_body')
                 var lContainer = lyricBody ? doc.querySelectorAll('.lyric_body .verse') : doc.querySelectorAll('#lyric_body .verse')
@@ -1330,7 +1341,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var source = 'A2Z'
                 var synced = false
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(resp, 'text/html');
+                // Remove <base> tag to avoid CSP violation
+                const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+                const doc = parser.parseFromString(sanitizedResp, 'text/html');
 
                 let look = true;
                 let raw = ''
