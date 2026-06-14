@@ -175,6 +175,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 })
 				break;
 			}
+            case 'SKIP_AD':{
+                //save object
+            }
             case 'SLEEP_TIMER':{
 
                 break;
@@ -213,7 +216,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 				}
 				if (response) {
 					if (response.name && response.channel) {
-						console.log(response);
+						console.log('NEW_SEARCH : response : ',response);
 					}
 				}
                 try{
@@ -235,15 +238,23 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
         var uid = getVideoID(url);
         var obj = await getFromStorage(uid);
         let isMusic = await musicCheck(tabId);
+        var prefs = await getFromStorage('yt-userPrefs')
+        var profanityCheck = prefs['yt-userPrefs']?.profanity;
 		let lyrics, message, title, source = '';
         let synced = false;
         let offset = 0.0;
-		console.log('!!! uid - '+uid+' ',url)
+        var skipAdsState = ''
+
+		console.log('!!! uid - '+uid+' tabId - '+tabId + ' ',url)
         // Cancel previous search if still pending
         if (currentSearchController) {
             currentSearchController.abort('🥀🥀🥀🥀');
         }
         currentSearchController = new AbortController();
+
+        if(skipAdsState == 'FULL'){
+            injectClickValidator()
+        }
 
         if (isMusic) {
 			let result = await findSongAndArtist(tabId);
@@ -298,8 +309,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             offset = obj[uid]?.offset ? obj[uid].offset : 0
         }
 
-        var prefs = await getFromStorage('yt-userPrefs')
-        var profanityCheck = prefs['yt-userPrefs']?.profanity;
         console.log("Profanity : ", profanityCheck)
         if (!profanityCheck || profanityCheck == undefined) {
             profanityCheck = true
@@ -364,20 +373,30 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     var logoContainerDiv = document.createElement("div");
                     logoContainerDiv.className = "yf-logo-container";
 
-                    var youtubeDiv = document.createElement("div");
-                    youtubeDiv.className = "yf-youtube";
+                    var logoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    logoSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+                    logoSvg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+                    logoSvg.setAttribute("width", "40");
+                    logoSvg.setAttribute("height", "40");
+                    logoSvg.setAttribute("viewBox", "0 0 1024 1024");
+                    logoSvg.classList.add("yf-logo-svg");
 
-                    var fSpan = document.createElement("span");
-                    fSpan.className = "yf-f";
-                    fSpan.textContent = "F";
+                    var path1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path1.setAttribute("fill", "#FC0100");
+                    path1.setAttribute("d", "M497.268 276.736C569.711 276.396 642.135 279.114 714.349 284.881C727.446 285.968 740.525 287.277 753.578 288.806C762.329 289.799 773.414 290.9 781.817 293.23C795.119 296.897 807.298 303.82 817.254 313.373C827.078 322.74 834.543 334.301 839.039 347.108C843.577 359.777 845.063 374.58 847.007 387.876C858.627 467.352 858.43 548.006 848.033 627.6C846.074 642.592 845.426 659.295 840.797 673.725C836.646 686.45 829.643 698.058 820.323 707.664C793.908 735.032 759.734 733.521 724.49 736.863C659.05 743.177 593.366 746.622 527.625 747.19C455.787 747.44 383.977 744.327 312.431 737.858C299.624 736.809 286.823 735.68 274.03 734.471C247.281 731.948 226.202 729.921 206.282 709.991C196.308 700.013 188.215 688.687 183.633 675.14C178.552 660.121 178.181 643.987 175.971 628.407C172.016 595.768 168.915 561.886 168.02 528.999C166.884 487.303 170.372 444.976 175.412 403.616C177.66 385.167 179.645 363.75 185.764 346.264C189.674 335.005 195.987 324.733 204.266 316.159C212.168 307.974 224.681 298.99 235.62 295.684C258.55 288.753 284.987 287.203 308.733 285.017C371.384 279.247 434.386 277.827 497.268 276.736Z");
+                    logoSvg.appendChild(path1);
 
-                    youtubeDiv.appendChild(fSpan);
+                    var path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path2.setAttribute("fill", "#EEEEED");
+                    path2.setAttribute("d", "M482.546 379.687C487.355 378.959 499.46 379.307 504.518 379.339L542.029 379.427C588.699 379.22 635.37 379.252 682.04 379.524C673.664 399.79 665.433 420.116 657.349 440.5L515.341 440.422C509.241 453.903 502.839 469.987 497.507 483.85C539.887 484.81 582.436 483.069 625.463 484.098C619.41 501.742 609.041 525.293 601.855 543.048L569.115 542.684L474.236 542.552C469.347 553.387 464.524 565.758 459.907 576.874C450.442 599.536 441.123 622.258 431.952 645.04C402.498 644.256 372.473 644.849 342.941 645.015C364.752 591.016 387.026 537.206 409.76 483.59L426.614 442.782C439.178 411.884 444.923 384.546 482.546 379.687Z");
+                    logoSvg.appendChild(path2);
+
+                    logoContainerDiv.appendChild(logoSvg);
 
                     var freemiumSpan = document.createElement("span");
                     freemiumSpan.className = "freemium";
                     freemiumSpan.textContent = "Free Mium";
 
-                    logoContainerDiv.appendChild(youtubeDiv);
                     logoContainerDiv.appendChild(freemiumSpan);
 
                     var nowPlayingDiv = document.createElement("div");
@@ -503,9 +522,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector('#yf-font-size');
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
                                     var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize - 1) + 'px';
-                                    if (currentFontSize > 8) {
+                                    if (currentFontSize > 11) {
                                         console.log(fontSizeElement.textContent)
                                         console.log(fontSize)
                                         localStorage.setItem('fontSize', fontSize);
@@ -522,7 +541,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 if (localFontSize)
                                     li.lastChild.textContent = localFontSize
                                 else
-                                    li.lastChild.textContent = '14px'
+                                    li.lastChild.textContent = '20px'
 
 
                                 //Increase Icon
@@ -541,7 +560,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector('#yf-font-size');
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 14;
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
                                     if (currentFontSize < 32) {
                                         var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
                                         localStorage.setItem('fontSize', fontSize);
@@ -681,7 +700,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 reportLink.setAttribute("id", "report");
                                 reportLink.setAttribute("class", "yf-reportLink")
                                 reportLink.setAttribute("href", "mailto:uncannyrishabh@gmail.com?subject=REPORT%20%7C%20YTF&body=%3Cdescribe_issue_here%3E%0A%3Cattach_screenshot%3E");
-                                reportLink.innerText = optionText;
+                                reportLink.innerText = 'Report an issue';
 
                                 reportLinkContainer.appendChild(reportLink);
 
@@ -926,7 +945,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     return result;
                 }
 
-                var currentLyricIndex = 0;
+                var currentLyricIndex = -1;
                 var currentActiveElement;
                 /**
                  * Synchronizes lyrics display with media playback.
@@ -957,7 +976,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                                 behavior: 'smooth'
                             });
                         } else {
-                            // fallback
                             el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
                     }
@@ -1101,14 +1119,23 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 let val, channel
                 let musicCard = document.querySelectorAll('#header-container #title')
 
-                if (musicCard && document.querySelector('.yt-video-attribute-view-model__metadata')) {
-                    val = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(1)').textContent.trim();
-                    channel = document.querySelector('.yt-video-attribute-view-model__metadata > :nth-child(2)').textContent.trim();
+                const musicCardSelectors = [
+                    '.yt-video-attribute-view-model__metadata'
+                    ,'.ytVideoAttributeViewModelContentContainer'
+                ]
+
+                var musicCardSelectorFound = musicCardSelectors.find(selector => {
+                    return document.querySelector(selector) !== null
+                })
+
+                if (musicCard && musicCardSelectorFound) {
+                    val = document.querySelector(musicCardSelectorFound + ' > .ytVideoAttributeViewModelMetadata > :nth-child(1)').textContent.trim();
+                    channel = document.querySelector(musicCardSelectorFound + ' > .ytVideoAttributeViewModelMetadata > :nth-child(2)').textContent.trim();
                     
                     val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
 	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
 
-                    console.log('getSongAndArtistFromCard => Title : ' + val + ' Channel : ' + channel)
+                    console.log('getSongAndArtistFromCard => Title : ' + val + ' Artist : ' + channel)
                 }
 
                 if (val == undefined || channel == undefined) {
@@ -1118,7 +1145,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                     val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
 	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
 
-                    console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Channel : ' + channel)
+                    console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Artist : ' + channel)
                 }
 
                 return JSON.stringify({ val, channel });
@@ -1243,7 +1270,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var source = 'BING'
                 var synced = false
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(resp, 'text/html');
+                // Remove <base> tag to avoid CSP violation
+                const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+                const doc = parser.parseFromString(sanitizedResp, 'text/html');
                 // const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
                 var lyricBody = doc.querySelector('.lyric_body')
                 var lContainer = lyricBody ? doc.querySelectorAll('.lyric_body .verse') : doc.querySelectorAll('#lyric_body .verse')
@@ -1312,7 +1341,9 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 var source = 'A2Z'
                 var synced = false
                 const parser = new DOMParser();
-                const doc = parser.parseFromString(resp, 'text/html');
+                // Remove <base> tag to avoid CSP violation
+                const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+                const doc = parser.parseFromString(sanitizedResp, 'text/html');
 
                 let look = true;
                 let raw = ''
@@ -1404,5 +1435,129 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
 		}
 
 	}
+
+    function injectClickValidator() {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            args: [],
+            func: () => {
+                'use strict';
+
+                if (window.__ytfAdBlockerInjected) {
+                    console.log(':::Ad blocker already injected, skipping:::');
+                    return;
+                }
+
+                function isInIframe() {
+                    try {
+                        console.log(':::Checking if in iframe:::');
+                        return window.self !== window.top;
+                    }
+                    catch (e) {
+                        console.log(':::Error In Iframe logic:::');
+                        return true;
+                    }
+                }
+
+                const skipButtonClasses = [
+                    "videoAdUiSkipButton",
+                    "ytp-ad-skip-button ytp-button",
+                    "ytp-ad-skip-button-modern ytp-button",
+                    "ytp-skip-ad-button",
+                ];
+
+                const getEventHandler = (listener) => function handleEvent(e) {
+                    const handler = {
+                        get(_, prop) {
+                            console.log(':::Proxy get handler invoked:::');
+                            if (prop === "isTrusted") {
+                                return true;
+                            }
+                            if (typeof e[prop] === "function") {
+                                return function (...args) {
+                                    return e[prop](...args);
+                                };
+                            }
+                            return e[prop];
+                        },
+                    };
+                    return listener(new Proxy({}, handler));
+                };
+                function overrideAddEventListener() {
+                    const originalAddEventListener = HTMLElement.prototype.addEventListener;
+                    HTMLElement.prototype.addEventListener = function (type, listener, options) {
+                        if (type === "click" && skipButtonClasses.includes(this.className)) {
+                            return originalAddEventListener.call(this, type, getEventHandler(listener), options);
+                        }
+                        return originalAddEventListener.call(this, type, listener, options);
+                    };
+                }
+                if (!isInIframe()) {
+                    console.log(':::Youtube trusted click override injected:::')
+                    overrideAddEventListener();
+                }
+
+                window.__ytfAdBlockerInjected = true;
+            }
+        });
+    }
+
+    function injectAdDetector() {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            args: [],
+            func: () => {
+                const video = document.querySelector('video');
+                var movie_player = document.querySelector('#movie_player');
+                if (!movie_player) {
+                    return
+                }
+                observer = new MutationObserver(() => {
+                    var adOverlay = movie_player.querySelector('.ytp-ad-player-overlay-layout');
+                    if (!adOverlay) {
+                        video.muted = false
+                        return;
+                    }
+                    console.log('Ad overlay detected & muted');
+                    video.muted = true;
+                    if (video.paused) {
+                        video.play
+                    }
+                    let adAttempts = 0;
+
+                    const adCheckInterval = setInterval(() => {
+                        adOverlay = document.querySelector('.ytp-ad-player-overlay-layout');
+
+                        if (adOverlay && adAttempts < 4) {
+                            if (video) {
+                                video.currentTime = video.duration - 0.5;
+                                console.log('ad duration ::: ' + video.duration)
+                                setTimeout(() => {
+                                    const skipButton = document.querySelector('.ytp-skip-ad-button');
+                                    if (skipButton) {
+                                        skipButton.click();
+                                        console.log('Skip ad button clicked');
+                                    }
+                                }, 1000);
+                            }
+                            adAttempts++;
+                        } else {
+                            clearInterval(adCheckInterval);
+                        }
+                    }, 900);
+
+                });
+                
+                console.log(':::Observer injected:::')
+                observer.observe(movie_player, {
+                    childList: true,
+                    subtree: true
+                });
+
+            }
+        });
+    }
 
 })();

@@ -42,6 +42,7 @@ var primaryInner, secondaryInner
 	// 	subtree: true
 	// });
 
+
 	//KILL_SHORTS_PRESET
 
 
@@ -87,16 +88,16 @@ var primaryInner, secondaryInner
 					break;
 				}
 
-				console.log('DOM State 1 :: ' + document.readyState)
-				if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
-					document.addEventListener('DOMContentLoaded', () => {
-						console.log('DOM State 2 :: ' + document.readyState)
-						let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
-						let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-						console.log('DOMContentLoaded :::: ' + title + " - " + channel)
+				// console.log('DOM State 1 :: ' + document.readyState)
+				// if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+					// document.addEventListener('DOMContentLoaded', () => {
+					// 	console.log('DOM State 2 :: ' + document.readyState)
+					// 	let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
+					// 	let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
+					// 	console.log('DOMContentLoaded :::: ' + title + " - " + channel)
 
-					}, { once: true });
-				}
+					// }, { once: true });
+				// }
 
 				if (isMusic) {
 					if (progressbar) {
