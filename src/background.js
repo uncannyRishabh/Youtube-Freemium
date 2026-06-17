@@ -918,10 +918,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                  * Converts a timestamp string (e.g., '03:24.56') to total seconds (float).
                  */
                 function timestampToSeconds(ts) {
-                    const match = ts.match(/^(\d{2}):(\d{2})\.(\d{2})$/);
+                    const match = ts.match(/^(\d{1,2}):(\d{1,2})\.(\d{2,3})$/);
                     if (!match) return 0;
                     const [, min, sec, ms] = match;
-                    return parseInt(min, 10) * 60 + parseInt(sec, 10) + parseInt(ms, 10) / 100;
+                    return parseInt(min, 10) * 60 + parseInt(sec, 10) + parseInt(ms, 10) / Math.pow(10, ms.length);
                 }
 
                 /**
@@ -1215,16 +1215,59 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
                 }
                 if(message == 'OK' && synced) {
                     lyrics = resp.syncedLyrics?.replaceAll('[','').split('\n').map(line => line.split(']'))
+                    lyrics = sanitizeAndInsertLyrics(lyrics)
                 }
                 else if(message == 'OK' && !synced) {
                     lyrics = resp.plainLyrics.split('\n')
                 }
-    
+
+                function isValidTimestamp(timestamp) {
+                    // \d{2} matches two digits for MM and SS
+                    // \.\d{2,3} matches a literal dot followed by 2 or 3 digits for milliseconds
+                    const pattern = /^\d{1,2}:\d{1,2}\.\d{2,3}$/;
+                    return pattern.test(timestamp);
+                }
+
+                function sanitizeAndInsertLyrics(lyrics) {
+                    const sortedLyrics = [];
+
+                    //remove metadata
+                    lyrics = lyrics.filter(line => {
+                        if(line[0] && isValidTimestamp(line[0])) {
+                            return true;
+                        }
+                    })
+
+                    lyrics.forEach(line => {
+                        // Safety check
+                        if (!Array.isArray(line) || line.length < 2) return;
+
+                        const lyricText = line[line.length - 1];
+                        const timestamps = line.slice(0, -1);
+
+                        timestamps.forEach(ts => {
+                            if (!isValidTimestamp(ts)) return;
+
+                            // Find the first index where the existing timestamp is later than the new one
+                            const insertIndex = sortedLyrics.findIndex(item => ts.localeCompare(item[0]) < 0);
+
+                            if (insertIndex === -1) {
+                                // If the timestamp is later than everything currently in the array, push to the end
+                                sortedLyrics.push([ts, lyricText]);
+                            } else {
+                                // Insert the [timestamp, lyric] pair exactly where it fits
+                                sortedLyrics.splice(insertIndex, 0, [ts, lyricText]);
+                            }
+                        });
+                    });
+
+                    return sortedLyrics;
+                };
+                
                 var r = {lyrics, message, source, synced}
                 return JSON.stringify(r)
-                
             },
-            args: [response]
+            args: [response] 
         });
     }
 
