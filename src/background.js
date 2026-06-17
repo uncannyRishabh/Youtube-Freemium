@@ -1011,70 +1011,132 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, generate
             args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary]
         });
 
-        //bubble logic
-		await chrome.scripting.executeScript({
-			target: { tabId },
-			function: () => {
-				const colors = {
-					bubble1: '#7B68EE',
-					bubble2: '#FF6B6B',
-					bubble3: '#4ECDC4',
-				};
-				const bubbles = [
-					document.getElementById('bubble-1'),
-					document.getElementById('bubble-2'),
-					document.getElementById('bubble-3')
-				];
-				if (!bubbles[0] || !bubbles[1] || !bubbles[2]) return;
-				bubbles[0].style.backgroundColor = colors.bubble1;
-				bubbles[1].style.backgroundColor = colors.bubble2;
-				bubbles[2].style.backgroundColor = colors.bubble3;
-				const container = document.getElementById('lyricContainer');
-				class Bubble {
-					constructor(element, index) {
-						this.el = element;
-						this.index = index;
-						this.reset();
-					}
-					reset() {
-						const bounds = container.getBoundingClientRect();
-						this.baseSize = Math.random() * (Math.min(bounds.width, bounds.height) * 0.4) + (Math.min(bounds.width, bounds.height) * 0.2);
-						this.el.style.width = this.baseSize + 'px';
-						this.el.style.height = this.baseSize + 'px';
-						this.x = Math.random() * (bounds.width - this.baseSize);
-						this.y = Math.random() * (bounds.height - this.baseSize);
-						this.vx = (Math.random() - 0.5) * 1.5;
-						this.vy = (Math.random() - 0.5) * 1.5;
-						this.angle = Math.random() * 360;
-						this.sizeFluctuation = Math.random() * 0.4 + 0.1;
-					}
-					update() {
-						const bounds = container.getBoundingClientRect();
-						this.x += this.vx;
-						this.y += this.vy;
-						if (this.x <= 0 || this.x + this.currentSize >= bounds.width) this.vx *= -1;
-						if (this.y <= 0 || this.y + this.currentSize >= bounds.height) this.vy *= -1;
-						this.angle += 0.01;
-						const scale = 1 + Math.sin(this.angle) * this.sizeFluctuation;
-						this.currentSize = this.baseSize * scale;
-						this.el.style.width = this.currentSize + 'px';
-						this.el.style.height = this.currentSize + 'px';
-						this.el.style.transform = 'translate(' + this.x + 'px, ' + this.y + 'px)';
-					}
-				}
-				const bubbleObjects = bubbles.map((el, i) => new Bubble(el, i));
-				function animate() {
-					bubbleObjects.forEach(bubble => bubble.update());
-					requestAnimationFrame(animate);
-				}
-				window.addEventListener('resize', () => {
-					bubbleObjects.forEach(bubble => bubble.reset());
-				});
-				animate();
-			},
-			args: []
-		});
+        // lava lamp visualizer logic
+        await chrome.scripting.executeScript({
+            target: { tabId },
+            function: () => {
+                const colors = {
+                    bubble1: '#7B68EE',
+                    bubble2: '#FF6B6B',
+                    bubble3: '#4ECDC4',
+                };
 
+                const bubbles = [
+                    document.getElementById('bubble-1'),
+                    document.getElementById('bubble-2'),
+                    document.getElementById('bubble-3')
+                ];
+
+                if (!bubbles[0] || !bubbles[1] || !bubbles[2]) return;
+
+                const wrapper = document.querySelector('.bubbles-wrapper');
+                if (!wrapper) return;
+
+                bubbles.forEach(b => {
+                    if (b.parentElement !== wrapper) wrapper.appendChild(b);
+                    // Force hardware acceleration layer and prevent rendering artifacts
+                    b.style.backfaceVisibility = 'hidden';
+                });
+
+                bubbles[0].style.backgroundColor = colors.bubble1;
+                bubbles[1].style.backgroundColor = colors.bubble2;
+                bubbles[2].style.backgroundColor = colors.bubble3;
+
+                // Global state for dimensions to keep them out of the animation loop
+                let viewW = 500, viewH = 600, dynamicSize = 350;
+
+                class WrapperBlob {
+                    constructor(element, index) {
+                        this.el = element;
+                        this.index = index;
+
+                        this.timeX = Math.random() * 100;
+                        this.timeY = Math.random() * 100;
+                        this.timeScale = Math.random() * 100;
+
+                        this.speedX = 0.003 + (index * 0.0015);
+                        this.speedY = 0.002 + (index * 0.002);
+                        this.speedScale = 0.004;
+
+                        if (this.index === 0) {
+                            this.homeX = 0.25; this.homeY = 0.30;
+                        } else if (this.index === 1) {
+                            this.homeX = 0.75; this.homeY = 0.70;
+                        } else {
+                            this.homeX = 0.70; this.homeY = 0.25;
+                        }
+                    }
+
+                    // ONLY updates styles when the window actually resizes
+                    applySize() {
+                        this.el.style.width = dynamicSize + 'px';
+                        this.el.style.height = dynamicSize + 'px';
+                    }
+
+                    // The "Hot Path": Stripped down to pure math and a single GPU transform
+                    update() {
+                        this.timeX += this.speedX;
+                        this.timeY += this.speedY;
+                        this.timeScale += this.speedScale;
+
+                        const finalPctX = this.homeX + (Math.sin(this.timeX) * 0.15);
+                        const finalPctY = this.homeY + (Math.cos(this.timeY) * 0.15);
+
+                        const screenX = (finalPctX * viewW) - (dynamicSize / 2);
+                        const screenY = (finalPctY * viewH) - (dynamicSize / 2);
+                        const scale = 1.15 + Math.sin(this.timeScale) * 0.15;
+
+                        this.el.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) scale(${scale})`;
+                    }
+                }
+
+                const blobObjects = bubbles.map((el, i) => new WrapperBlob(el, i));
+
+                // Dimension calculation is now locked to load/resize only
+                function calculateDimensions() {
+                    let bounds = wrapper.getBoundingClientRect();
+                    viewW = bounds.width || window.innerWidth;
+                    viewH = bounds.height || window.innerHeight;
+
+                    const minDim = Math.min(viewW, viewH);
+                    dynamicSize = Math.max(minDim * 0.9, 350);
+
+                    blobObjects.forEach(blob => blob.applySize());
+                }
+
+                let isVisible = false;
+                let animationFrameId;
+
+                function animate() {
+                    if (!isVisible) return; // Kill the loop completely if off-screen
+
+                    blobObjects.forEach(blob => blob.update());
+                    animationFrameId = requestAnimationFrame(animate);
+                }
+
+                // Initialize Dimensions
+                calculateDimensions();
+
+                window.addEventListener('resize', calculateDimensions);
+
+                // INTELLIGENT SLEEP: Monitor if the wrapper is actually on the user's screen
+                const observer = new IntersectionObserver((entries) => {
+                    const entry = entries[0];
+                    isVisible = entry.isIntersecting;
+
+                    if (isVisible) {
+                        // Wake up and resume
+                        animate();
+                    } else {
+                        // Go to sleep to save YouTube performance
+                        cancelAnimationFrame(animationFrameId);
+                    }
+                }, { threshold: 0.01 });
+
+                observer.observe(wrapper);
+            },
+            args: []
+        });
     }
 
 	/**
