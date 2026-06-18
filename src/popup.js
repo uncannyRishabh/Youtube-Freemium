@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!userPrefs['yt-userPrefs']) {
         profanity = 'false'
         kill_shorts = false
-        skipAdsStatev = 'OFF'
+        skipAdsState = 'OFF'
         await saveObject('yt-userPrefs', { profanity });
     }
 
@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     killShortsText.textContent = kill_shorts 
         ? 'Enable Shorts'
         : 'Disable Shorts'
-
+    
     // Handle profanity filter toggle
     toggleExplicit.addEventListener('click', () => {
         const isEnabled = toggleExplicitText.textContent === 'Enable profanity';
@@ -239,8 +239,7 @@ function updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescr
 * - fix incorrect lyric tagging on nav music -> non music - intermittent
 * - feat : add album color based lamp 
 * - feat : update artist and song name fetching method
-* - feat : remove lyrics when searching
-* - feat : fix search(slow) before UI render
+* - remove data this time
 
 */
 

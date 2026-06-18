@@ -307,3 +307,262 @@ export function extractProminentColors(img) {
 
 	return { bubbleColors, backgroundColor };
 }
+
+export async function findLyricsfromSources(tabId, source, val, channel, signal) {
+	var result;
+
+	switch (source) {
+		case 'BING': {
+			result = await searchBing(tabId, val, channel, signal)
+			break;
+		}
+		case 'A2Z': {
+			result = await searchA2Z(tabId, val, channel, signal)
+			break;
+		}
+		case 'LRCLIB': {
+			result = await searchLRCLIB(tabId, val, channel, signal)
+			break;
+		}
+		default: {
+			result = await searchLRCLIB(tabId, val, channel, signal)
+			if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
+				result = await searchA2Z(tabId, val, channel, signal)
+				if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
+					result = await searchBing(tabId, val, channel, signal)
+				}
+			}
+		}
+	}
+
+	return result;
+}
+
+async function searchLRCLIB(tabId, name, channel, signal) {
+
+	if (name.includes(channel)) {
+		name = name.replace(channel, '')
+	}
+
+	var response = await (await searchLrclibdotnet(name, channel, signal)).text()
+	//Todo : fallback logic when multiple artists search with all artists, if not found search with first
+	return await chrome.scripting.executeScript({
+		target: { tabId },
+		function: (resp) => {
+			var resp = JSON.parse(resp)
+			var lyrics = []
+			var message = 'NOK'
+			var source = 'LRCLIB'
+			var synced = false
+			var name = resp?.name
+
+			/**
+			 * {
+					"message": "Failed to find specified track",
+					"name": "TrackNotFound",
+					"statusCode": 404
+				}
+			*/
+
+			if ((name && name != 'TrackNotFound') && resp?.plainLyrics != null) {
+				message = 'OK'
+				synced = resp.syncedLyrics != null
+			}
+			if (message == 'OK' && synced) {
+				lyrics = resp.syncedLyrics?.replaceAll('[', '').split('\n').map(line => line.split(']'))
+				lyrics = sanitizeAndInsertLyrics(lyrics)
+			}
+			else if (message == 'OK' && !synced) {
+				lyrics = resp.plainLyrics.split('\n')
+			}
+
+			function isValidTimestamp(timestamp) {
+				// \d{2} matches two digits for MM and SS
+				// \.\d{2,3} matches a literal dot followed by 2 or 3 digits for milliseconds
+				const pattern = /^\d{1,2}:\d{1,2}\.\d{2,3}$/;
+				return pattern.test(timestamp);
+			}
+
+			function sanitizeAndInsertLyrics(lyrics) {
+				const sortedLyrics = [];
+
+				//remove metadata
+				lyrics = lyrics.filter(line => {
+					if (line[0] && isValidTimestamp(line[0])) {
+						return true;
+					}
+				})
+
+				lyrics.forEach(line => {
+					// Safety check
+					if (!Array.isArray(line) || line.length < 2) return;
+
+					const lyricText = line[line.length - 1];
+					const timestamps = line.slice(0, -1);
+
+					timestamps.forEach(ts => {
+						if (!isValidTimestamp(ts)) return;
+
+						// Find the first index where the existing timestamp is later than the new one
+						const insertIndex = sortedLyrics.findIndex(item => ts.localeCompare(item[0]) < 0);
+
+						if (insertIndex === -1) {
+							// If the timestamp is later than everything currently in the array, push to the end
+							sortedLyrics.push([ts, lyricText]);
+						} else {
+							// Insert the [timestamp, lyric] pair exactly where it fits
+							sortedLyrics.splice(insertIndex, 0, [ts, lyricText]);
+						}
+					});
+				});
+
+				return sortedLyrics;
+			};
+
+			var r = { lyrics, message, source, synced }
+			return JSON.stringify(r)
+		},
+		args: [response]
+	});
+}
+
+async function searchBing(tabId, name, channel, signal) {
+	var myHeaders = {
+		'accept-language': 'en-US,en-IN;q=0.9,en;q=0.8',
+		'cache-control': 'no-cache',
+		'dnt': '1',
+		'pragma': 'no-cache',
+		'priority': 'u=0, i',
+		'sec-ch-ua-bitness': '"64"',
+		'sec-ch-ua-full-version': '"124.0.6367.208"',
+		'sec-ch-ua-full-version-list': '"Chromium";v="124.0.6367.208", "Google Chrome";v="124.0.6367.208", "Not-A.Brand";v="99.0.0.0"',
+		'sec-ch-ua-mobile': '?1',
+		'sec-ch-ua-model': '"Nexus 5"',
+		'sec-ch-ua-platform': '"Android"',
+		'sec-ch-ua-platform-version': '"6.0"',
+		'sec-fetch-dest': 'document',
+		'sec-fetch-mode': 'navigate',
+		'sec-fetch-site': 'same-origin',
+		'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+	}
+
+	var requestOptions = {
+		method: 'GET',
+		headers: myHeaders,
+		redirect: 'follow',
+		signal
+	};
+
+	var mq = encodeURIComponent(queryBuilder(name, channel))
+	var url = `https://www.bing.com/search?q=${mq}`
+	console.log('searching bing : ', url)
+	var response = await (await fetch(url, requestOptions)).text();
+
+	//Handle not found
+	return await chrome.scripting.executeScript({
+		target: { tabId },
+		function: (resp) => {
+			// console.log(resp)
+			var lyrics = []
+			var message = ''
+			var source = 'BING'
+			var synced = false
+			const parser = new DOMParser();
+			// Remove <base> tag to avoid CSP violation
+			const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+			const doc = parser.parseFromString(sanitizedResp, 'text/html');
+			// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
+			var lyricBody = doc.querySelector('.lyric_body')
+			var lContainer = lyricBody ? doc.querySelectorAll('.lyric_body .verse') : doc.querySelectorAll('#lyric_body .verse')
+			const b_TopTitle = doc.querySelector('.b_topTitle')
+
+			//Alternate container
+			if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
+				lContainer = doc.querySelector('.l_tac_facts')
+			}
+
+			if (lContainer != null && Object.keys(lContainer).length != 0) {
+				// console.log(lContainer.textContent)
+				message = 'OK'
+				// lContainer.querySelectorAll('span').forEach(span => {
+				// 	lyrics.push(span.textContent.trim());
+				// });
+
+				var raw = ''
+				lContainer.forEach(verse => raw += verse.innerHTML)
+				// console.log(raw)
+				if (raw.length > 0) {
+					var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
+					lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
+				}
+				else {
+					message = 'NOK'
+				}
+
+				// console.log(lyrics);
+			}
+			else {
+				message = 'NOK'
+			}
+
+			//VALIDATE HERE
+			var r = { lyrics, message, source, synced }
+			// console.log(r)
+			return JSON.stringify(r)
+		},
+		args: [response]
+	});
+}
+
+async function searchA2Z(tabId, name, channel, signal) {
+	const requestOptions = {
+		method: "GET",
+		redirect: "follow",
+		signal
+	};
+
+	if (name.includes(channel)) {
+		name = name.replace(channel, '')
+	}
+
+	var url = generateA2ZLyricsUrl(name, channel)
+	console.log('searching A2Z : ', url)
+	var response = await fetch(encodeURI(url), requestOptions)
+	var page = await response.text()
+
+	return await chrome.scripting.executeScript({
+		target: { tabId },
+		function: (resp) => {
+			// console.log(resp)
+			var lyrics = []
+			var message = ''
+			var source = 'A2Z'
+			var synced = false
+			const parser = new DOMParser();
+			// Remove <base> tag to avoid CSP violation
+			const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+			const doc = parser.parseFromString(sanitizedResp, 'text/html');
+
+			let look = true;
+			let raw = ''
+			let refDiv = doc.querySelector(".ringtone");
+			if (refDiv && refDiv.nextElementSibling) {
+				while (look && refDiv.nextElementSibling) {
+					refDiv = refDiv.nextElementSibling;
+					if (refDiv.tagName === 'DIV') {
+						look = false;
+						raw = refDiv.textContent
+					}
+				}
+				var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
+				var lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean)
+			}
+
+			message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK"
+			var r = { lyrics, message, source, synced }
+			// console.log(r)
+			return JSON.stringify(r)
+		},
+		args: [page]
+	});
+}
