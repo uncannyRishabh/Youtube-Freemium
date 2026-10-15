@@ -95,6 +95,18 @@ export const YTF_SELECTORS = {
         BUBBLE_2: 'bubble-2',
         BUBBLE_3: 'bubble-3',
         BUBBLE_IDS: ['bubble-1', 'bubble-2', 'bubble-3']
+    },
+    CREDIT: {
+        SOURCE_CREDIT: '.yf-source-credit',
+        SOURCE_LINK: '.yf-source-link'
+    },
+    INTERLUDE: {
+        LINE: 'am-interlude-line',
+        DOTS: '.am-interlude-dots',
+        DOT: '.am-interlude-dot',
+        LIT: 'lit',
+        PULSING: 'pulsing',
+        ACTIVE: 'active'
     }
 };
 
