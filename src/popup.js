@@ -1,4 +1,5 @@
 import { saveObject, getFromStorage, getDefaultUserPrefs, carouselData } from './utils.js';
+import { POPUP_SELECTORS } from './ytf-constants.js';
 
 /**
  * Sends a message to the background script
@@ -22,11 +23,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     chrome.runtime.sendMessage({ action: 'clearUpdateBadge' });
     messageHandler('clearUpdateBadge',)
     
-    const toggleExplicit = document.querySelector('#explicitFilter');
-    const toggleExplicitText = document.querySelector('#explicitFilter > .yf-menuText');
-    const killShorts = document.querySelector('#killShorts');
-    const killShortsText = document.querySelector('#killShorts > .yf-menuText');
-    const clearData = document.querySelector('#clearData');
+    const toggleExplicit = document.querySelector(POPUP_SELECTORS.EXPLICIT_FILTER);
+    const toggleExplicitText = document.querySelector(POPUP_SELECTORS.EXPLICIT_FILTER_TEXT);
+    const killShorts = document.querySelector(POPUP_SELECTORS.KILL_SHORTS);
+    const killShortsText = document.querySelector(POPUP_SELECTORS.KILL_SHORTS_TEXT);
+    const clearData = document.querySelector(POPUP_SELECTORS.CLEAR_DATA);
     
     // Load user preferences
     var userPrefs = await getFromStorage('yt-userPrefs');
@@ -83,9 +84,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     })
 
     // Handle skip ads 3-state switch
-    const skipAdsMenu = document.querySelector('#skipAds');
-    const skipAdsSubText = skipAdsMenu.querySelector('.yf-menuSubText');
-    const switchButtons = skipAdsMenu.querySelectorAll('.yf-switch');
+    const skipAdsMenu = document.querySelector(POPUP_SELECTORS.SKIP_ADS_MENU);
+    const skipAdsSubText = skipAdsMenu.querySelector(POPUP_SELECTORS.SKIP_ADS_SUBTEXT);
+    const switchButtons = skipAdsMenu.querySelectorAll(POPUP_SELECTORS.SKIP_ADS_SWITCHES);
     
     const stateDescriptions = {
         'OFF': 'Watch ads normally',
@@ -125,8 +126,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function initWhatsNewCarousel() {
-    const box = document.getElementById('carouselBox');
-    const line = document.getElementById('progressLine');
+    const box = document.querySelector(POPUP_SELECTORS.CAROUSEL_BOX);
+    const line = document.querySelector(POPUP_SELECTORS.PROGRESS_LINE);
     if (!box || !line || !carouselData.length) return;
 
     // 1. Dynamic Injection

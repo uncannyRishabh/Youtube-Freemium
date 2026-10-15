@@ -1,8 +1,51 @@
 var player, lyricContainer, moveRequired, insidePrimary, observer
 var primaryInner, secondaryInner
+var YT_SELECTORS, YTF_SELECTORS
 
 (async () => {
 	console.log('Script Injected')
+	
+	try {
+		const constants = await import(chrome.runtime.getURL('ytf-constants.js'));
+		YT_SELECTORS = constants.YT_SELECTORS;
+		YTF_SELECTORS = constants.YTF_SELECTORS;
+	} catch (e) {
+		console.error('Failed to import constants, falling back to defaults:', e);
+	}
+
+	// Fallback definitions in case dynamic import fails
+	if (!YT_SELECTORS) {
+		YT_SELECTORS = {
+			LAYOUT: {
+				PRIMARY: 'ytd-watch-flexy #primary > #primary-inner',
+				SECONDARY: 'ytd-watch-flexy #secondary',
+				TARGET: (isNarrow) => isNarrow ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary'
+			},
+			METADATA: {
+				MUSIC_BADGE: 'button-view-model a',
+				FALLBACK_TITLE: '#above-the-fold > #title',
+				FALLBACK_CHANNEL: '#upload-info > #channel-name > div > div'
+			},
+			SHORTS: {
+				RICH_SECTION_SHELF: 'ytd-rich-section-renderer ytd-rich-shelf-renderer',
+				HIDE_CLASS: 'hide-youtube-shelves'
+			}
+		};
+	}
+	if (!YTF_SELECTORS) {
+		YTF_SELECTORS = {
+			CONTAINER: {
+				CLASS: '.yf-container',
+				IN_PRIMARY: 'ytd-watch-flexy #primary > #primary-inner > #yf-container',
+				IN_SECONDARY: 'ytd-watch-flexy #secondary > #yf-container'
+			},
+			HEADER: {
+				PROGRESS_BAR: '#ytf-progressbar',
+				NOW_PLAYING_LABEL: '.now-playing'
+			}
+		};
+	}
+
 	// Load user preferences
 	var userPrefs = await getFromStorage('yt-userPrefs');
 
@@ -19,32 +62,7 @@ var primaryInner, secondaryInner
 	preconnect2.crossOrigin = "";
 	document.head.appendChild(preconnect2);
 
-	moveRequired = document.querySelector(window.innerWidth < 1000
-		? 'ytd-watch-flexy #primary > #primary-inner'
-		: 'ytd-watch-flexy #secondary') == null;
-
-	// player = document.querySelector('#primary video')
-	// lyricContainer = document.querySelector('#columns #yf-container');
-
-	// observer = new MutationObserver(observePlayer);
-	// if(player != null){
-	// observer.observe(player, { attributes: true, attributeFilter: ['style'] });
-	// }
-
-	// Watch for new elements being added
-	// const observer = new MutationObserver(() => {
-	// 	console.log('FROM Mutation Observer')
-	// 	hideShelfRenderer();
-	// });
-
-	// observer.observe(document.querySelector('#contents'), {
-	// 	childList: true,
-	// 	subtree: true
-	// });
-
-
-	//KILL_SHORTS_PRESET
-
+	moveRequired = document.querySelector(YT_SELECTORS.LAYOUT.TARGET(window.innerWidth < 1000)) == null;
 
 	const style = document.createElement('style');
 	style.textContent = `
@@ -56,15 +74,13 @@ var primaryInner, secondaryInner
 
 	document.head.appendChild(style);
 	if (kill_shorts) {
-		document.documentElement.classList.toggle("hide-youtube-shelves");
+		document.documentElement.classList.toggle(YT_SELECTORS.SHORTS.HIDE_CLASS);
 	}
-
 
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		const { type, val } = obj;
-		// console.log(obj)
 
-    	var ytc = document.querySelector(window.innerWidth < 1000 ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
+    	var ytc = document.querySelector(YT_SELECTORS.LAYOUT.TARGET(window.innerWidth < 1000));
 
 		switch (type) {
 			case 'NEW_SEARCH': {
@@ -73,43 +89,27 @@ var primaryInner, secondaryInner
 					break;
 				}
 
-				var container = ytc.querySelector('.yf-container')
-				var progressbar = ytc.querySelector('#ytf-progressbar')
-				var nowPlaying = ytc.querySelector('.now-playing')
-				var music = document.querySelector('button-view-model a')
+				var container = ytc.querySelector(YTF_SELECTORS.CONTAINER.CLASS)
+				var progressbar = ytc.querySelector(YTF_SELECTORS.HEADER.PROGRESS_BAR)
+				var nowPlaying = ytc.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_LABEL)
+				var music = document.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE)
 				var isMusic = music === null ? false : (music.textContent == 'Music')
-				// player = document.querySelector('#primary video')
-				// if(player != null){
-				// 	observer.observe(player, { attributes: true, attributeFilter: ['style'] });
-				// }
 
 				if (container && container.getAttribute('data-uid') === val) {
 					res({ 'name': '', 'channel': '' })
 					break;
 				}
 
-				// console.log('DOM State 1 :: ' + document.readyState)
-				// if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
-					// document.addEventListener('DOMContentLoaded', () => {
-					// 	console.log('DOM State 2 :: ' + document.readyState)
-					// 	let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
-					// 	let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
-					// 	console.log('DOMContentLoaded :::: ' + title + " - " + channel)
-
-					// }, { once: true });
-				// }
-
 				if (isMusic) {
 					if (progressbar) {
 						progressbar.style.visibility = 'visible'
 						progressbar.classList.add("pure-material-progress-linear");
 						progressbar.classList.remove("no-animate")
-						// progressbar.setAttriprogressbar.style.backgroundColor = '#00000000'
 					}
 					if (nowPlaying) nowPlaying.textContent = 'Searching -'
 				}
-				let title = document.querySelector('#above-the-fold > #title')?.textContent.trim();
-				let channel = document.querySelector('#upload-info > #channel-name > div > div')?.textContent.trim();
+				let title = document.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE)?.textContent.trim();
+				let channel = document.querySelector(YT_SELECTORS.METADATA.FALLBACK_CHANNEL)?.textContent.trim();
 				console.log('Content.js :::: ' + title + " - " + channel)
 
 				if (title && channel) {
@@ -122,9 +122,6 @@ var primaryInner, secondaryInner
 				break;
 			}
 			case 'DISPLAY_LYRICS': {
-				// if(currentTab.isActive){
-
-				// }
 				break;
 			}
 			default: {
@@ -192,12 +189,13 @@ function hideShelfRenderer() {
 // }
 
 function windowResize() {
-	insidePrimary = document.querySelector('ytd-watch-flexy #primary > #primary-inner > #yf-container')
+	const inPrimarySelector = YTF_SELECTORS?.CONTAINER?.IN_PRIMARY || 'ytd-watch-flexy #primary > #primary-inner > #yf-container';
+	const inSecondarySelector = YTF_SELECTORS?.CONTAINER?.IN_SECONDARY || 'ytd-watch-flexy #secondary > #yf-container';
+
+	insidePrimary = document.querySelector(inPrimarySelector);
 	moveRequired = document.querySelector(window.innerWidth < 1000
-		? 
-		'ytd-watch-flexy #primary > #primary-inner > #yf-container'
-		:
-		'ytd-watch-flexy #secondary > #yf-container'
+		? inPrimarySelector
+		: inSecondarySelector
 	) == null;
 
 	if (moveRequired) {
@@ -208,18 +206,20 @@ function windowResize() {
 			moveDivToPrimary();
 		}
 	}
-
 }
 
 function moveDivToPrimary() {
-	lyricContainer = document.querySelector('ytd-watch-flexy #secondary > #yf-container');
+	const secondaryContainerSelector = YTF_SELECTORS?.CONTAINER?.IN_SECONDARY || 'ytd-watch-flexy #secondary > #yf-container';
+	const primaryInnerSelector = YT_SELECTORS?.LAYOUT?.PRIMARY || 'ytd-watch-flexy #primary > #primary-inner';
+
+	lyricContainer = document.querySelector(secondaryContainerSelector);
 
 	if (lyricContainer) {
 		lyricContainer.classList.add('ytf-container-marginTop');
 		if (primaryInner == null) {
-			primaryInner = document.querySelector('ytd-watch-flexy #primary > #primary-inner');
+			primaryInner = document.querySelector(primaryInnerSelector);
 		}
-		const firstChild = primaryInner.children[1];
+		const firstChild = primaryInner?.children[1];
 
 		if (firstChild) {
 			primaryInner.insertBefore(lyricContainer, firstChild);
@@ -228,20 +228,22 @@ function moveDivToPrimary() {
 }
 
 function moveDivToSecondary() {
-	lyricContainer = document.querySelector('ytd-watch-flexy #primary > #primary-inner > #yf-container');
+	const primaryContainerSelector = YTF_SELECTORS?.CONTAINER?.IN_PRIMARY || 'ytd-watch-flexy #primary > #primary-inner > #yf-container';
+	const secondarySelector = YT_SELECTORS?.LAYOUT?.SECONDARY || 'ytd-watch-flexy #secondary';
+
+	lyricContainer = document.querySelector(primaryContainerSelector);
 
 	if (lyricContainer) {
 		lyricContainer.classList.remove('ytf-container-marginTop');
 		if (secondaryInner == null) {
-			secondaryInner = document.querySelector('ytd-watch-flexy #secondary');
+			secondaryInner = document.querySelector(secondarySelector);
 		}
-		const firstChild = secondaryInner.firstChild;
+		const firstChild = secondaryInner?.firstChild;
 
 		if (firstChild) {
 			secondaryInner.insertBefore(lyricContainer, firstChild);
 		}
 	}
-
 }
 
 // function getAlbumArtColors() {

@@ -1,4 +1,5 @@
 import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources} from './utils.js';
+import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
 (() => {
 
@@ -267,19 +268,19 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                 // === INJECT "SEARCHING" UI STATE BEFORE WAITING FOR NETWORK ===
                 await chrome.scripting.executeScript({
                     target: { tabId },
-                    function: (searchTitle) => {
-                        var ytc = document.querySelector(window.innerWidth < 1000 ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
-                        var container = ytc?.querySelector('.yf-container');
+                    function: (searchTitle, YT_SEL, YTF_SEL) => {
+                        var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
+                        var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
                         if (!container) return; // UI hasn't been built yet
 
                         // Update Header text
-                        var npt = container.querySelector('.now-playing-text-input');
+                        var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                         if (npt) npt.placeholder = searchTitle || 'Searching...';
-                        var nowPlaying = container.querySelector('.now-playing');
+                        var nowPlaying = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_LABEL);
                         if (nowPlaying) nowPlaying.textContent = 'Searching -';
 
                         // Animate Loader
-                        var progressbar = container.querySelector('#ytf-progressbar');
+                        var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
                         if (progressbar) {
                             progressbar.classList.remove("no-animate");
                             progressbar.classList.add("pure-material-progress-linear");
@@ -295,10 +296,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                         searchingDiv.appendChild(searchingText);
 
                         // Replace current content with Searching Div cleanly
-                        var existingContent = container.querySelector('#searchingDiv') || 
-                                              container.querySelector('#intermediateContainer') || 
-                                              container.querySelector('#lyricContainer') || 
-                                              container.querySelector('#notFound');
+                        var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
                         
                         if (existingContent) {
                             container.replaceChild(searchingDiv, existingContent);
@@ -306,7 +304,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                             container.appendChild(searchingDiv);
                         }
                     },
-                    args: [val]
+                    args: [val, YT_SELECTORS, YTF_SELECTORS]
                 });
                 // ===================================================================
 
@@ -362,12 +360,12 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary) => {
-                var ytc = document.querySelector(window.innerWidth < 1000 ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
-                var container = ytc?.querySelector('.yf-container')
-                var intermediateContainer = ytc?.querySelector('#intermediateContainer')
+            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, YT_SEL, YTF_SEL) => {
+                var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
+                var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS)
+                var intermediateContainer = ytc?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE)
                 var lyricElements = []
-                const mediaElem = document.querySelector('video')
+                const mediaElem = document.querySelector(YT_SEL.PLAYER.VIDEO)
 
                 console.log('UID :::::: '+uid)
                 
@@ -554,10 +552,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                                 svgElement.appendChild(pathElement);
                                 li.appendChild(svgElement);
 
-                                li.lastChild.addEventListener('click', () => {
-                                    var fontSizeElement = li.querySelector('#yf-font-size');
+                                 li.lastChild.addEventListener('click', () => {
+                                    var fontSizeElement = li.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
                                     var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
-                                    var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize - 1) + 'px';
+                                    var fontSize = document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER).style.fontSize = (currentFontSize - 1) + 'px';
                                     if (currentFontSize > 11) {
                                         console.log(fontSizeElement.textContent)
                                         console.log(fontSize)
@@ -590,10 +588,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                                 li.appendChild(svgElement);
 
                                 li.lastChild.addEventListener('click', () => {
-                                    var fontSizeElement = li.querySelector('#yf-font-size');
+                                    var fontSizeElement = li.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
                                     var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
                                     if (currentFontSize < 32) {
-                                        var fontSize = document.querySelector('#lyricContainer').style.fontSize = (currentFontSize + 1) + 'px';
+                                        var fontSize = document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER).style.fontSize = (currentFontSize + 1) + 'px';
                                         localStorage.setItem('fontSize', fontSize);
                                         if (fontSizeElement) {
                                             fontSizeElement.textContent = fontSize;
@@ -634,7 +632,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                                 li.appendChild(svgElement);
 
                                 li.lastChild.addEventListener('click',async () => {
-                                    var offsetValueElement = li.querySelector('#yf-offset-text')
+                                    var offsetValueElement = li.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT)
                                     offset = parseFloat(mediaElem.getAttribute('ytf-data-offset'))
                                     console.log('dec. offset : '+offset)
                                     offset = Math.round((offset - 0.25) * 100) / 100;
@@ -700,7 +698,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                                 li.appendChild(svgElement);
 
                                 li.lastChild.addEventListener('click', async () => {
-                                    var offsetValueElement = li.querySelector('#yf-offset-text')
+                                    var offsetValueElement = li.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT)
                                     offset = parseFloat(mediaElem.getAttribute('ytf-data-offset'))
                                     console.log('inc. offset : '+offset)
                                     offset = Math.round((offset + 0.25) * 100) / 100;
@@ -772,16 +770,16 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     }
                 }
 
-                var npt = container.querySelector('.now-playing-text-input')
+                var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT)
 
                 //Reset offset after every song
-                var offsetInputElement = container.querySelector('#yf-offset-text')
+                var offsetInputElement = container.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT)
                 if (offsetInputElement) {
                     offsetInputElement.value = offset.toFixed(2)
                 }
 
                 if (message === 'OK') { 
-                    var nowPlaying = container.querySelector('.now-playing')
+                    var nowPlaying = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_LABEL)
                     if (nowPlaying) nowPlaying.textContent = 'Now Playing -'
 
                     if (npt) npt.placeholder = title
@@ -802,7 +800,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                        	lyricContainer.style.fontSize = localFontSize
 
 					// Add blurred bubbles background
-					let bubblesWrapper = container.querySelector('.bubbles-wrapper')
+					let bubblesWrapper = container.querySelector(YTF_SEL.VISUALIZER.BUBBLES_WRAPPER)
 					if (!bubblesWrapper) {
 						bubblesWrapper = document.createElement('div');
 						bubblesWrapper.className = 'bubbles-wrapper';
@@ -884,10 +882,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     intermediateContainer.appendChild(lyricContainer)
                     
                     // === CLEAN REPLACEMENT LOGIC FOR 'OK' ===
-                    var existingContent = container.querySelector('#searchingDiv') || 
-                                          container.querySelector('#notFound') || 
-                                          container.querySelector('#intermediateContainer') || 
-                                          container.querySelector('#lyricContainer');
+                    var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
 
                     if (existingContent) {
                         container.replaceChild(intermediateContainer, existingContent);
@@ -900,7 +895,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     if (npt) npt.placeholder = title
                     container.setAttribute('data-uid', uid)
 
-                    var nowPlaying = container.querySelector('.now-playing')
+                    var nowPlaying = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_LABEL)
                     if (nowPlaying) nowPlaying.textContent = 'Now Playing -'
 
                     var notFoundDiv = document.createElement('div');
@@ -914,10 +909,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     notFoundDiv.appendChild(notFoundText);
 
                     // === CLEAN REPLACEMENT LOGIC FOR 'NOK' ===
-                    var existingContent = container.querySelector('#searchingDiv') || 
-                                          container.querySelector('#intermediateContainer') || 
-                                          container.querySelector('#lyricContainer') || 
-                                          container.querySelector('#notFound');
+                    var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
 
                     if (existingContent) {
                         container.replaceChild(notFoundDiv, existingContent);
@@ -932,16 +924,16 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     container.removeAttribute('data-uid')
 
                     console.log('Removing..')
-                    var ytc = document.querySelector('ytd-watch-flexy #secondary > #secondary-inner')
-                    var c = ytc.querySelector('.yf-container')
-                    var lc = ytc.querySelector('#lyricContainer')
-                    if (lc) {
+                    var ytc = document.querySelector(YT_SEL.LAYOUT.SECONDARY_INNER)
+                    var c = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS)
+                    var lc = ytc?.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER)
+                    if (lc && c) {
                         c.removeChild(c.lastChild)
                     }
                     detachLyricsSync(mediaElem);
                 }
 
-                var progressbar = container.querySelector('#ytf-progressbar')
+                var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR)
                 if (progressbar) {
                     progressbar.classList.remove("pure-material-progress-linear");
                     progressbar.classList.add("no-animate");
@@ -1042,28 +1034,24 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
 
 
             },
-            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary]
+            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, YT_SELECTORS, YTF_SELECTORS]
         });
 
         // lava lamp visualizer logic
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: () => {
+            function: (YTF_SEL) => {
                 const colors = {
                     bubble1: '#7B68EE',
                     bubble2: '#FF6B6B',
                     bubble3: '#4ECDC4',
                 };
 
-                const bubbles = [
-                    document.getElementById('bubble-1'),
-                    document.getElementById('bubble-2'),
-                    document.getElementById('bubble-3')
-                ];
+                const bubbles = YTF_SEL.VISUALIZER.BUBBLE_IDS.map(id => document.getElementById(id));
 
                 if (!bubbles[0] || !bubbles[1] || !bubbles[2]) return;
 
-                const wrapper = document.querySelector('.bubbles-wrapper');
+                const wrapper = document.querySelector(YTF_SEL.VISUALIZER.BUBBLES_WRAPPER);
                 if (!wrapper) return;
 
                 bubbles.forEach(b => {
@@ -1169,7 +1157,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
 
                 observer.observe(wrapper);
             },
-            args: []
+            args: [YTF_SELECTORS]
         });
     }
 
@@ -1181,10 +1169,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
     async function musicCheck(tabId) {
         var isMusic = await chrome.scripting.executeScript({
             target: { tabId },
-            function: () => {
-                let music = document.querySelector('button-view-model a')
-                return (music === null) || (music === undefined) ? false : (music.textContent == 'Music')
-            }
+            function: (YT_SEL) => {
+                let music = document.querySelector(YT_SEL.METADATA.MUSIC_BADGE)
+                return (music === null) || (music === undefined) ? false : (music.textContent.trim() == 'Music')
+            },
+            args: [YT_SELECTORS]
         });
         return isMusic[0].result;
     }
@@ -1192,60 +1181,57 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
     async function killShort(tabId, val) {
         await chrome.scripting.executeScript({
 			target: { tabId },
-			function: (val) => {
+			function: (val, YT_SEL) => {
 				if (val) {
-                    console.log("FREEMIUM : KILLSHORT" + val)
-                    document.documentElement.classList.toggle("hide-youtube-shelves", true);
+                    console.log("FREEMIUM : KILLSHORT", val)
+                    document.documentElement.classList.toggle(YT_SEL.SHORTS.HIDE_CLASS, true);
                 }
                 else {
-                    console.log("FREEMIUM : KILLSHORT" + val)
-                    document.documentElement.classList.toggle("hide-youtube-shelves", false);
+                    console.log("FREEMIUM : KILLSHORT", val)
+                    document.documentElement.classList.toggle(YT_SEL.SHORTS.HIDE_CLASS, false);
                 }
-            }
-            ,
-            args: [val]
+            },
+            args: [val, YT_SELECTORS]
 		});
     }
 
     async function findSongAndArtist(tabId) {
         return chrome.scripting.executeScript({
             target: { tabId },
-            function: () => {
+            function: (YT_SEL) => {
                 //Fallback for fetching song/artist
                 let val, channel
-                let musicCard = document.querySelectorAll('#header-container #title')
+                let musicCard = document.querySelectorAll(YT_SEL.METADATA.MUSIC_HEADER_TITLE)
 
-                const musicCardSelectors = [
-                    '.yt-video-attribute-view-model__metadata'
-                    ,'.ytVideoAttributeViewModelContentContainer'
-                ]
+                const musicCardSelectors = YT_SEL.METADATA.MUSIC_CARD_CONTAINERS
 
                 var musicCardSelectorFound = musicCardSelectors.find(selector => {
                     return document.querySelector(selector) !== null
                 })
 
                 if (musicCard && musicCardSelectorFound) {
-                    val = document.querySelector(musicCardSelectorFound + ' > .ytVideoAttributeViewModelMetadata > :nth-child(1)').textContent.trim();
-                    channel = document.querySelector(musicCardSelectorFound + ' > .ytVideoAttributeViewModelMetadata > :nth-child(2)').textContent.trim();
+                    val = document.querySelector(musicCardSelectorFound + YT_SEL.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent.trim();
+                    channel = document.querySelector(musicCardSelectorFound + YT_SEL.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent.trim();
                     
-                    val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
-	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
+                    val = val?.replace(/\b(feat|ft)\b\.?/i, '').trim();
+	                channel = channel?.replace(/\b(feat|ft)\b\.?/i, '').trim();
 
                     console.log('getSongAndArtistFromCard => Title : ' + val + ' Artist : ' + channel)
                 }
 
                 if (val == undefined || channel == undefined) {
-                    val = document.querySelector('#above-the-fold > #title').textContent.trim();
-                    channel = document.querySelector('#upload-info > #channel-name > div > div').textContent.trim();
+                    val = document.querySelector(YT_SEL.METADATA.FALLBACK_TITLE)?.textContent.trim();
+                    channel = document.querySelector(YT_SEL.METADATA.FALLBACK_CHANNEL)?.textContent.trim();
 
-                    val = val.replace(/\b(feat|ft)\b\.?/i, '').trim();
-	                channel = channel.replace(/\b(feat|ft)\b\.?/i, '').trim();
+                    val = val?.replace(/\b(feat|ft)\b\.?/i, '').trim();
+	                channel = channel?.replace(/\b(feat|ft)\b\.?/i, '').trim();
 
                     console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Artist : ' + channel)
                 }
 
-                return JSON.stringify({ val, channel });
-            }
+                return JSON.stringify({ val: val || '', channel: channel || '' });
+            },
+            args: [YT_SELECTORS]
         });
     }
 
@@ -1253,10 +1239,11 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
         console.log('TAB ID :: ', tabId)
         var uid = await chrome.scripting.executeScript({
             target: { tabId },
-            function: () => {
-                var container = document.querySelector('#yf-container')
-                return container.getAttribute('data-uid')
-            }
+            function: (YTF_SEL) => {
+                var container = document.querySelector(YTF_SEL.CONTAINER.ROOT)
+                return container?.getAttribute('data-uid')
+            },
+            args: [YTF_SELECTORS]
         });
 
         if (uid[0]?.result) {
@@ -1274,9 +1261,10 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
 
             await chrome.scripting.executeScript({
                 target: { tabId },
-                function: (bool, lyrics, synced, fuzzyProfanityDictionary) => {
-                    var container = document.querySelector('#intermediateContainer')
-                    var lyricContainer = container.querySelector('#lyricContainer')
+                function: (bool, lyrics, synced, fuzzyProfanityDictionary, YTF_SEL) => {
+                    var container = document.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE)
+                    var lyricContainer = container?.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER)
+                    if (!lyricContainer) return;
 
                     console.log('PROFANITY CHECKPOINT !!', bool)
 
@@ -1295,7 +1283,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     else {
                         lyricContainer.setAttribute('data-profanity', 'false')
 
-                        // const censorRegex = new RegExp('\\b(?:' + fuzzyProfanityDictionary.join('|') + ')\\b', 'gi');
                         const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                         const re = new RegExp(`(${pattern})`, 'giu');
 
@@ -1310,7 +1297,7 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                         })
                     }
                 },
-                args: [bool, lyrics, synced, fuzzyProfanityDictionary]
+                args: [bool, lyrics, synced, fuzzyProfanityDictionary, YTF_SELECTORS]
             })
         }
 
@@ -1320,8 +1307,8 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
         chrome.scripting.executeScript({
             target: { tabId },
             world: 'MAIN',
-            args: [],
-            func: () => {
+            args: [YT_SELECTORS.ADS.ALL_SKIP_CLASSES],
+            func: (skipButtonClasses) => {
                 'use strict';
 
                 if (window.__ytfAdBlockerInjected) {
@@ -1339,13 +1326,6 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                         return true;
                     }
                 }
-
-                const skipButtonClasses = [
-                    "videoAdUiSkipButton",
-                    "ytp-ad-skip-button ytp-button",
-                    "ytp-ad-skip-button-modern ytp-button",
-                    "ytp-skip-ad-button",
-                ];
 
                 const getEventHandler = (listener) => function handleEvent(e) {
                     const handler = {
@@ -1387,15 +1367,15 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
         chrome.scripting.executeScript({
             target: { tabId },
             world: 'MAIN',
-            args: [],
-            func: () => {
-                const video = document.querySelector('video');
-                var movie_player = document.querySelector('#movie_player');
+            args: [YT_SELECTORS],
+            func: (YT_SEL) => {
+                const video = document.querySelector(YT_SEL.PLAYER.VIDEO);
+                var movie_player = document.querySelector(YT_SEL.PLAYER.MOVIE_PLAYER);
                 if (!movie_player) {
                     return
                 }
                 observer = new MutationObserver(() => {
-                    var adOverlay = movie_player.querySelector('.ytp-ad-player-overlay-layout');
+                    var adOverlay = movie_player.querySelector(YT_SEL.ADS.AD_OVERLAY);
                     if (!adOverlay) {
                         video.muted = false
                         return;
@@ -1408,14 +1388,14 @@ import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefau
                     let adAttempts = 0;
 
                     const adCheckInterval = setInterval(() => {
-                        adOverlay = document.querySelector('.ytp-ad-player-overlay-layout');
+                        adOverlay = document.querySelector(YT_SEL.ADS.AD_OVERLAY);
 
                         if (adOverlay && adAttempts < 4) {
                             if (video) {
                                 video.currentTime = video.duration - 0.5;
                                 console.log('ad duration ::: ' + video.duration)
                                 setTimeout(() => {
-                                    const skipButton = document.querySelector('.ytp-skip-ad-button');
+                                    const skipButton = document.querySelector(YT_SEL.ADS.SKIP_BUTTON);
                                     if (skipButton) {
                                         skipButton.click();
                                         console.log('Skip ad button clicked');

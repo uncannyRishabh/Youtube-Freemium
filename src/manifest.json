@@ -8,7 +8,7 @@
 		"https://www.bing.com/*",
 		"https://www.azlyrics.com/*",
 		"https://www.youtube.com/*",
-		"https://lrclib.net/"
+		"https://lrclib.net/*"
 	],
 	"content_security_policy": {
 		"extension_pages": "script-src 'self'; img-src 'self'"
@@ -46,7 +46,7 @@
 		}
 	],
 	"web_accessible_resources": [{
-		"resources": ["utils.js"],
+		"resources": ["utils.js", "ytf-constants.js"],
 		"matches": ["https://www.youtube.com/*", "https://music.youtube.com/*"]
 	}]
 }
