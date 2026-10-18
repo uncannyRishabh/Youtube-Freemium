@@ -188,8 +188,8 @@ export async function searchLrclibdotnet(track, artist, signal) {
 	// try {
 		const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
 		const myHeaders = new Headers();
-		myHeaders.append("X-User-Agent", `${Date.now()}`);
-		myHeaders.append("Lrclib-Client", `${Date.now()}`);
+		myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
+		myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
 		
 		const requestOptions = {
 			method: "GET",

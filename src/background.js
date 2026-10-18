@@ -440,7 +440,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 23;
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
                                     if (currentFontSize > 11) {
                                         var fontSize = (currentFontSize - 1) + 'px';
                                         document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER).style.fontSize = fontSize;
@@ -452,7 +452,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.appendChild(document.createElement('span')).className = 'yf-fontSize';
                                 li.lastChild.id = 'yf-font-size';
                                 var localFontSize = localStorage.getItem('fontSize');
-                                li.lastChild.textContent = localFontSize ? localFontSize : '23px';
+                                li.lastChild.textContent = localFontSize ? localFontSize : '20px';
 
                                 svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
                                 svgElement.setAttribute("height", "24");
@@ -466,8 +466,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 23;
-                                    if (currentFontSize < 34) {
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
+                                    if (currentFontSize < 32) {
                                         var fontSize = (currentFontSize + 1) + 'px';
                                         document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER).style.fontSize = fontSize;
                                         localStorage.setItem('fontSize', fontSize);
@@ -594,10 +594,47 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         }
                     });
 
+                    var collapseBtn = document.createElement("button");
+                    collapseBtn.id = "yf-collapse-btn";
+                    collapseBtn.className = "yf-collapse-btn";
+                    collapseBtn.title = "Collapse / Expand";
+                    collapseBtn.setAttribute("aria-label", "Toggle lyrics panel");
+                    collapseBtn.innerHTML = `
+                        <svg class="yf-collapse-icon" viewBox="0 0 24 24" width="22" height="22">
+                            <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                        </svg>
+                    `;
+
+                    const toggleCollapse = (e) => {
+                        if (e) e.stopPropagation();
+                        const isCollapsed = container.classList.toggle(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                        try {
+                            localStorage.setItem('ytf-collapsed', isCollapsed ? 'true' : 'false');
+                        } catch (err) {}
+                    };
+
+                    collapseBtn.addEventListener('click', toggleCollapse);
+
+                    header.addEventListener('click', (e) => {
+                        if (e.target.closest(YTF_SEL.DROPDOWN.ROOT) ||
+                            e.target.closest(YTF_SEL.HEADER.MENU_BTN) ||
+                            e.target.closest(YTF_SEL.HEADER.NOW_PLAYING_INPUT) ||
+                            e.target.closest(YTF_SEL.HEADER.COLLAPSE_BTN_CLASS) ||
+                            e.target.closest('a')) {
+                            return;
+                        }
+                        toggleCollapse(e);
+                    });
+
+                    if (localStorage.getItem('ytf-collapsed') === 'true') {
+                        container.classList.add(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                    }
+
                     header.appendChild(logoContainerDiv);
                     header.appendChild(nowPlayingDiv);
                     header.appendChild(menuSpan);
                     header.appendChild(yfDropdown);
+                    header.appendChild(collapseBtn);
 
                     container.appendChild(header);
 
@@ -805,7 +842,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 var currentLyricIndex = -1;
                 var currentActiveElement;
 
-                function syncLyricsDisplay(lyricsArr, currentTime, offset, lyricElements) {
+                function syncLyricsDisplay(lyricsArr, currentTime, offset, lyricElements, immediate = false) {
                     const activeIdx = findActiveLyricIndex(lyricsArr, currentTime, offset);
                     const el = lyricElements[activeIdx];
 
@@ -828,8 +865,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         }
                     }
 
-                    if (currentLyricIndex !== activeIdx) {
-                        if (currentActiveElement) {
+                    if (currentLyricIndex !== activeIdx || immediate) {
+                        if (currentActiveElement && currentActiveElement !== el) {
                             currentActiveElement.classList.remove('active-lyric');
                             const oldDots = currentActiveElement.querySelectorAll('.am-interlude-dot');
                             oldDots.forEach(d => d.classList.remove('lit'));
@@ -846,10 +883,10 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                             parent.scrollTo({
                                 top: scrollPosition,
-                                behavior: 'smooth'
+                                behavior: immediate ? 'auto' : 'smooth'
                             });
                         } else if (el) {
-                            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            el.scrollIntoView({ behavior: immediate ? 'auto' : 'smooth', block: 'start' });
                         }
                     }
                 }
@@ -857,7 +894,36 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 function attachLyricsSync(mediaElem, lyricsArr, lyricsContainer, lyricElements) {
                     if (!mediaElem || !lyricsArr || !lyricsContainer) return;
                     detachLyricsSync(mediaElem);
+
+                    let isLyricsVisible = true;
+                    const lyricsObserver = new IntersectionObserver((entries) => {
+                        const wasVisible = isLyricsVisible;
+                        isLyricsVisible = entries[0]?.isIntersecting ?? false;
+
+                        // When coming back onto screen, immediately show and scroll to the active line
+                        if (isLyricsVisible && !wasVisible && mediaElem) {
+                            var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
+                            syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, true);
+                        }
+                    }, { threshold: 0.01 });
+
+                    lyricsObserver.observe(lyricsContainer);
+                    mediaElem._lyricsObserver = lyricsObserver;
+
+                    const onVisibilityChange = () => {
+                        if (document.hidden) {
+                            // Document hidden, sync loop idle
+                        } else if (isLyricsVisible && mediaElem) {
+                            var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
+                            syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, true);
+                        }
+                    };
+                    document.addEventListener('visibilitychange', onVisibilityChange);
+                    mediaElem._lyricsVisibilityChange = onVisibilityChange;
+
                     mediaElem._lyricsSyncHandler = function () {
+                        // Do not perform lyric sync if lyrics are not visible on screen or document is hidden
+                        if (!isLyricsVisible || document.hidden) return;
                         var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                         syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements);
                     };
@@ -865,9 +931,19 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 }
 
                 function detachLyricsSync(mediaElem) {
-                    if (mediaElem && mediaElem._lyricsSyncHandler) {
-                        mediaElem.removeEventListener('timeupdate', mediaElem._lyricsSyncHandler);
-                        delete mediaElem._lyricsSyncHandler;
+                    if (mediaElem) {
+                        if (mediaElem._lyricsObserver) {
+                            mediaElem._lyricsObserver.disconnect();
+                            delete mediaElem._lyricsObserver;
+                        }
+                        if (mediaElem._lyricsVisibilityChange) {
+                            document.removeEventListener('visibilitychange', mediaElem._lyricsVisibilityChange);
+                            delete mediaElem._lyricsVisibilityChange;
+                        }
+                        if (mediaElem._lyricsSyncHandler) {
+                            mediaElem.removeEventListener('timeupdate', mediaElem._lyricsSyncHandler);
+                            delete mediaElem._lyricsSyncHandler;
+                        }
                     }
                 }
             },

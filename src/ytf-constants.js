@@ -71,7 +71,8 @@ export const YTF_SELECTORS = {
         SEARCHING: '#searchingDiv',
         NOT_FOUND: '#notFound',
         LYRIC_CONTAINER: '#lyricContainer',
-        SWAP_TARGETS: '#searchingDiv, #intermediateContainer, #lyricContainer, #notFound'
+        SWAP_TARGETS: '#searchingDiv, #intermediateContainer, #lyricContainer, #notFound',
+        COLLAPSED_CLASS: 'collapsed'
     },
     HEADER: {
         ROOT: '#header',
@@ -79,7 +80,10 @@ export const YTF_SELECTORS = {
         NOW_PLAYING_INPUT: '.now-playing-text-input',
         NOW_PLAYING_INPUT_ID: '#now-playing-text-input',
         PROGRESS_BAR: '#ytf-progressbar',
-        MENU_BTN: '.yf-menu'
+        MENU_BTN: '.yf-menu',
+        COLLAPSE_BTN: '#yf-collapse-btn',
+        COLLAPSE_BTN_CLASS: '.yf-collapse-btn',
+        COLLAPSE_ICON: '.yf-collapse-icon'
     },
     DROPDOWN: {
         ROOT: '#yf-dropdown',
