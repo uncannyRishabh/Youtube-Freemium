@@ -1,3 +1,4 @@
+import { SCRAPER_SELECTORS } from './ytf-constants.js';
 
 export function getDefaultUserPrefs(){
 	return {
@@ -185,8 +186,10 @@ function findLRCLibspecificName(name) {
 
 export async function searchLrclibdotnet(track, artist, signal) {
 	// try {
+		const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
 		const myHeaders = new Headers();
-		myHeaders.append("Referer", "Freemium by - @uncannyRishabh");
+		myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
+		myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
 		
 		const requestOptions = {
 			method: "GET",
@@ -344,37 +347,53 @@ async function searchLRCLIB(tabId, name, channel, signal) {
 		name = name.replace(channel, '')
 	}
 
-	var response = await (await searchLrclibdotnet(name, channel, signal)).text()
-	//Todo : fallback logic when multiple artists search with all artists, if not found search with first
-	return await chrome.scripting.executeScript({
-		target: { tabId },
-		function: (resp) => {
-			var resp = JSON.parse(resp)
-			var lyrics = []
-			var message = 'NOK'
-			var source = 'LRCLIB'
-			var synced = false
-			var name = resp?.name
+	try {
+		const res = await searchLrclibdotnet(name, channel, signal);
+		if (res.status === 429) {
+			const retryAfter = res.headers.get('Retry-After');
+			console.warn(`[LRCLIB] Rate limited (429). Retry-After: ${retryAfter || 'unspecified'}s`);
+			return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false }) }];
+		}
+		if (!res.ok) {
+			console.warn(`[LRCLIB] Request failed with status ${res.status}`);
+			return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false }) }];
+		}
 
-			/**
-			 * {
-					"message": "Failed to find specified track",
-					"name": "TrackNotFound",
-					"statusCode": 404
+		var response = await res.text();
+		return await chrome.scripting.executeScript({
+			target: { tabId },
+			function: (resp) => {
+				var respObj;
+				try {
+					respObj = JSON.parse(resp);
+				} catch (e) {
+					return JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false });
 				}
-			*/
+				var lyrics = []
+				var message = 'NOK'
+				var source = 'LRCLIB'
+				var synced = false
+				var name = respObj?.name
 
-			if ((name && name != 'TrackNotFound') && resp?.plainLyrics != null) {
-				message = 'OK'
-				synced = resp.syncedLyrics != null
-			}
-			if (message == 'OK' && synced) {
-				lyrics = resp.syncedLyrics?.replaceAll('[', '').split('\n').map(line => line.split(']'))
-				lyrics = sanitizeAndInsertLyrics(lyrics)
-			}
-			else if (message == 'OK' && !synced) {
-				lyrics = resp.plainLyrics.split('\n')
-			}
+				/**
+				 * {
+						"message": "Failed to find specified track",
+						"name": "TrackNotFound",
+						"statusCode": 404
+					}
+				*/
+
+				if ((name && name != 'TrackNotFound') && respObj?.plainLyrics != null) {
+					message = 'OK'
+					synced = respObj.syncedLyrics != null
+				}
+				if (message == 'OK' && synced) {
+					lyrics = respObj.syncedLyrics?.replaceAll('[', '').split('\n').map(line => line.split(']'))
+					lyrics = sanitizeAndInsertLyrics(lyrics)
+				}
+				else if (message == 'OK' && !synced) {
+					lyrics = respObj.plainLyrics.split('\n')
+				}
 
 			function isValidTimestamp(timestamp) {
 				// \d{2} matches two digits for MM and SS
@@ -424,6 +443,10 @@ async function searchLRCLIB(tabId, name, channel, signal) {
 		},
 		args: [response]
 	});
+	} catch (error) {
+		console.warn('[LRCLIB] Search error or aborted:', error);
+		return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false }) }];
+	}
 }
 
 async function searchBing(tabId, name, channel, signal) {
@@ -461,7 +484,7 @@ async function searchBing(tabId, name, channel, signal) {
 	//Handle not found
 	return await chrome.scripting.executeScript({
 		target: { tabId },
-		function: (resp) => {
+		function: (resp, selectors) => {
 			// console.log(resp)
 			var lyrics = []
 			var message = ''
@@ -471,14 +494,13 @@ async function searchBing(tabId, name, channel, signal) {
 			// Remove <base> tag to avoid CSP violation
 			const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
 			const doc = parser.parseFromString(sanitizedResp, 'text/html');
-			// const lContainer = doc.querySelector('#kp-wp-tab-default_tab\\:kc\\:\\/music\\/recording_cluster\\:lyrics > div > div')
-			var lyricBody = doc.querySelector('.lyric_body')
-			var lContainer = lyricBody ? doc.querySelectorAll('.lyric_body .verse') : doc.querySelectorAll('#lyric_body .verse')
-			const b_TopTitle = doc.querySelector('.b_topTitle')
+			var lyricBody = doc.querySelector(selectors.LYRIC_BODY)
+			var lContainer = lyricBody ? doc.querySelectorAll(selectors.VERSES) : doc.querySelectorAll(selectors.VERSES_ALT)
+			const b_TopTitle = doc.querySelector(selectors.TOP_TITLE)
 
 			//Alternate container
 			if (b_TopTitle && b_TopTitle.textContent === "Lyrics") {
-				lContainer = doc.querySelector('.l_tac_facts')
+				lContainer = doc.querySelector(selectors.TAC_FACTS)
 			}
 
 			if (lContainer != null && Object.keys(lContainer).length != 0) {
@@ -510,7 +532,7 @@ async function searchBing(tabId, name, channel, signal) {
 			// console.log(r)
 			return JSON.stringify(r)
 		},
-		args: [response]
+		args: [response, SCRAPER_SELECTORS.BING]
 	});
 }
 
@@ -532,7 +554,7 @@ async function searchA2Z(tabId, name, channel, signal) {
 
 	return await chrome.scripting.executeScript({
 		target: { tabId },
-		function: (resp) => {
+		function: (resp, selectors) => {
 			// console.log(resp)
 			var lyrics = []
 			var message = ''
@@ -545,7 +567,7 @@ async function searchA2Z(tabId, name, channel, signal) {
 
 			let look = true;
 			let raw = ''
-			let refDiv = doc.querySelector(".ringtone");
+			let refDiv = doc.querySelector(selectors.RINGTONE);
 			if (refDiv && refDiv.nextElementSibling) {
 				while (look && refDiv.nextElementSibling) {
 					refDiv = refDiv.nextElementSibling;
@@ -563,6 +585,6 @@ async function searchA2Z(tabId, name, channel, signal) {
 			// console.log(r)
 			return JSON.stringify(r)
 		},
-		args: [page]
+		args: [page, SCRAPER_SELECTORS.A2Z]
 	});
 }
