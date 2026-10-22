@@ -280,9 +280,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         var searchingDiv = document.createElement('div');
                         searchingDiv.id = 'searchingDiv';
                         searchingDiv.className = 'not-found';
+                        var searchingSpinner = document.createElement('div');
+                        searchingSpinner.className = 'yf-search-spinner';
                         var searchingText = document.createElement('span');
-                        searchingText.className = 'not-found-text sizeM';
-                        searchingText.textContent = 'Searching...';
+                        searchingText.className = 'not-found-title';
+                        searchingText.textContent = 'Searching lyrics...';
+                        searchingDiv.appendChild(searchingSpinner);
                         searchingDiv.appendChild(searchingText);
 
                         var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
@@ -1167,9 +1170,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     var closeBtn = document.createElement('button');
                     closeBtn.className = 'yf-search-close-btn';
-                    closeBtn.textContent = '✕';
                     closeBtn.title = 'Close';
                     closeBtn.setAttribute('aria-label', 'Close search dropdown');
+                    closeBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    `;
                     closeBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         closeFloatingSearchDropdown();
@@ -1183,7 +1190,14 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         var noResDiv = document.createElement('div');
                         noResDiv.className = 'yf-search-status';
                         const safeQuery = query ? String(query).replace(/"/g, '&quot;') : '';
-                        noResDiv.innerHTML = `<span class="yf-search-status-text">No lyrics found for "${safeQuery}"</span>`;
+                        noResDiv.innerHTML = `
+                            <svg class="yf-search-status-icon" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                            </svg>
+                            <span class="yf-search-status-title">No Lyrics Found</span>
+                            <span class="yf-search-status-text">No matching lyrics found for "${safeQuery}".</span>
+                            <span class="yf-search-status-hint">Tip: Try searching with "Song Title - Artist" format.</span>
+                        `;
                         searchDropdown.appendChild(noResDiv);
                     } else {
                         var listDiv = document.createElement('div');
@@ -1473,9 +1487,14 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         searchDropdown.innerHTML = `
                             <div class="yf-search-dropdown-header">
                                 <span class="yf-search-dropdown-title">Searching...</span>
-                                <button class="yf-search-close-btn" title="Close" aria-label="Close">✕</button>
+                                <button class="yf-search-close-btn" title="Close" aria-label="Close">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                                    </svg>
+                                </button>
                             </div>
                             <div class="yf-search-status">
+                                <div class="yf-search-spinner"></div>
                                 <span class="yf-search-status-text">Searching lyrics for "${safeQuery}"...</span>
                             </div>
                         `;
@@ -1532,11 +1551,25 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     notFoundDiv.id = 'notFound';
                     notFoundDiv.className = 'not-found';
 
-                    var notFoundText = document.createElement('span');
-                    notFoundText.className = 'not-found-text sizeM';
-                    notFoundText.textContent = 'Not Found';
+                    var notFoundIcon = document.createElement('div');
+                    notFoundIcon.className = 'not-found-icon';
+                    notFoundIcon.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor">
+                            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                        </svg>
+                    `;
 
-                    notFoundDiv.appendChild(notFoundText);
+                    var notFoundTitle = document.createElement('span');
+                    notFoundTitle.className = 'not-found-title';
+                    notFoundTitle.textContent = 'No Lyrics Available';
+
+                    var notFoundSub = document.createElement('span');
+                    notFoundSub.className = 'not-found-subtext';
+                    notFoundSub.textContent = 'Use the search bar above to look up lyrics';
+
+                    notFoundDiv.appendChild(notFoundIcon);
+                    notFoundDiv.appendChild(notFoundTitle);
+                    notFoundDiv.appendChild(notFoundSub);
 
                     var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
                     if (existingContent) {
