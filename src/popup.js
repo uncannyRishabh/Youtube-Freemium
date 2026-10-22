@@ -21,7 +21,7 @@ function messageHandler(type, val) {
 document.addEventListener("DOMContentLoaded", async () => {
     // Clear notification badge when popup opens
     chrome.runtime.sendMessage({ action: 'clearUpdateBadge' });
-    messageHandler('clearUpdateBadge',)
+    messageHandler('clearUpdateBadge');
     
     const toggleExplicit = document.querySelector(POPUP_SELECTORS.EXPLICIT_FILTER);
     const toggleExplicitText = document.querySelector(POPUP_SELECTORS.EXPLICIT_FILTER_TEXT);
@@ -36,9 +36,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     let skipAdsState = userPrefs['yt-userPrefs']?.skipAdsState;
     
     if (!userPrefs['yt-userPrefs']) {
-        profanity = 'false'
-        kill_shorts = false
-        skipAdsState = 'OFF'
+        profanity = 'false';
+        kill_shorts = false;
+        skipAdsState = 'OFF';
         await saveObject('yt-userPrefs', { profanity });
     }
 
@@ -49,39 +49,55 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     killShortsText.textContent = kill_shorts 
         ? 'Enable Shorts'
-        : 'Disable Shorts'
+        : 'Disable Shorts';
+
+    // Keyboard support helper
+    const addKeyboardListener = (elem, clickHandler) => {
+        if (!elem) return;
+        elem.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                clickHandler ? clickHandler(e) : elem.click();
+            }
+        });
+    };
     
     // Handle profanity filter toggle
-    toggleExplicit.addEventListener('click', () => {
+    const handleProfanityToggle = () => {
         const isEnabled = toggleExplicitText.textContent === 'Enable profanity';
         
         toggleExplicitText.textContent = isEnabled 
             ? 'Disable profanity'
             : 'Enable profanity';
             
-        if(profanity === 'true'){
-            profanity = 'false'
-        }
-        else if(profanity === 'false'){
-            profanity = 'true'
+        if (profanity === 'true') {
+            profanity = 'false';
+        } else if (profanity === 'false') {
+            profanity = 'true';
         }
         
-        saveObject('yt-userPrefs', {'profanity' : profanity});
+        saveObject('yt-userPrefs', { 'profanity': profanity });
         messageHandler('PROFANITY_TOGGLE', profanity);
-    });
+    };
 
-    //Handle kill shorts button
-    killShorts.addEventListener('click', async() => {
-        kill_shorts = !kill_shorts
+    toggleExplicit.addEventListener('click', handleProfanityToggle);
+    addKeyboardListener(toggleExplicit, handleProfanityToggle);
+
+    // Handle kill shorts button
+    const handleKillShortsToggle = async () => {
+        kill_shorts = !kill_shorts;
 
         killShortsText.textContent = kill_shorts 
-        ? 'Enable Shorts'
-        : 'Disable Shorts'
+            ? 'Enable Shorts'
+            : 'Disable Shorts';
 
-        saveObject('yt-userPrefs', {'kill_shorts' : kill_shorts});
+        saveObject('yt-userPrefs', { 'kill_shorts': kill_shorts });
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        messageHandler('KILL_SHORTS',kill_shorts);
-    })
+        messageHandler('KILL_SHORTS', kill_shorts);
+    };
+
+    killShorts.addEventListener('click', handleKillShortsToggle);
+    addKeyboardListener(killShorts, handleKillShortsToggle);
 
     // Handle skip ads 3-state switch
     const skipAdsMenu = document.querySelector(POPUP_SELECTORS.SKIP_ADS_MENU);
@@ -96,22 +112,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     
     const savedSkipAdsState = skipAdsState || 'OFF';
     skipAdsState = savedSkipAdsState;
-    // updateSkipAdsUI();
-    skipAdsSubText.textContent = stateDescriptions[skipAdsState];
+    updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescriptions);
 
     switchButtons.forEach((button, index) => {
-        button.addEventListener('click', (e) => {
+        const selectState = (e) => {
             e.stopPropagation();
             const states = ['OFF', 'PARTIAL', 'FULL'];
             skipAdsState = states[index];
             updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescriptions);
-            saveObject('yt-userPrefs', {'skipAdsState': skipAdsState});
+            saveObject('yt-userPrefs', { 'skipAdsState': skipAdsState });
             messageHandler('SKIP_AD', skipAdsState);
-        });
+        };
+
+        button.addEventListener('click', selectState);
+        addKeyboardListener(button, selectState);
     });
 
     // Handle clear data button
-    clearData.addEventListener('click', () => {
+    const handleClearData = () => {
         chrome.storage.local.clear(() => {
             if (chrome.runtime.lastError) {
                 console.error('Error clearing storage:', chrome.runtime.lastError);
@@ -120,9 +138,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 saveObject('yt-userPrefs', getDefaultUserPrefs());
             }
         });
-    });
+    };
 
-    initWhatsNewCarousel()
+    clearData.addEventListener('click', handleClearData);
+    addKeyboardListener(clearData, handleClearData);
+
+    initWhatsNewCarousel();
 });
 
 function initWhatsNewCarousel() {
@@ -179,13 +200,15 @@ function initWhatsNewCarousel() {
 }
 
 function updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescriptions) {
-    // Update active button
+    // Update active button and aria attributes
     switchButtons.forEach((btn, idx) => {
         const states = ['OFF', 'PARTIAL', 'FULL'];
         if (states[idx] === skipAdsState) {
             btn.classList.add('active');
+            btn.setAttribute('aria-checked', 'true');
         } else {
             btn.classList.remove('active');
+            btn.setAttribute('aria-checked', 'false');
         }
     });
 
@@ -206,31 +229,22 @@ function updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescr
 
 * - Add sleep timer functionality
 * - Forward and backward buttons do not update the popup UI.
-* - Make bubble animation efficient - only run animation when tab is in focus
+* - Make bubble animation efficient - only run animation when tab is in focus ✅ 
 * - Make bubble animation take colors from album art
 * - Bubbles reacting to song beats
 * - Bubbles spinning when in searching mode
-* - Bubbles to spread out evenly and morph shape. 
-* - Search functionality with - is this correct lyrics ❌ / ✅ options
-* - Font Size not updating in local storage - intermittently
 * - Page refresh on clear data - on all open youtube tabs
 * - Re-render popup.js on clear data when open
 
 * - long press listener on increment/decrement offset
-* - add source - powered by stuff
-
-* - remove - now playing
 
 * - fix main called multiple times for same page
 * - re search if (source=lrclib && lastAccessed > 15 days && sync != true)
-* - add bottom margin for lyrics
 * - add youtube music distinction
 * - fix first install issue
 
 * - Clipse, Tyler, The Creator, Pusha T, Malice - P.O.V. (Official Music Video)
 
-* - make it collapsible/accordion
-* - implement apple search UI for search
 * - Share your experience bottom of lyric view (rating)
 * - save time saved & ads skipped count
 * - rename and obfuscate override code
@@ -239,7 +253,7 @@ function updateSkipAdsUI(switchButtons, skipAdsState, skipAdsSubText, stateDescr
 * - reload on disable/uninstall
 * - fix incorrect lyric tagging on nav music -> non music - intermittent
 * - feat : add album color based lamp 
-* - feat : update artist and song name fetching method
+* - feat : update artist and song name fetching method 
 * - remove data this time
 
 */

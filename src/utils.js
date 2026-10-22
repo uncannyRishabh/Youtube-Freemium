@@ -4,7 +4,8 @@ export function getDefaultUserPrefs(){
 	return {
 		profanity:'true',
 		kill_shorts:false,
-		skipAdsState:'OFF'
+		skipAdsState:'OFF',
+		fontSize: '24px'
 	}
 }
 
@@ -241,6 +242,223 @@ function generateLRCLIBUrl(track, artist){
 	artist = encodeURI(findLRCLibspecificName(artist))
 	
 	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
+}
+
+/**
+ * Searches LRCLIB for lyrics records.
+ * Supports "Song - Artist" queries (splitting on the first dash into track_name & artist_name)
+ * with graceful fallback to general search.
+ * @param {string} query - Track/artist search string
+ * @param {AbortSignal} [signal] - Optional abort signal
+ * @returns {Promise<Array>} Matching lyrics records
+ */
+export async function searchLrclibRecords(query, signal) {
+	const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
+	const myHeaders = new Headers();
+	myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
+	myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
+
+	const cleanQuery = (query || '')
+		.replace(/\[[^\]]*\]/g, '')
+		.trim();
+
+	if (!cleanQuery) return [];
+
+	let trackName = cleanQuery;
+	let artistName = '';
+
+	// If query contains dash, split from 1st element
+	if (cleanQuery.includes('-')) {
+		const firstDashIndex = cleanQuery.indexOf('-');
+		trackName = cleanQuery.substring(0, firstDashIndex).trim();
+		artistName = cleanQuery.substring(firstDashIndex + 1).trim();
+	}
+
+	let url = '';
+	if (artistName) {
+		url = `https://lrclib.net/api/search?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`;
+	} else {
+		url = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`;
+	}
+
+	console.log('[LRCLIB] Searching records:', url);
+
+	try {
+		const response = await fetch(url, {
+			method: "GET",
+			headers: myHeaders,
+			signal
+		});
+
+		if (response.status === 429) {
+			console.warn('[LRCLIB] Rate limited (429)');
+			return [];
+		}
+
+		let data = response.ok ? await response.json() : [];
+
+		// If specific track_name & artist_name yielded 0 results, fallback to general query
+		if ((!Array.isArray(data) || data.length === 0) && artistName) {
+			const fallbackUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`;
+			const fallbackResp = await fetch(fallbackUrl, {
+				method: "GET",
+				headers: myHeaders,
+				signal
+			});
+			if (fallbackResp.ok) {
+				const fallbackData = await fallbackResp.json();
+				if (Array.isArray(fallbackData)) {
+					data = fallbackData;
+				}
+			}
+		}
+
+		return Array.isArray(data) ? data : [];
+	} catch (error) {
+		console.warn('[LRCLIB] Search error or aborted:', error);
+		return [];
+	}
+}
+
+/**
+ * Fetches a single LRCLIB lyrics record by ID (used for retrieving full lyricsfile if needed)
+ * @param {number|string} id - Record ID
+ * @param {AbortSignal} [signal] - Optional abort signal
+ * @returns {Promise<Object|null>}
+ */
+export async function fetchLrclibRecordById(id, signal) {
+	if (!id) return null;
+	const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
+	const myHeaders = new Headers();
+	myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
+	myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
+
+	try {
+		const response = await fetch(`https://lrclib.net/api/get/${id}`, {
+			method: "GET",
+			headers: myHeaders,
+			signal
+		});
+		if (response.ok) {
+			return await response.json();
+		}
+		return null;
+	} catch (error) {
+		console.warn('[LRCLIB] Failed to fetch record by id:', id, error);
+		return null;
+	}
+}
+
+/**
+ * Parses Lyricsfile YAML format into lines with word timestamps
+ * Returns array of [ timestampStr, lineText, wordsArray ]
+ * wordsArray = [ { text, start, end } ] in seconds
+ * @param {string} yamlStr - Raw lyricsfile YAML string
+ * @returns {Array}
+ */
+export function parseLyricsfileYaml(yamlStr) {
+	if (!yamlStr || typeof yamlStr !== 'string') return [];
+	const lines = [];
+	const rawLines = yamlStr.split('\n');
+
+	let currentLine = null;
+	let currentWord = null;
+	let inWords = false;
+
+	function cleanVal(v) {
+		if (v == null) return '';
+		let s = String(v).trim();
+		if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+			s = s.slice(1, -1);
+		}
+		return s;
+	}
+
+	for (let i = 0; i < rawLines.length; i++) {
+		const raw = rawLines[i];
+		const trimmed = raw.trim();
+		if (!trimmed || trimmed.startsWith('#')) continue;
+
+		if (trimmed === 'lines:') {
+			inWords = false;
+			continue;
+		}
+
+		if (trimmed.startsWith('plain:') || trimmed.startsWith('version:') || trimmed.startsWith('metadata:')) {
+			inWords = false;
+			currentLine = null;
+			continue;
+		}
+
+		const indent = raw.search(/\S/);
+
+		// If indent <= 4 and starts with dash, it is definitely a new line item, NOT a word
+		if (trimmed.startsWith('-') && indent <= 4) {
+			inWords = false;
+			currentLine = { text: '', start_ms: 0, end_ms: 0, words: [] };
+			lines.push(currentLine);
+			currentWord = null;
+
+			const rest = trimmed.slice(1).trim();
+			if (rest.startsWith('text:')) {
+				currentLine.text = cleanVal(rest.slice(5));
+			}
+			continue;
+		}
+
+		if (trimmed === 'words:') {
+			inWords = true;
+			continue;
+		}
+
+		if (inWords) {
+			if (trimmed.startsWith('-')) {
+				currentWord = { text: '', start: 0, end: 0 };
+				if (currentLine) currentLine.words.push(currentWord);
+
+				const rest = trimmed.slice(1).trim();
+				if (rest.startsWith('text:')) {
+					currentWord.text = cleanVal(rest.slice(5));
+				}
+				continue;
+			}
+
+			const colonIdx = trimmed.indexOf(':');
+			if (colonIdx !== -1) {
+				const key = trimmed.slice(0, colonIdx).trim();
+				const val = cleanVal(trimmed.slice(colonIdx + 1));
+				if (key === 'text' && currentWord) {
+					currentWord.text = val;
+				} else if (key === 'start_ms' && currentWord) {
+					currentWord.start = parseInt(val, 10) / 1000;
+				} else if (key === 'end_ms' && currentWord) {
+					currentWord.end = parseInt(val, 10) / 1000;
+				}
+			}
+			continue;
+		}
+
+		const colonIdx = trimmed.indexOf(':');
+		if (colonIdx !== -1 && currentLine) {
+			const key = trimmed.slice(0, colonIdx).trim();
+			const val = cleanVal(trimmed.slice(colonIdx + 1));
+			if (key === 'text') {
+				currentLine.text = val;
+			} else if (key === 'start_ms') {
+				currentLine.start_ms = parseInt(val, 10);
+			} else if (key === 'end_ms') {
+				currentLine.end_ms = parseInt(val, 10);
+			}
+		}
+	}
+
+	return lines.map(line => {
+		const totalSec = (line.start_ms || 0) / 1000;
+		const m = Math.floor(totalSec / 60);
+		const s = (totalSec % 60).toFixed(2);
+		const ts = `${m < 10 ? '0' : ''}${m}:${parseFloat(s) < 10 ? '0' : ''}${s}`;
+		return [ts, line.text || '', line.words || []];
+	});
 }
 
 /**
