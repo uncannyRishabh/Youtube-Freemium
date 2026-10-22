@@ -76,14 +76,34 @@ export const YTF_SELECTORS = {
     },
     HEADER: {
         ROOT: '#header',
+        TOP_ROW: '.yf-header-top',
+        BOTTOM_ROW: '.yf-header-bottom',
+        ACTIONS: '.yf-header-actions',
         NOW_PLAYING_LABEL: '.now-playing',
         NOW_PLAYING_INPUT: '.now-playing-text-input',
         NOW_PLAYING_INPUT_ID: '#now-playing-text-input',
+        SEARCH_BTN: '.yf-search-btn',
         PROGRESS_BAR: '#ytf-progressbar',
         MENU_BTN: '.yf-menu',
         COLLAPSE_BTN: '#yf-collapse-btn',
         COLLAPSE_BTN_CLASS: '.yf-collapse-btn',
         COLLAPSE_ICON: '.yf-collapse-icon'
+    },
+    SEARCH: {
+        DROPDOWN: '#yf-search-dropdown',
+        DROPDOWN_CLASS: '.yf-search-dropdown',
+        SEARCH_BTN: '.yf-search-btn',
+        CLOSE_BTN: '.yf-search-close-btn',
+        RESULT_ITEM: '.yf-search-result-item',
+        WORD_SYNC_BADGE: '.yf-wordsync-badge',
+        SYNCED_BADGE: '.yf-synced-badge',
+        PLAIN_BADGE: '.yf-plain-badge'
+    },
+    LYRICS: {
+        WORD: '.yf-word',
+        WORD_CURRENT: '.yf-word-current',
+        WORD_SUNG: '.yf-word-sung',
+        WORD_UPCOMING: '.yf-word-upcoming'
     },
     DROPDOWN: {
         ROOT: '#yf-dropdown',

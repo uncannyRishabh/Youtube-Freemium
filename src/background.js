@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources } from './utils.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, fetchLrclibRecordById, parseLyricsfileYaml } from './utils.js';
 import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
 (() => {
@@ -106,7 +106,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     /**
      * Handles messages from content script
      */
-    chrome.runtime.onMessage.addListener(async (obj, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((obj, sender, sendResponse) => {
         const { type, val, action } = obj;
 
         if (action === 'clearUpdateBadge') {
@@ -114,6 +114,58 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         }
 
         switch (type) {
+            case 'SEARCH_LRCLIB': {
+                const query = val || obj.query;
+                searchLrclibRecords(query).then((results) => {
+                    sendResponse({ success: true, results });
+                }).catch((err) => {
+                    sendResponse({ success: false, error: err.message, results: [] });
+                });
+                return true;
+            }
+            case 'FETCH_LRCLIB_RECORD': {
+                const recordId = val || obj.id;
+                fetchLrclibRecordById(recordId).then((record) => {
+                    sendResponse({ success: true, record });
+                }).catch((err) => {
+                    sendResponse({ success: false, error: err.message });
+                });
+                return true;
+            }
+            case 'SAVE_SELECTED_LYRICS': {
+                const targetUid = obj.uid;
+                const data = obj.data || {};
+                if (targetUid) {
+                    saveObject(targetUid, {
+                        ...data,
+                        userSelected: true,
+                        message: 'OK',
+                        lastAccessed: Date.now()
+                    }).then(() => {
+                        sendResponse({ success: true });
+                    }).catch((err) => {
+                        sendResponse({ success: false, error: err.message });
+                    });
+                    return true;
+                }
+                sendResponse({ success: false, error: 'No UID provided' });
+                break;
+            }
+            case 'SAVE_FONT_SIZE': {
+                const rawSize = val || obj.fontSize;
+                if (rawSize) {
+                    const parsed = parseFloat(rawSize);
+                    const clampedSize = (!isNaN(parsed) ? Math.min(Math.max(parsed, 14), 36) : 24) + 'px';
+                    saveObject('yt-userPrefs', { fontSize: clampedSize }).then(() => {
+                        sendResponse({ success: true, fontSize: clampedSize });
+                    }).catch((err) => {
+                        sendResponse({ success: false, error: err.message });
+                    });
+                    return true;
+                }
+                sendResponse({ success: false, error: 'No font size provided' });
+                break;
+            }
             case 'PROFANITY_TOGGLE': {
                 currentState.tabList.forEach(async (tabId) => {
                     toggleProfanityFilter(tabId, JSON.parse(val));
@@ -175,6 +227,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         let isMusic = await musicCheck(tabId);
         var prefs = await getFromStorage('yt-userPrefs');
         var profanityCheck = prefs['yt-userPrefs']?.profanity;
+        var savedFontSize = prefs['yt-userPrefs']?.fontSize || '24px';
+        const parsedSaved = parseFloat(savedFontSize);
+        savedFontSize = (!isNaN(parsedSaved) ? Math.min(Math.max(parsedSaved, 14), 36) : 24) + 'px';
         let lyrics, message, title, source = '';
         let synced = false;
         let offset = 0.0;
@@ -193,7 +248,14 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             let result = await findSongAndArtist(tabId);
             let { val, channel } = result && result[0]?.result ? JSON.parse(result[0].result) : { val: '', channel: '' };
 
-            if ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val)) {
+            let displayTitle = val;
+            if (val && channel && !val.includes(' - ') && !val.toLowerCase().includes(channel.toLowerCase())) {
+                displayTitle = `${val} - ${channel}`;
+            }
+
+            const hasUserSelection = !isEmpty(obj) && obj[uid]?.userSelected === true && obj[uid]?.message === 'OK';
+
+            if (!hasUserSelection && ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val))) {
                 // Inject Searching UI state
                 await chrome.scripting.executeScript({
                     target: { tabId },
@@ -203,9 +265,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         if (!container) return;
 
                         var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
-                        if (npt) npt.placeholder = searchTitle || 'Searching...';
-                        var nowPlaying = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_LABEL);
-                        if (nowPlaying) nowPlaying.textContent = 'Searching -';
+                        if (npt) {
+                            npt.value = searchTitle || '';
+                            npt.placeholder = searchTitle || 'Searching...';
+                            npt.setAttribute('data-current-title', searchTitle || '');
+                        }
 
                         var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
                         if (progressbar) {
@@ -216,9 +280,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         var searchingDiv = document.createElement('div');
                         searchingDiv.id = 'searchingDiv';
                         searchingDiv.className = 'not-found';
+                        var searchingSpinner = document.createElement('div');
+                        searchingSpinner.className = 'yf-search-spinner';
                         var searchingText = document.createElement('span');
-                        searchingText.className = 'not-found-text sizeM';
-                        searchingText.textContent = 'Searching...';
+                        searchingText.className = 'not-found-title';
+                        searchingText.textContent = 'Searching lyrics...';
+                        searchingDiv.appendChild(searchingSpinner);
                         searchingDiv.appendChild(searchingText);
 
                         var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
@@ -228,7 +295,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             container.appendChild(searchingDiv);
                         }
                     },
-                    args: [val, YT_SELECTORS, YTF_SELECTORS]
+                    args: [displayTitle, YT_SELECTORS, YTF_SELECTORS]
                 });
 
                 let result = await findLyricsfromSources(tabId, "", val, channel, currentSearchController.signal);
@@ -246,7 +313,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 }
                 var scroll = 0;
                 var timeCreated = Date.now();
-                title = val;
+                title = displayTitle || val;
 
                 if (message === 'OK' && lyrics && lyrics.length > 0) {
                     saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source, synced, offset });
@@ -254,7 +321,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             } else if (!isEmpty(obj)) {
                 lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : '';
                 message = obj[uid]?.message ? obj[uid].message : "NOK";
-                title = obj[uid]?.title ? obj[uid].title : '';
+                title = obj[uid]?.title ? obj[uid].title : (displayTitle || '');
                 source = obj[uid]?.source ? obj[uid].source : '';
                 synced = obj[uid]?.synced ? obj[uid].synced : false;
                 offset = obj[uid]?.offset ? obj[uid].offset : 0;
@@ -274,7 +341,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL) => {
+            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize) => {
                 var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
                 var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
                 var intermediateContainer = ytc?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
@@ -283,6 +350,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                 if (mediaElem) {
                     mediaElem.setAttribute('ytf-data-offset', offset);
+                }
+
+                function clampFontSize(sizeStr) {
+                    const val = parseFloat(sizeStr);
+                    if (isNaN(val)) return '24px';
+                    const clamped = Math.min(Math.max(val, 14), 36);
+                    return Math.round(clamped) + 'px';
                 }
 
                 if (!container) {
@@ -344,19 +418,64 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     var nowPlayingDiv = document.createElement("div");
                     nowPlayingDiv.className = "now-playing-div";
 
-                    var nowPlayingSpan = document.createElement("span");
-                    nowPlayingSpan.className = "now-playing now-playing-text";
-                    nowPlayingSpan.textContent = "Searching -";
-
                     var nowPlayingText = document.createElement("input");
                     nowPlayingText.setAttribute("autocomplete", "off");
+                    nowPlayingText.setAttribute("spellcheck", "false");
                     nowPlayingText.id = "now-playing-text-input";
                     nowPlayingText.className = "now-playing-text-input";
-                    nowPlayingText.textContent = title;
-                    nowPlayingText.disabled = "disabled";
+                    nowPlayingText.value = title;
+                    nowPlayingText.placeholder = title || "Search song or artist...";
+                    nowPlayingText.setAttribute("data-current-title", title);
+                    nowPlayingText.title = "Click to search or edit song";
 
-                    nowPlayingDiv.appendChild(nowPlayingSpan);
+                    var searchBtn = document.createElement("button");
+                    searchBtn.className = "yf-search-btn";
+                    searchBtn.title = "Search lyrics";
+                    searchBtn.setAttribute("aria-label", "Search lyrics");
+                    searchBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                        </svg>
+                    `;
+
+                    nowPlayingText.addEventListener('focus', () => {
+                        nowPlayingDiv.classList.add('active-input');
+                        if (nowPlayingText.value === nowPlayingText.getAttribute('data-current-title')) {
+                            nowPlayingText.select();
+                        }
+                    });
+
+                    nowPlayingText.addEventListener('blur', () => {
+                        nowPlayingDiv.classList.remove('active-input');
+                        if (!nowPlayingText.value.trim()) {
+                            nowPlayingText.value = nowPlayingText.getAttribute('data-current-title') || '';
+                        }
+                    });
+
+                    nowPlayingText.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (container._performSearch) {
+                                container._performSearch(nowPlayingText.value.trim());
+                            }
+                        } else if (e.key === 'Escape') {
+                            nowPlayingText.value = nowPlayingText.getAttribute('data-current-title') || '';
+                            nowPlayingText.blur();
+                            if (container._closeSearchResults) {
+                                container._closeSearchResults();
+                            }
+                        }
+                    });
+
+                    searchBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (container._performSearch) {
+                            container._performSearch(nowPlayingText.value.trim());
+                        }
+                    });
+
                     nowPlayingDiv.appendChild(nowPlayingText);
+                    nowPlayingDiv.appendChild(searchBtn);
 
                     var menuSpan = document.createElement("span");
                     menuSpan.className = "yf-menu";
@@ -440,19 +559,22 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
-                                    if (currentFontSize > 11) {
-                                        var fontSize = (currentFontSize - 1) + 'px';
-                                        document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER).style.fontSize = fontSize;
-                                        localStorage.setItem('fontSize', fontSize);
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 24;
+                                    if (currentFontSize > 14) {
+                                        var fontSize = clampFontSize((currentFontSize - 1) + 'px');
+                                        var lc = document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
+                                        if (lc) lc.style.fontSize = fontSize;
+                                        try { localStorage.setItem('fontSize', fontSize); } catch(e) {}
+                                        chrome.runtime.sendMessage({ type: 'SAVE_FONT_SIZE', fontSize: fontSize });
                                         if (fontSizeElement) fontSizeElement.textContent = fontSize;
+                                        effectiveFontSize = fontSize;
                                     }
                                 });
 
                                 li.appendChild(document.createElement('span')).className = 'yf-fontSize';
                                 li.lastChild.id = 'yf-font-size';
-                                var localFontSize = localStorage.getItem('fontSize');
-                                li.lastChild.textContent = localFontSize ? localFontSize : '20px';
+                                var localFontSize = clampFontSize(initialFontSize || localStorage.getItem('fontSize') || '24px');
+                                li.lastChild.textContent = localFontSize;
 
                                 svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
                                 svgElement.setAttribute("height", "24");
@@ -466,12 +588,15 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                                 li.lastChild.addEventListener('click', () => {
                                     var fontSizeElement = li.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
-                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 20;
-                                    if (currentFontSize < 32) {
-                                        var fontSize = (currentFontSize + 1) + 'px';
-                                        document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER).style.fontSize = fontSize;
-                                        localStorage.setItem('fontSize', fontSize);
+                                    var currentFontSize = fontSizeElement.textContent ? parseFloat(fontSizeElement.textContent) : 24;
+                                    if (currentFontSize < 36) {
+                                        var fontSize = clampFontSize((currentFontSize + 1) + 'px');
+                                        var lc = document.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
+                                        if (lc) lc.style.fontSize = fontSize;
+                                        try { localStorage.setItem('fontSize', fontSize); } catch(e) {}
+                                        chrome.runtime.sendMessage({ type: 'SAVE_FONT_SIZE', fontSize: fontSize });
                                         if (fontSizeElement) fontSizeElement.textContent = fontSize;
+                                        effectiveFontSize = fontSize;
                                     }
                                 });
                                 break;
@@ -597,20 +722,35 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     var collapseBtn = document.createElement("button");
                     collapseBtn.id = "yf-collapse-btn";
                     collapseBtn.className = "yf-collapse-btn";
-                    collapseBtn.title = "Collapse / Expand";
+                    collapseBtn.title = "Collapse";
                     collapseBtn.setAttribute("aria-label", "Toggle lyrics panel");
                     collapseBtn.innerHTML = `
                         <svg class="yf-collapse-icon" viewBox="0 0 24 24" width="22" height="22">
-                            <path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                            <path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/>
                         </svg>
                     `;
 
                     const toggleCollapse = (e) => {
                         if (e) e.stopPropagation();
                         const isCollapsed = container.classList.toggle(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                        collapseBtn.title = isCollapsed ? 'Expand' : 'Collapse';
                         try {
                             localStorage.setItem('ytf-collapsed', isCollapsed ? 'true' : 'false');
                         } catch (err) {}
+
+                        // When icon is open (arrow up), use existing method to find out the lyric to highlight based on timestamp and highlight that lyric
+                        if (!isCollapsed && mediaElem) {
+                            if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                mediaElem._syncCurrentLyric(true);
+                                requestAnimationFrame(() => {
+                                    setTimeout(() => {
+                                        if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                            mediaElem._syncCurrentLyric(true);
+                                        }
+                                    }, 50);
+                                });
+                            }
+                        }
                     };
 
                     collapseBtn.addEventListener('click', toggleCollapse);
@@ -619,7 +759,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         if (e.target.closest(YTF_SEL.DROPDOWN.ROOT) ||
                             e.target.closest(YTF_SEL.HEADER.MENU_BTN) ||
                             e.target.closest(YTF_SEL.HEADER.NOW_PLAYING_INPUT) ||
+                            e.target.closest(YTF_SEL.HEADER.SEARCH_BTN) ||
                             e.target.closest(YTF_SEL.HEADER.COLLAPSE_BTN_CLASS) ||
+                            e.target.closest(YTF_SEL.SEARCH.DROPDOWN) ||
                             e.target.closest('a')) {
                             return;
                         }
@@ -628,13 +770,28 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     if (localStorage.getItem('ytf-collapsed') === 'true') {
                         container.classList.add(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                        collapseBtn.title = 'Expand';
+                    } else {
+                        collapseBtn.title = 'Collapse';
                     }
 
-                    header.appendChild(logoContainerDiv);
-                    header.appendChild(nowPlayingDiv);
-                    header.appendChild(menuSpan);
-                    header.appendChild(yfDropdown);
-                    header.appendChild(collapseBtn);
+                    var headerTop = document.createElement("div");
+                    headerTop.className = "yf-header-top";
+                    headerTop.appendChild(logoContainerDiv);
+
+                    var headerActions = document.createElement("div");
+                    headerActions.className = "yf-header-actions";
+                    headerActions.appendChild(menuSpan);
+                    headerActions.appendChild(collapseBtn);
+                    headerTop.appendChild(headerActions);
+                    headerTop.appendChild(yfDropdown);
+
+                    var headerBottom = document.createElement("div");
+                    headerBottom.className = "yf-header-bottom";
+                    headerBottom.appendChild(nowPlayingDiv);
+
+                    header.appendChild(headerTop);
+                    header.appendChild(headerBottom);
 
                     container.appendChild(header);
 
@@ -655,12 +812,201 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     offsetInputElement.value = offset.toFixed(2);
                 }
 
-                if (message === 'OK') {
-                    var nowPlaying = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_LABEL);
-                    if (nowPlaying) nowPlaying.textContent = 'Now Playing -';
+                if (npt) {
+                    npt.value = title;
+                    npt.setAttribute('data-current-title', title);
+                    npt.placeholder = title || 'Search song or artist...';
+                }
 
-                    if (npt) npt.placeholder = title;
-                    container.setAttribute('data-uid', uid);
+                var effectiveFontSize = clampFontSize(initialFontSize || localStorage.getItem('fontSize') || '24px');
+                var fontSizeDisplay = container.querySelector(YTF_SEL.DROPDOWN.FONT_SIZE);
+                if (fontSizeDisplay) {
+                    fontSizeDisplay.textContent = effectiveFontSize;
+                }
+                var existingLyricBox = container.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
+                if (existingLyricBox) {
+                    existingLyricBox.style.fontSize = effectiveFontSize;
+                }
+
+                let currentLyrics = lyrics;
+                let currentSynced = synced;
+                let currentSource = source;
+
+                function formatDuration(sec) {
+                    if (sec == null || isNaN(sec) || sec <= 0) return '--:--';
+                    const totalSec = Math.round(sec);
+                    const m = Math.floor(totalSec / 60);
+                    const s = totalSec % 60;
+                    return `${m}:${s < 10 ? '0' : ''}${s}`;
+                }
+
+                function parseLyricsfileYaml(yamlStr) {
+                    if (!yamlStr || typeof yamlStr !== 'string') return [];
+                    const lines = [];
+                    const rawLines = yamlStr.split('\n');
+
+                    let currentLine = null;
+                    let currentWord = null;
+                    let inWords = false;
+
+                    function cleanVal(v) {
+                        if (v == null) return '';
+                        let s = String(v).trim();
+                        if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+                            s = s.slice(1, -1);
+                        }
+                        return s;
+                    }
+
+                    for (let i = 0; i < rawLines.length; i++) {
+                        const raw = rawLines[i];
+                        const trimmed = raw.trim();
+                        if (!trimmed || trimmed.startsWith('#')) continue;
+
+                        if (trimmed === 'lines:') {
+                            inWords = false;
+                            continue;
+                        }
+
+                        if (trimmed.startsWith('plain:') || trimmed.startsWith('version:') || trimmed.startsWith('metadata:')) {
+                            inWords = false;
+                            currentLine = null;
+                            continue;
+                        }
+
+                        const indent = raw.search(/\S/);
+
+                        if (trimmed.startsWith('-') && indent <= 4) {
+                            inWords = false;
+                            currentLine = { text: '', start_ms: 0, end_ms: 0, words: [] };
+                            lines.push(currentLine);
+                            currentWord = null;
+
+                            const rest = trimmed.slice(1).trim();
+                            if (rest.startsWith('text:')) {
+                                currentLine.text = cleanVal(rest.slice(5));
+                            }
+                            continue;
+                        }
+
+                        if (trimmed === 'words:') {
+                            inWords = true;
+                            continue;
+                        }
+
+                        if (inWords) {
+                            if (trimmed.startsWith('-')) {
+                                currentWord = { text: '', start: 0, end: 0 };
+                                if (currentLine) currentLine.words.push(currentWord);
+
+                                const rest = trimmed.slice(1).trim();
+                                if (rest.startsWith('text:')) {
+                                    currentWord.text = cleanVal(rest.slice(5));
+                                }
+                                continue;
+                            }
+
+                            const colonIdx = trimmed.indexOf(':');
+                            if (colonIdx !== -1) {
+                                const key = trimmed.slice(0, colonIdx).trim();
+                                const val = cleanVal(trimmed.slice(colonIdx + 1));
+                                if (key === 'text' && currentWord) {
+                                    currentWord.text = val;
+                                } else if (key === 'start_ms' && currentWord) {
+                                    currentWord.start = parseInt(val, 10) / 1000;
+                                } else if (key === 'end_ms' && currentWord) {
+                                    currentWord.end = parseInt(val, 10) / 1000;
+                                }
+                            }
+                            continue;
+                        }
+
+                        const colonIdx = trimmed.indexOf(':');
+                        if (colonIdx !== -1 && currentLine) {
+                            const key = trimmed.slice(0, colonIdx).trim();
+                            const val = cleanVal(trimmed.slice(colonIdx + 1));
+                            if (key === 'text') {
+                                currentLine.text = val;
+                            } else if (key === 'start_ms') {
+                                currentLine.start_ms = parseInt(val, 10);
+                            } else if (key === 'end_ms') {
+                                currentLine.end_ms = parseInt(val, 10);
+                            }
+                        }
+                    }
+
+                    return lines.map(line => {
+                        const totalSec = (line.start_ms || 0) / 1000;
+                        const m = Math.floor(totalSec / 60);
+                        const s = (totalSec % 60).toFixed(2);
+                        const ts = `${m < 10 ? '0' : ''}${m}:${parseFloat(s) < 10 ? '0' : ''}${s}`;
+                        return [ts, line.text || '', line.words || []];
+                    });
+                }
+
+                function parseLrc(syncedLyrics) {
+                    if (!syncedLyrics) return [];
+                    const rawLines = syncedLyrics.replaceAll('[', '').split('\n').map(l => l.split(']'));
+                    function isValidTimestamp(ts) {
+                        return /^\d{2}:\d{2}\.\d{2,3}$/.test(ts);
+                    }
+                    const sortedLyrics = [];
+                    const valid = rawLines.filter(l => l[0] && isValidTimestamp(l[0]));
+                    valid.forEach(line => {
+                        if (!Array.isArray(line) || line.length < 2) return;
+                        const lyricText = line[line.length - 1];
+                        const timestamps = line.slice(0, -1);
+                        timestamps.forEach(ts => {
+                            if (!isValidTimestamp(ts)) return;
+                            const idx = sortedLyrics.findIndex(s => ts.localeCompare(s[0]) < 0);
+                            if (idx === -1) sortedLyrics.push([ts, lyricText]);
+                            else sortedLyrics.splice(idx, 0, [ts, lyricText]);
+                        });
+                    });
+                    return sortedLyrics;
+                }
+
+                function sortResultsByDuration(results, videoDuration) {
+                    return results.sort((a, b) => {
+                        const aDur = typeof a.duration === 'number' && !isNaN(a.duration) ? a.duration : 0;
+                        const bDur = typeof b.duration === 'number' && !isNaN(b.duration) ? b.duration : 0;
+
+                        // If videoDuration is available and valid (> 0):
+                        // Even when duration is < 59s, compare duration difference to video length
+                        if (videoDuration > 0) {
+                            const aDiff = aDur > 0 ? Math.abs(aDur - videoDuration) : 999999;
+                            const bDiff = bDur > 0 ? Math.abs(bDur - videoDuration) : 999999;
+
+                            if (Math.abs(aDiff - bDiff) > 2) {
+                                return aDiff - bDiff;
+                            }
+                        }
+
+                        // Secondary priority: prefer tracks with word sync
+                        if (a.hasWordSync && !b.hasWordSync) return -1;
+                        if (!a.hasWordSync && b.hasWordSync) return 1;
+
+                        // Tertiary priority: prefer tracks with synced lyrics
+                        const aHasSynced = !!(a.syncedLyrics && a.syncedLyrics.trim());
+                        const bHasSynced = !!(b.syncedLyrics && b.syncedLyrics.trim());
+                        if (aHasSynced && !bHasSynced) return -1;
+                        if (!aHasSynced && bHasSynced) return 1;
+
+                        // Quaternary priority: prefer tracks with plain lyrics
+                        const aHasPlain = !!(a.plainLyrics && a.plainLyrics.trim());
+                        const bHasPlain = !!(b.plainLyrics && b.plainLyrics.trim());
+                        if (aHasPlain && !bHasPlain) return -1;
+                        if (!aHasPlain && bHasPlain) return 1;
+
+                        return 0;
+                    });
+                }
+
+                function renderLyricsView(targetLyrics, targetSynced, targetSource, targetProfanity) {
+                    lyricElements = [];
+                    currentLyrics = targetLyrics;
+                    currentSynced = targetSynced;
+                    currentSource = targetSource;
 
                     intermediateContainer = document.createElement('div');
                     intermediateContainer.id = 'intermediateContainer';
@@ -669,9 +1015,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     var lyricContainer = document.createElement('div');
                     lyricContainer.id = 'lyricContainer';
                     lyricContainer.className = 'lyricContainer lyric sizeM';
-                    lyricContainer.setAttribute('data-profanity', profanityCheck);
+                    lyricContainer.setAttribute('data-profanity', targetProfanity);
 
-                    var localFontSize = localStorage.getItem('fontSize');
+                    var localFontSize = clampFontSize(effectiveFontSize || localStorage.getItem('fontSize') || '24px');
                     if (localFontSize) {
                         lyricContainer.style.fontSize = localFontSize;
                     }
@@ -687,46 +1033,49 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                     const re = new RegExp(`(${pattern})`, 'giu');
 
-                    lyrics = lyrics.reduce((acc, item) => {
-                        if (item.length >= 2) {
+                    var processedLyrics = (targetLyrics || []).reduce((acc, item) => {
+                        if (Array.isArray(item) ? item.length >= 2 : (item && String(item).trim())) {
                             acc.push(item);
                         }
                         return acc;
                     }, []);
 
-                    // Populate lyrics & detect instrumental gaps for Apple Music 3-dot equalizer
-                    lyrics.forEach((l, idx) => {
+                    processedLyrics.forEach((l) => {
                         var timestamp;
                         var rawText = l;
+                        var words = null;
                         if (Array.isArray(l)) {
                             timestamp = l[0];
                             rawText = l[1] ? l[1] : '';
+                            words = Array.isArray(l[2]) && l[2].length > 0 ? l[2] : null;
                         }
 
-                        var isBlankInterlude = !rawText || rawText.trim() === '' || rawText.trim() === '...';
+                        var isBlankInterlude = !rawText || String(rawText).trim() === '' || String(rawText).trim() === '...';
                         var d = document.createElement('span');
 
                         if (timestamp) {
                             d.setAttribute('data-timestamp', timestamp);
                             d.className = 'lyric-line';
                             d.addEventListener('click', function () {
-                                const mediaElem = document.querySelector('video');
-                                var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
+                                const mElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
+                                var curOffset = parseFloat(mElem?.getAttribute('ytf-data-offset')) || 0;
                                 const ts = this.getAttribute('data-timestamp');
                                 let seconds = 0;
                                 if (ts) {
                                     const parts = ts.split(':');
                                     if (parts.length === 2) {
                                         const min = parseInt(parts[0], 10);
-                                        const sec = parseFloat(parts[1]) - offset;
+                                        const sec = parseFloat(parts[1]) - curOffset;
                                         seconds = min * 60 + sec;
                                     }
                                 }
-                                if (mediaElem) mediaElem.currentTime = seconds;
+                                if (mElem) mElem.currentTime = seconds;
                             });
+                        } else {
+                            d.className = 'lyric-line';
                         }
 
-                        if (isBlankInterlude && synced) {
+                        if (isBlankInterlude && targetSynced) {
                             d.classList.add('am-interlude-line');
                             d.innerHTML = `
                                 <span class="am-interlude-dots active">
@@ -735,9 +1084,26 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                     <span class="am-interlude-dot"></span>
                                 </span>
                             `;
+                        } else if (words && words.length > 0) {
+                            d.classList.add('has-word-sync');
+                            words.forEach(w => {
+                                var wordSpan = document.createElement('span');
+                                wordSpan.className = 'yf-word yf-word-upcoming';
+                                wordSpan.setAttribute('data-start', w.start);
+                                wordSpan.setAttribute('data-end', w.end);
+                                var wordText = w.text || '';
+                                if (lyricContainer.getAttribute('data-profanity') === 'false') {
+                                    wordText = String(wordText).replaceAll(re, match => {
+                                        if (match.length <= 1) return '*';
+                                        return match.charAt(0) + '*'.repeat(match.length - 1);
+                                    });
+                                }
+                                wordSpan.textContent = wordText;
+                                d.appendChild(wordSpan);
+                            });
                         } else {
                             if (lyricContainer.getAttribute('data-profanity') === 'false') {
-                                var replacedLine = rawText.replaceAll(re, match => {
+                                var replacedLine = String(rawText).replaceAll(re, match => {
                                     if (match.length <= 1) return '*';
                                     return match.charAt(0) + '*'.repeat(match.length - 1);
                                 });
@@ -751,7 +1117,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         lyricContainer.appendChild(d);
                     });
 
-                    if (source && source.toUpperCase() === 'LRCLIB') {
+                    if (targetSource && targetSource.toUpperCase() === 'LRCLIB') {
                         var creditDiv = document.createElement('div');
                         creditDiv.className = 'yf-source-credit';
                         creditDiv.innerHTML = '<span>Lyrics provided by <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer" class="yf-source-link">LRCLIB</a></span>';
@@ -759,8 +1125,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         lyricContainer.appendChild(creditDiv);
                     }
 
-                    if (synced) {
-                        attachLyricsSync(mediaElem, lyrics, lyricContainer, lyricElements);
+                    if (targetSynced) {
+                        attachLyricsSync(mediaElem, processedLyrics, lyricContainer, lyricElements);
                     } else {
                         detachLyricsSync(mediaElem);
                     }
@@ -774,22 +1140,436 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     } else {
                         container.appendChild(intermediateContainer);
                     }
-                } else if (message === 'NOK') {
-                    if (npt) npt.placeholder = title;
-                    container.setAttribute('data-uid', uid);
+                }
 
-                    var nowPlaying = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_LABEL);
-                    if (nowPlaying) nowPlaying.textContent = 'Now Playing -';
+                let searchDropdown = null;
+
+                function closeFloatingSearchDropdown() {
+                    if (searchDropdown) {
+                        searchDropdown.remove();
+                        searchDropdown = null;
+                    }
+                }
+
+                function renderFloatingSearchDropdown(results, query, videoDuration) {
+                    closeFloatingSearchDropdown();
+
+                    var bottomBar = container.querySelector(YTF_SEL.HEADER.BOTTOM_ROW);
+                    if (!bottomBar) return;
+
+                    searchDropdown = document.createElement('div');
+                    searchDropdown.id = 'yf-search-dropdown';
+                    searchDropdown.className = 'yf-search-dropdown';
+
+                    var headerDiv = document.createElement('div');
+                    headerDiv.className = 'yf-search-dropdown-header';
+
+                    var headerTitle = document.createElement('span');
+                    headerTitle.className = 'yf-search-dropdown-title';
+                    headerTitle.textContent = results && results.length > 0 ? `Results (${results.length})` : 'Search Results';
+
+                    var closeBtn = document.createElement('button');
+                    closeBtn.className = 'yf-search-close-btn';
+                    closeBtn.title = 'Close';
+                    closeBtn.setAttribute('aria-label', 'Close search dropdown');
+                    closeBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    `;
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeFloatingSearchDropdown();
+                    });
+
+                    headerDiv.appendChild(headerTitle);
+                    headerDiv.appendChild(closeBtn);
+                    searchDropdown.appendChild(headerDiv);
+
+                    if (!results || results.length === 0) {
+                        var noResDiv = document.createElement('div');
+                        noResDiv.className = 'yf-search-status';
+                        const safeQuery = query ? String(query).replace(/"/g, '&quot;') : '';
+                        noResDiv.innerHTML = `
+                            <svg class="yf-search-status-icon" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                            </svg>
+                            <span class="yf-search-status-title">No Lyrics Found</span>
+                            <span class="yf-search-status-text">No matching lyrics found for "${safeQuery}".</span>
+                            <span class="yf-search-status-hint">Tip: Try searching with "Song Title - Artist" format.</span>
+                        `;
+                        searchDropdown.appendChild(noResDiv);
+                    } else {
+                        var listDiv = document.createElement('div');
+                        listDiv.className = 'yf-search-dropdown-list';
+
+                        results.forEach((item, index) => {
+                            var row = document.createElement('div');
+                            row.className = 'yf-search-result-item';
+                            row.setAttribute('data-index', index);
+
+                            var infoDiv = document.createElement('div');
+                            infoDiv.className = 'yf-result-info';
+
+                            var titleSpan = document.createElement('div');
+                            titleSpan.className = 'yf-result-title';
+                            titleSpan.textContent = item.trackName || 'Unknown Title';
+
+                            var artistSpan = document.createElement('div');
+                            artistSpan.className = 'yf-result-artist';
+                            const artistText = [item.artistName, item.albumName].filter(Boolean).join(' • ');
+                            artistSpan.textContent = artistText || 'Unknown Artist';
+
+                            infoDiv.appendChild(titleSpan);
+                            infoDiv.appendChild(artistSpan);
+
+                            var metaDiv = document.createElement('div');
+                            metaDiv.className = 'yf-result-meta';
+
+                            if (item.hasWordSync) {
+                                var wsBadge = document.createElement('span');
+                                wsBadge.className = 'yf-wordsync-badge';
+                                wsBadge.title = 'Word-by-word synced lyrics';
+                                wsBadge.innerHTML = `
+                                    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                                        <path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.5-6.2 4.5 2.4-7.4-6.2-4.5h7.6z"/>
+                                    </svg>
+                                    <span>Word Synced</span>
+                                `;
+                                metaDiv.appendChild(wsBadge);
+                            } else if (item.syncedLyrics && item.syncedLyrics.trim()) {
+                                var syncedBadge = document.createElement('span');
+                                syncedBadge.className = 'yf-synced-badge';
+                                syncedBadge.title = 'Time-synced lyrics';
+                                syncedBadge.innerHTML = `
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+                                        <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                                    </svg>
+                                    <span>Synced</span>
+                                `;
+                                metaDiv.appendChild(syncedBadge);
+                            } else {
+                                var plainBadge = document.createElement('span');
+                                plainBadge.className = 'yf-plain-badge';
+                                plainBadge.title = 'Plain text lyrics';
+                                plainBadge.textContent = 'Plain';
+                                metaDiv.appendChild(plainBadge);
+                            }
+
+                            var durationSpan = document.createElement('span');
+                            durationSpan.className = 'yf-result-duration';
+                            durationSpan.textContent = formatDuration(item.duration);
+                            metaDiv.appendChild(durationSpan);
+
+                            row.appendChild(infoDiv);
+                            row.appendChild(metaDiv);
+
+                            row.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                selectTrack(item);
+                            });
+
+                            listDiv.appendChild(row);
+                        });
+
+                        searchDropdown.appendChild(listDiv);
+                    }
+
+                    bottomBar.appendChild(searchDropdown);
+                }
+
+                function selectTrack(item) {
+                    closeFloatingSearchDropdown();
+
+                    const chosenTitle = `${item.trackName}${item.artistName ? ' - ' + item.artistName : ''}`;
+                    if (npt) {
+                        npt.value = chosenTitle;
+                        npt.setAttribute('data-current-title', chosenTitle);
+                        npt.placeholder = chosenTitle;
+                    }
+
+                    function applySelectedLyrics(chosenLyrics, isSynced, isWordSync) {
+                        const currentUid = container.getAttribute('data-uid') || uid;
+                        if (currentUid) {
+                            chrome.runtime.sendMessage({
+                                type: 'SAVE_SELECTED_LYRICS',
+                                uid: currentUid,
+                                data: {
+                                    lyrics: chosenLyrics,
+                                    title: chosenTitle,
+                                    synced: isSynced,
+                                    hasWordSync: isWordSync,
+                                    source: 'LRCLIB',
+                                    offset: 0
+                                }
+                            });
+                        }
+
+                        currentLyrics = chosenLyrics;
+                        currentSynced = isSynced;
+                        currentSource = 'LRCLIB';
+
+                        const existingIntermediate = container.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
+                        const notFoundElem = container.querySelector(YTF_SEL.CONTAINER.NOT_FOUND);
+
+                        if (!existingIntermediate || notFoundElem) {
+                            // Container was Not Found; swap it to intermediate container with lyrics
+                            renderLyricsView(chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
+                        } else {
+                            // Only update lyrics inside the existing lyricContainer in place!
+                            var lyricContainer = existingIntermediate.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
+                            if (lyricContainer) {
+                                detachLyricsSync(mediaElem);
+                                lyricElements = [];
+                                lyricContainer.innerHTML = '';
+                                lyricContainer.setAttribute('data-profanity', profanityCheck);
+                                var localFontSize = clampFontSize(effectiveFontSize || localStorage.getItem('fontSize') || '24px');
+                                if (localFontSize) {
+                                    lyricContainer.style.fontSize = localFontSize;
+                                }
+
+                                const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                                const re = new RegExp(`(${pattern})`, 'giu');
+
+                                var processedLyrics = (chosenLyrics || []).reduce((acc, lItem) => {
+                                    if (Array.isArray(lItem) ? lItem.length >= 2 : (lItem && String(lItem).trim())) {
+                                        acc.push(lItem);
+                                    }
+                                    return acc;
+                                }, []);
+
+                                processedLyrics.forEach((l) => {
+                                    var timestamp;
+                                    var rawText = l;
+                                    var words = null;
+                                    if (Array.isArray(l)) {
+                                        timestamp = l[0];
+                                        rawText = l[1] ? l[1] : '';
+                                        words = Array.isArray(l[2]) && l[2].length > 0 ? l[2] : null;
+                                    }
+
+                                    var isBlankInterlude = !rawText || String(rawText).trim() === '' || String(rawText).trim() === '...';
+                                    var d = document.createElement('span');
+
+                                    if (timestamp) {
+                                        d.setAttribute('data-timestamp', timestamp);
+                                        d.className = 'lyric-line';
+                                        d.addEventListener('click', function () {
+                                            const mElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
+                                            var curOffset = parseFloat(mElem?.getAttribute('ytf-data-offset')) || 0;
+                                            const ts = this.getAttribute('data-timestamp');
+                                            let seconds = 0;
+                                            if (ts) {
+                                                const parts = ts.split(':');
+                                                if (parts.length === 2) {
+                                                    const min = parseInt(parts[0], 10);
+                                                    const sec = parseFloat(parts[1]) - curOffset;
+                                                    seconds = min * 60 + sec;
+                                                }
+                                            }
+                                            if (mElem) mElem.currentTime = seconds;
+                                        });
+                                    } else {
+                                        d.className = 'lyric-line';
+                                    }
+
+                                    if (isBlankInterlude && isSynced) {
+                                        d.classList.add('am-interlude-line');
+                                        d.innerHTML = `
+                                            <span class="am-interlude-dots active">
+                                                <span class="am-interlude-dot"></span>
+                                                <span class="am-interlude-dot"></span>
+                                                <span class="am-interlude-dot"></span>
+                                            </span>
+                                        `;
+                                    } else if (words && words.length > 0) {
+                                        d.classList.add('has-word-sync');
+                                        words.forEach(w => {
+                                            var wordSpan = document.createElement('span');
+                                            wordSpan.className = 'yf-word yf-word-upcoming';
+                                            wordSpan.setAttribute('data-start', w.start);
+                                            wordSpan.setAttribute('data-end', w.end);
+                                            var wordText = w.text || '';
+                                            if (lyricContainer.getAttribute('data-profanity') === 'false') {
+                                                wordText = String(wordText).replaceAll(re, match => {
+                                                    if (match.length <= 1) return '*';
+                                                    return match.charAt(0) + '*'.repeat(match.length - 1);
+                                                });
+                                            }
+                                            wordSpan.textContent = wordText;
+                                            d.appendChild(wordSpan);
+                                        });
+                                    } else {
+                                        if (lyricContainer.getAttribute('data-profanity') === 'false') {
+                                            var replacedLine = String(rawText).replaceAll(re, match => {
+                                                if (match.length <= 1) return '*';
+                                                return match.charAt(0) + '*'.repeat(match.length - 1);
+                                            });
+                                            d.textContent = replacedLine || '...';
+                                        } else {
+                                            d.textContent = rawText || '...';
+                                        }
+                                    }
+
+                                    lyricElements.push(d);
+                                    lyricContainer.appendChild(d);
+                                });
+
+                                var creditDiv = document.createElement('div');
+                                creditDiv.className = 'yf-source-credit';
+                                creditDiv.innerHTML = '<span>Lyrics provided by <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer" class="yf-source-link">LRCLIB</a></span>';
+                                creditDiv.addEventListener('click', (e) => e.stopPropagation());
+                                lyricContainer.appendChild(creditDiv);
+
+                                if (isSynced) {
+                                    attachLyricsSync(mediaElem, processedLyrics, lyricContainer, lyricElements);
+                                }
+                                lyricContainer.scrollTop = 0;
+                            } else {
+                                renderLyricsView(chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
+                            }
+                        }
+                    }
+
+                    if (item.hasWordSync) {
+                        if (item.lyricsfile) {
+                            const parsed = parseLyricsfileYaml(item.lyricsfile);
+                            applySelectedLyrics(parsed.length > 0 ? parsed : parseLrc(item.syncedLyrics), true, parsed.length > 0);
+                        } else if (item.id) {
+                            chrome.runtime.sendMessage({ type: 'FETCH_LRCLIB_RECORD', id: item.id }, (resp) => {
+                                if (resp && resp.success && resp.record && resp.record.lyricsfile) {
+                                    const parsed = parseLyricsfileYaml(resp.record.lyricsfile);
+                                    applySelectedLyrics(parsed.length > 0 ? parsed : parseLrc(item.syncedLyrics), true, parsed.length > 0);
+                                } else if (item.syncedLyrics && item.syncedLyrics.trim()) {
+                                    applySelectedLyrics(parseLrc(item.syncedLyrics), true, false);
+                                } else {
+                                    applySelectedLyrics((item.plainLyrics || '').split('\n'), false, false);
+                                }
+                            });
+                        } else if (item.syncedLyrics && item.syncedLyrics.trim()) {
+                            applySelectedLyrics(parseLrc(item.syncedLyrics), true, false);
+                        } else {
+                            applySelectedLyrics((item.plainLyrics || '').split('\n'), false, false);
+                        }
+                    } else if (item.syncedLyrics && item.syncedLyrics.trim()) {
+                        applySelectedLyrics(parseLrc(item.syncedLyrics), true, false);
+                    } else if (item.plainLyrics && item.plainLyrics.trim()) {
+                        applySelectedLyrics(item.plainLyrics.split('\n'), false, false);
+                    } else {
+                        applySelectedLyrics(['[No lyrics available for this track]'], false, false);
+                    }
+                }
+
+                function performSearch(query) {
+                    if (!query) return;
+
+                    container.classList.remove(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                    var cBtn = container.querySelector('#yf-collapse-btn');
+                    if (cBtn) cBtn.title = 'Collapse';
+                    try {
+                        localStorage.setItem('ytf-collapsed', 'false');
+                    } catch (e) {}
+
+                    var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
+                    if (progressbar) {
+                        progressbar.classList.remove("no-animate");
+                        progressbar.classList.add("pure-material-progress-linear");
+                    }
+
+                    closeFloatingSearchDropdown();
+
+                    var bottomBar = container.querySelector(YTF_SEL.HEADER.BOTTOM_ROW);
+                    if (bottomBar) {
+                        searchDropdown = document.createElement('div');
+                        searchDropdown.id = 'yf-search-dropdown';
+                        searchDropdown.className = 'yf-search-dropdown';
+                        const safeQuery = String(query).replace(/"/g, '&quot;');
+                        searchDropdown.innerHTML = `
+                            <div class="yf-search-dropdown-header">
+                                <span class="yf-search-dropdown-title">Searching...</span>
+                                <button class="yf-search-close-btn" title="Close" aria-label="Close">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="yf-search-status">
+                                <div class="yf-search-spinner"></div>
+                                <span class="yf-search-status-text">Searching lyrics for "${safeQuery}"...</span>
+                            </div>
+                        `;
+                        searchDropdown.querySelector('.yf-search-close-btn')?.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            closeFloatingSearchDropdown();
+                        });
+                        bottomBar.appendChild(searchDropdown);
+                    }
+
+                    chrome.runtime.sendMessage({ type: 'SEARCH_LRCLIB', val: query }, (response) => {
+                        if (progressbar) {
+                            progressbar.classList.remove("pure-material-progress-linear");
+                            progressbar.classList.add("no-animate");
+                        }
+
+                        if (!response || !response.success || !response.results || response.results.length === 0) {
+                            renderFloatingSearchDropdown([], query, 0);
+                            return;
+                        }
+
+                        // Fetch video duration from DOM (consider even when < 59s)
+                        const videoElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
+                        const videoDuration = (videoElem && !isNaN(videoElem.duration) && videoElem.duration > 0)
+                            ? videoElem.duration
+                            : 0;
+
+                        const sorted = sortResultsByDuration(response.results, videoDuration);
+                        renderFloatingSearchDropdown(sorted, query, videoDuration);
+                    });
+                }
+
+                // Global listener to close search dropdown when clicking outside
+                document.addEventListener('mousedown', (e) => {
+                    if (searchDropdown && !searchDropdown.contains(e.target)) {
+                        const inputElem = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
+                        const searchBtnElem = container.querySelector(YTF_SEL.HEADER.SEARCH_BTN);
+                        if (inputElem && inputElem.contains(e.target)) return;
+                        if (searchBtnElem && searchBtnElem.contains(e.target)) return;
+                        closeFloatingSearchDropdown();
+                    }
+                });
+
+                container._performSearch = performSearch;
+                container._closeSearchResults = closeFloatingSearchDropdown;
+
+                if (message === 'OK') {
+                    container.setAttribute('data-uid', uid);
+                    renderLyricsView(lyrics, synced, source, profanityCheck);
+                } else if (message === 'NOK') {
+                    container.setAttribute('data-uid', uid);
 
                     var notFoundDiv = document.createElement('div');
                     notFoundDiv.id = 'notFound';
                     notFoundDiv.className = 'not-found';
 
-                    var notFoundText = document.createElement('span');
-                    notFoundText.className = 'not-found-text sizeM';
-                    notFoundText.textContent = 'Not Found';
+                    var notFoundIcon = document.createElement('div');
+                    notFoundIcon.className = 'not-found-icon';
+                    notFoundIcon.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor">
+                            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                        </svg>
+                    `;
 
-                    notFoundDiv.appendChild(notFoundText);
+                    var notFoundTitle = document.createElement('span');
+                    notFoundTitle.className = 'not-found-title';
+                    notFoundTitle.textContent = 'No Lyrics Available';
+
+                    var notFoundSub = document.createElement('span');
+                    notFoundSub.className = 'not-found-subtext';
+                    notFoundSub.textContent = 'Use the search bar above to look up lyrics';
+
+                    notFoundDiv.appendChild(notFoundIcon);
+                    notFoundDiv.appendChild(notFoundTitle);
+                    notFoundDiv.appendChild(notFoundSub);
 
                     var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
                     if (existingContent) {
@@ -799,7 +1579,6 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     }
                     detachLyricsSync(mediaElem);
                 } else {
-                    if (npt) npt.placeholder = title;
                     container.removeAttribute('data-uid');
 
                     var ytc = document.querySelector(YT_SEL.LAYOUT.SECONDARY_INNER);
@@ -865,11 +1644,39 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         }
                     }
 
+                    // Real-time word-level synchronization for active line
+                    if (el && el.classList.contains('has-word-sync')) {
+                        const wordSpans = el.querySelectorAll('.yf-word');
+                        for (let i = 0; i < wordSpans.length; i++) {
+                            const wSpan = wordSpans[i];
+                            const wStart = parseFloat(wSpan.getAttribute('data-start')) - offset;
+                            const wEnd = parseFloat(wSpan.getAttribute('data-end')) - offset;
+                            if (currentTime >= wEnd) {
+                                if (wSpan.className !== 'yf-word yf-word-sung') wSpan.className = 'yf-word yf-word-sung';
+                            } else if (currentTime >= wStart && currentTime < wEnd) {
+                                if (wSpan.className !== 'yf-word yf-word-current') wSpan.className = 'yf-word yf-word-current';
+                            } else {
+                                if (wSpan.className !== 'yf-word yf-word-upcoming') wSpan.className = 'yf-word yf-word-upcoming';
+                            }
+                        }
+                    }
+
                     if (currentLyricIndex !== activeIdx || immediate) {
                         if (currentActiveElement && currentActiveElement !== el) {
                             currentActiveElement.classList.remove('active-lyric');
                             const oldDots = currentActiveElement.querySelectorAll('.am-interlude-dot');
                             oldDots.forEach(d => d.classList.remove('lit'));
+                            const oldWords = currentActiveElement.querySelectorAll('.yf-word');
+                            oldWords.forEach(w => {
+                                const wEnd = parseFloat(w.getAttribute('data-end')) - offset;
+                                w.className = (currentTime >= wEnd) ? 'yf-word yf-word-sung' : 'yf-word yf-word-upcoming';
+                            });
+                        }
+                        if (immediate && el?.parentElement) {
+                            const prevActives = el.parentElement.querySelectorAll('.active-lyric');
+                            prevActives.forEach(prev => {
+                                if (prev !== el) prev.classList.remove('active-lyric');
+                            });
                         }
                         currentLyricIndex = activeIdx;
                         currentActiveElement = el;
@@ -921,13 +1728,24 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     document.addEventListener('visibilitychange', onVisibilityChange);
                     mediaElem._lyricsVisibilityChange = onVisibilityChange;
 
+                    mediaElem._syncCurrentLyric = function (immediate = true) {
+                        if (!mediaElem || !lyricsArr || !lyricElements || lyricElements.length === 0) return;
+                        var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
+                        syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, immediate);
+                    };
+
                     mediaElem._lyricsSyncHandler = function () {
-                        // Do not perform lyric sync if lyrics are not visible on screen or document is hidden
-                        if (!isLyricsVisible || document.hidden) return;
+                        // Do not perform lyric sync if lyrics are not visible on screen, document is hidden, or container is collapsed
+                        if (!isLyricsVisible || document.hidden || container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) return;
                         var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                         syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements);
                     };
                     mediaElem.addEventListener('timeupdate', mediaElem._lyricsSyncHandler);
+
+                    // If container is currently open, highlight active lyric immediately
+                    if (!container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) {
+                        mediaElem._syncCurrentLyric(true);
+                    }
                 }
 
                 function detachLyricsSync(mediaElem) {
@@ -944,10 +1762,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             mediaElem.removeEventListener('timeupdate', mediaElem._lyricsSyncHandler);
                             delete mediaElem._lyricsSyncHandler;
                         }
+                        if (mediaElem._syncCurrentLyric) {
+                            delete mediaElem._syncCurrentLyric;
+                        }
                     }
                 }
             },
-            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS]
+            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, savedFontSize]
         });
 
         // Apple Music Mesh Lava-Lamp Visualizer (Zero-Repaint GPU Composited)
@@ -1247,9 +2068,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     console.log('PROFANITY CHECKPOINT !!', bool)
 
-                    var localFontSize = localStorage.getItem('fontSize');
-                    if (localFontSize)
-                        lyricContainer.style.fontSize = localFontSize
+                    var localFontSize = localStorage.getItem('fontSize') || '24px';
+                    var parsedSize = parseFloat(localFontSize);
+                    if (!isNaN(parsedSize)) {
+                        localFontSize = Math.min(Math.max(parsedSize, 14), 36) + 'px';
+                    }
+                    lyricContainer.style.fontSize = localFontSize;
 
                     var lyricLines = lyricContainer.querySelectorAll('.lyric-line');
 

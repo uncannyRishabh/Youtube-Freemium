@@ -3,48 +3,36 @@ var primaryInner, secondaryInner
 var YT_SELECTORS, YTF_SELECTORS
 
 (async () => {
-	console.log('Script Injected')
-	
-	try {
-		const constants = await import(chrome.runtime.getURL('ytf-constants.js'));
-		YT_SELECTORS = constants.YT_SELECTORS;
-		YTF_SELECTORS = constants.YTF_SELECTORS;
-	} catch (e) {
-		console.error('Failed to import constants, falling back to defaults:', e);
-	}
+	console.log('Script Injected');
 
-	// Fallback definitions in case dynamic import fails
-	if (!YT_SELECTORS) {
-		YT_SELECTORS = {
-			LAYOUT: {
-				PRIMARY: 'ytd-watch-flexy #primary > #primary-inner',
-				SECONDARY: 'ytd-watch-flexy #secondary',
-				TARGET: (isNarrow) => isNarrow ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary'
-			},
-			METADATA: {
-				MUSIC_BADGE: 'button-view-model a',
-				FALLBACK_TITLE: '#above-the-fold > #title',
-				FALLBACK_CHANNEL: '#upload-info > #channel-name > div > div'
-			},
-			SHORTS: {
-				RICH_SECTION_SHELF: 'ytd-rich-section-renderer ytd-rich-shelf-renderer',
-				HIDE_CLASS: 'hide-youtube-shelves'
-			}
-		};
-	}
-	if (!YTF_SELECTORS) {
-		YTF_SELECTORS = {
-			CONTAINER: {
-				CLASS: '.yf-container',
-				IN_PRIMARY: 'ytd-watch-flexy #primary > #primary-inner > #yf-container',
-				IN_SECONDARY: 'ytd-watch-flexy #secondary > #yf-container'
-			},
-			HEADER: {
-				PROGRESS_BAR: '#ytf-progressbar',
-				NOW_PLAYING_LABEL: '.now-playing'
-			}
-		};
-	}
+	YT_SELECTORS = {
+		LAYOUT: {
+			PRIMARY: 'ytd-watch-flexy #primary > #primary-inner',
+			SECONDARY: 'ytd-watch-flexy #secondary',
+			TARGET: (isNarrow) => isNarrow ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary'
+		},
+		METADATA: {
+			MUSIC_BADGE: 'button-view-model a',
+			FALLBACK_TITLE: '#above-the-fold > #title',
+			FALLBACK_CHANNEL: '#upload-info > #channel-name > div > div'
+		},
+		SHORTS: {
+			RICH_SECTION_SHELF: 'ytd-rich-section-renderer ytd-rich-shelf-renderer',
+			HIDE_CLASS: 'hide-youtube-shelves'
+		}
+	};
+
+	YTF_SELECTORS = {
+		CONTAINER: {
+			CLASS: '.yf-container',
+			IN_PRIMARY: 'ytd-watch-flexy #primary > #primary-inner > #yf-container',
+			IN_SECONDARY: 'ytd-watch-flexy #secondary > #yf-container'
+		},
+		HEADER: {
+			PROGRESS_BAR: '#ytf-progressbar',
+			NOW_PLAYING_LABEL: '.now-playing'
+		}
+	};
 
 	// Load user preferences
 	var userPrefs = await getFromStorage('yt-userPrefs');
