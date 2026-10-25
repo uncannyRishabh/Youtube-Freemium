@@ -33,15 +33,19 @@ var YT_SELECTORS, YTF_SELECTORS
 
 	YTF_SELECTORS = {
 		CONTAINER: {
+			ROOT: '#yf-container',
 			CLASS: '.yf-container',
 			IN_PRIMARY: 'ytd-watch-flexy #primary > #primary-inner > #yf-container',
 			IN_SECONDARY: 'ytd-watch-flexy #secondary > #yf-container',
-			SWAP_TARGETS: '#searchingDiv, #intermediateContainer, #lyricContainer, #notFound'
+			SWAP_TARGETS: '#searchingDiv, #intermediateContainer, #lyricContainer, #notFound',
+			COLLAPSED_CLASS: 'collapsed'
 		},
 		HEADER: {
 			PROGRESS_BAR: '#ytf-progressbar',
 			NOW_PLAYING_LABEL: '.now-playing',
-			NOW_PLAYING_INPUT: '.now-playing-text-input'
+			NOW_PLAYING_INPUT: '.now-playing-text-input',
+			COLLAPSE_BTN: '#yf-collapse-btn',
+			COLLAPSE_BTN_CLASS: '.yf-collapse-btn'
 		}
 	};
 
@@ -159,6 +163,15 @@ var YT_SELECTORS, YTF_SELECTORS
 				progressbar.classList.remove('no-animate');
 			}
 			if (nowPlaying) nowPlaying.textContent = 'Searching -';
+		} else {
+			// Video is not a music video: ensure container remains closed
+			const ytc = document.querySelector(YT_SELECTORS.LAYOUT.TARGET(window.innerWidth < 1000));
+			const container = ytc?.querySelector(YTF_SELECTORS.CONTAINER.CLASS);
+			if (container) {
+				container.classList.add(YTF_SELECTORS.CONTAINER.COLLAPSED_CLASS);
+				const collapseBtn = container.querySelector(YTF_SELECTORS.HEADER.COLLAPSE_BTN) || container.querySelector(YTF_SELECTORS.HEADER.COLLAPSE_BTN_CLASS);
+				if (collapseBtn) collapseBtn.title = 'Expand';
+			}
 		}
 
 		chrome.runtime.sendMessage({

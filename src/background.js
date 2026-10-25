@@ -517,7 +517,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize) => {
+            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize, isMusic) => {
                 const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
                 if (!watchFlexy) return;
                 const domUid = watchFlexy.getAttribute('video-id');
@@ -528,6 +528,10 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 var intermediateContainer = ytc?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
                 var lyricElements = [];
                 const mediaElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
+
+                if (container) {
+                    container._currentUid = uid;
+                }
 
                 if (mediaElem) {
                     mediaElem.setAttribute('ytf-data-offset', offset);
@@ -983,6 +987,21 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             localStorage.setItem('ytf-collapsed', isCollapsed ? 'true' : 'false');
                         } catch (err) {}
 
+                        const currentUid = container._currentUid || container.getAttribute('data-uid') || uid;
+                        if (isCollapsed) {
+                            if (currentUid) {
+                                container.setAttribute('data-manually-closed-uid', currentUid);
+                                try {
+                                    sessionStorage.setItem('ytf-manually-closed-uid', currentUid);
+                                } catch (err) {}
+                            }
+                        } else {
+                            container.removeAttribute('data-manually-closed-uid');
+                            try {
+                                sessionStorage.removeItem('ytf-manually-closed-uid');
+                            } catch (err) {}
+                        }
+
                         // When icon is open (arrow up), use existing method to find out the lyric to highlight based on timestamp and highlight that lyric
                         if (!isCollapsed && mediaElem) {
                             if (typeof mediaElem._syncCurrentLyric === 'function') {
@@ -1013,7 +1032,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         toggleCollapse(e);
                     });
 
-                    if (localStorage.getItem('ytf-collapsed') === 'true') {
+                    const activeUid = uid || (new URL(window.location.href)).searchParams.get('v');
+                    const manuallyClosedUid = container.getAttribute('data-manually-closed-uid') || (function () {
+                        try { return sessionStorage.getItem('ytf-manually-closed-uid'); } catch (err) { return null; }
+                    })();
+                    const isManuallyClosedForThisVideo = Boolean(activeUid && manuallyClosedUid === activeUid);
+
+                    if (isManuallyClosedForThisVideo || !isMusic || localStorage.getItem('ytf-collapsed') === 'true') {
                         container.classList.add(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
                         collapseBtn.title = 'Expand';
                     } else {
@@ -1050,6 +1075,38 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         ytc.insertBefore(container, ytc.firstChild);
                     }
                 }
+
+                function openContainer() {
+                    container.classList.remove(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                    var cBtn = container.querySelector(YTF_SEL.HEADER.COLLAPSE_BTN) || container.querySelector(YTF_SEL.HEADER.COLLAPSE_BTN_CLASS);
+                    if (cBtn) cBtn.title = 'Collapse';
+                    try {
+                        localStorage.setItem('ytf-collapsed', 'false');
+                    } catch (e) {}
+
+                    if (mediaElem && typeof mediaElem._syncCurrentLyric === 'function') {
+                        mediaElem._syncCurrentLyric(true);
+                        requestAnimationFrame(() => {
+                            setTimeout(() => {
+                                if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                    mediaElem._syncCurrentLyric(true);
+                                }
+                            }, 50);
+                        });
+                    }
+                }
+
+                function closeContainer() {
+                    container.classList.add(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
+                    var cBtn = container.querySelector(YTF_SEL.HEADER.COLLAPSE_BTN) || container.querySelector(YTF_SEL.HEADER.COLLAPSE_BTN_CLASS);
+                    if (cBtn) cBtn.title = 'Expand';
+                    try {
+                        localStorage.setItem('ytf-collapsed', 'true');
+                    } catch (e) {}
+                }
+
+                container._openContainer = openContainer;
+                container._closeContainer = closeContainer;
 
                 var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                 var offsetInputElement = container.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT);
@@ -1556,6 +1613,16 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         currentSynced = isSynced;
                         currentSource = 'LRCLIB';
 
+                        // Explicit user track selection: clear manual collapse for this video and open container
+                        container.removeAttribute('data-manually-closed-uid');
+                        try {
+                            sessionStorage.removeItem('ytf-manually-closed-uid');
+                        } catch (e) {}
+
+                        if (container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) {
+                            openContainer();
+                        }
+
                         const existingIntermediate = container.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
                         const notFoundElem = container.querySelector(YTF_SEL.CONTAINER.NOT_FOUND);
 
@@ -1710,12 +1777,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 function performSearch(query) {
                     if (!query) return;
 
-                    container.classList.remove(YTF_SEL.CONTAINER.COLLAPSED_CLASS);
-                    var cBtn = container.querySelector('#yf-collapse-btn');
-                    if (cBtn) cBtn.title = 'Collapse';
+                    container.removeAttribute('data-manually-closed-uid');
                     try {
-                        localStorage.setItem('ytf-collapsed', 'false');
+                        sessionStorage.removeItem('ytf-manually-closed-uid');
                     } catch (e) {}
+
+                    openContainer();
 
                     var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
                     if (progressbar) {
@@ -1788,9 +1855,23 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 container._performSearch = performSearch;
                 container._closeSearchResults = closeFloatingSearchDropdown;
 
-                if (message === 'OK') {
+                const hasLyrics = (message === 'OK' && lyrics && lyrics.length > 0);
+                const activeUid = uid || container.getAttribute('data-uid') || (new URL(window.location.href)).searchParams.get('v');
+                const manuallyClosedUid = container.getAttribute('data-manually-closed-uid') || (function () {
+                    try { return sessionStorage.getItem('ytf-manually-closed-uid'); } catch (err) { return null; }
+                })();
+                const isManuallyClosedForThisVideo = Boolean(activeUid && manuallyClosedUid === activeUid);
+
+                if (hasLyrics) {
                     container.setAttribute('data-uid', uid);
                     renderLyricsView(lyrics, synced, source, profanityCheck);
+
+                    // Opens up when lyrics is found and container is closed, unless closed manually by user
+                    if (!isManuallyClosedForThisVideo) {
+                        if (container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) {
+                            openContainer();
+                        }
+                    }
                 } else if (message === 'NOK') {
                     container.setAttribute('data-uid', uid);
 
@@ -1825,6 +1906,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         container.appendChild(notFoundDiv);
                     }
                     detachLyricsSync(mediaElem);
+
+                    // Container remains closed if video is not a music video or closed manually
+                    if (!isMusic || isManuallyClosedForThisVideo) {
+                        if (!container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) {
+                            closeContainer();
+                        }
+                    }
                 } else {
                     container.removeAttribute('data-uid');
 
@@ -1835,6 +1923,10 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         c.removeChild(c.lastChild);
                     }
                     detachLyricsSync(mediaElem);
+
+                    if (!isMusic || isManuallyClosedForThisVideo) {
+                        closeContainer();
+                    }
                 }
 
                 var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
@@ -2015,7 +2107,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     }
                 }
             },
-            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, savedFontSize]
+            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, savedFontSize, isMusic]
         });
 
         // Apple Music Mesh Lava-Lamp Visualizer (Zero-Repaint GPU Composited)
