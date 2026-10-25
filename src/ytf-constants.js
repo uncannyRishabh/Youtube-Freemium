@@ -35,7 +35,7 @@ export const YT_SELECTORS = {
         ],
         MUSIC_CARD_TITLE_SUFFIX: ' > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)',
         MUSIC_CARD_ARTIST_SUFFIX: ' > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)',
-        FALLBACK_TITLE: '#above-the-fold > #title',
+        FALLBACK_TITLE: '#above-the-fold h1, ytd-watch-metadata #title, #above-the-fold #title',
         FALLBACK_CHANNEL: '#upload-info > #channel-name > div > div'
     },
     SHORTS: {

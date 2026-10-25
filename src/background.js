@@ -142,13 +142,24 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         }
 
         switch (type) {
+            case 'YOUTUBE_NAVIGATE_START': {
+                if (currentSearchController) {
+                    currentSearchController.abort('Navigation started');
+                }
+                currentState.uid = null;
+                break;
+            }
             case 'YOUTUBE_PAGE_DATA_UPDATED': {
                 const targetUrl = obj.url || sender.tab?.url;
                 const targetTabId = sender.tab?.id;
                 if (targetUrl && targetTabId && targetUrl.includes(YOUTUBE_WATCH_URL)) {
                     currentState.tabTitle = sender.tab?.title;
                     currentState.uid = obj.uid || getVideoID(targetUrl);
-                    main(targetUrl, targetTabId);
+                    main(targetUrl, targetTabId, {
+                        isMusic: obj.isMusic,
+                        title: obj.title,
+                        channel: obj.channel
+                    });
                 }
                 break;
             }
@@ -244,7 +255,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     /**
      * Main processing function for YouTube page changes
      */
-    async function main(url, tabId) {
+    async function main(url, tabId, preloadedMetadata = null) {
         currentState.process = true;
         currentState.reqUrl = url;
         const targetUid = getVideoID(url);
@@ -254,68 +265,88 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             currentState.tabList.push(tabId);
         }
 
-        if (currentState.tabList.includes(tabId)) {
-            chrome.tabs.sendMessage(tabId, {
-                type: "NEW_SEARCH",
-                'val': targetUid
-            }, (response) => {
-                if (chrome.runtime.lastError) {
-                    // Content script not ready yet
-                }
-                try {
-                    runInContext(url, tabId);
-                } catch (error) {
-                    console.log(error);
-                }
-            });
+        try {
+            await runInContext(url, tabId, preloadedMetadata);
+        } catch (error) {
+            console.log(error);
         }
     }
 
     /**
      * Waits until the active watch page DOM inside the tab matches the target video ID
-     * and has rendered its primary metadata, avoiding race conditions with stale DOM.
+     * and has rendered its primary metadata, using reactive MutationObserver (push-based, no polling).
      */
     async function waitForWatchPageReady(tabId, uid, maxWaitMs = 3000) {
         try {
             const results = await chrome.scripting.executeScript({
                 target: { tabId },
-                function: (expectedUid, timeout) => {
+                function: (expectedUid, timeout, YT_SEL) => {
                     return new Promise((resolve) => {
-                        const startTime = Date.now();
-
-                        function check() {
+                        const checkImmediate = () => {
                             const currentUrl = window.location.href;
                             if (!currentUrl.includes(expectedUid)) {
-                                resolve(false);
-                                return;
+                                return false;
                             }
 
                             const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
                             const domUid = watchFlexy?.getAttribute('video-id');
 
                             if (watchFlexy && domUid === expectedUid) {
-                                const titleEl = watchFlexy.querySelector('#above-the-fold > #title');
+                                const titleEl = watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_TITLE);
                                 const titleText = titleEl?.textContent?.trim();
                                 if (titleText && titleText.length > 0) {
-                                    resolve(true);
-                                    return;
+                                    return true;
                                 }
                             }
+                            return false;
+                        };
 
-                            if (Date.now() - startTime >= timeout) {
-                                resolve(Boolean(watchFlexy && domUid === expectedUid));
-                                return;
-                            }
-
-                            setTimeout(check, 100);
+                        if (checkImmediate()) {
+                            resolve(true);
+                            return;
                         }
 
-                        check();
+                        let finished = false;
+                        let timer = null;
+                        let observer = null;
+
+                        const cleanup = (result) => {
+                            if (finished) return;
+                            finished = true;
+                            if (timer) clearTimeout(timer);
+                            if (observer) observer.disconnect();
+                            window.removeEventListener('yt-page-data-updated', onPageData);
+                            resolve(result);
+                        };
+
+                        const onPageData = () => {
+                            if (checkImmediate()) cleanup(true);
+                        };
+                        window.addEventListener('yt-page-data-updated', onPageData);
+
+                        observer = new MutationObserver(() => {
+                            if (checkImmediate()) cleanup(true);
+                        });
+
+                        const target = document.querySelector('ytd-page-manager') || document.querySelector('ytd-app') || document.body;
+                        if (target) {
+                            observer.observe(target, {
+                                attributes: true,
+                                attributeFilter: ['video-id', 'hidden'],
+                                childList: true,
+                                subtree: true
+                            });
+                        }
+
+                        // Single fallback timeout (not a polling loop) to prevent dangling listeners
+                        timer = setTimeout(() => {
+                            cleanup(checkImmediate());
+                        }, timeout);
                     });
                 },
-                args: [uid, maxWaitMs]
+                args: [uid, maxWaitMs, YT_SELECTORS]
             });
-            return results && results[0]?.result;
+            return Boolean(results && results[0]?.result);
         } catch (e) {
             console.warn('waitForWatchPageReady error:', e);
             return false;
@@ -368,7 +399,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         });
     }
 
-    const runInContext = async (url, tabId) => {
+    const runInContext = async (url, tabId, preloadedMetadata = null) => {
         var uid = getVideoID(url);
         if (!uid) return;
 
@@ -378,14 +409,25 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         currentSearchController = new AbortController();
         const searchSignal = currentSearchController.signal;
 
-        // Ensure DOM has loaded and matches the target UID before querying metadata
-        await waitForWatchPageReady(tabId, uid);
+        let metadata = preloadedMetadata;
+        if (!metadata || metadata.isMusic === undefined) {
+            // Push-based observer wait until DOM is ready for the target UID
+            const isReady = await waitForWatchPageReady(tabId, uid);
+            if (!isReady || searchSignal.aborted || currentState.uid !== uid) {
+                return;
+            }
+            metadata = await getVideoMusicMetadata(tabId, uid);
+        }
+
         if (searchSignal.aborted || currentState.uid !== uid) {
             return;
         }
 
+        const isMusic = Boolean(metadata.isMusic);
+        const val = metadata.title || metadata.val || '';
+        const channel = metadata.channel || '';
+
         var obj = await getFromStorage(uid);
-        const { isMusic, val, channel } = await getVideoMusicMetadata(tabId, uid);
         var prefs = await getFromStorage('yt-userPrefs');
         var profanityCheck = prefs['yt-userPrefs']?.profanity ?? true;
         var savedFontSize = normalizeFontSize(prefs['yt-userPrefs']?.fontSize);
