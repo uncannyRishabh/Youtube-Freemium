@@ -37,20 +37,14 @@ export const exactProfanityDictionary = []
  * @returns {Promise} Promise that resolves when save is complete
  */
 export async function saveObject(uid, obj) {
-	// Get current prefs
-	if (uid === 'yt-userPrefs') {
-		const currentPrefs = await getFromStorage('yt-userPrefs');
-		// Merge obj into currentPrefs['yt-userPrefs']
-		const updatedPrefs = { ...currentPrefs['yt-userPrefs'], ...obj };
-		obj = updatedPrefs;
-
-		console.log('UID: ' + uid + ' obj : ' + obj)
-		console.log(obj)
-	}
+	// Retrieve existing data for uid so properties are merged safely across updates
+	const current = await getFromStorage(uid);
+	const existing = (current && current[uid]) || {};
+	const merged = { ...existing, ...obj };
 
 	// Save back to storage
 	return new Promise((resolve, reject) => {
-		chrome.storage.local.set({ [uid]: obj }, () => {
+		chrome.storage.local.set({ [uid]: merged }, () => {
 			if (chrome.runtime.lastError) {
 				reject(chrome.runtime.lastError);
 			}

@@ -151,6 +151,20 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 sendResponse({ success: false, error: 'No UID provided' });
                 break;
             }
+            case 'SAVE_OFFSET': {
+                const targetUid = obj.uid;
+                const newOffset = parseFloat(obj.offset !== undefined ? obj.offset : val);
+                if (targetUid && !isNaN(newOffset)) {
+                    saveObject(targetUid, { offset: newOffset }).then(() => {
+                        sendResponse({ success: true, offset: newOffset });
+                    }).catch((err) => {
+                        sendResponse({ success: false, error: err.message });
+                    });
+                    return true;
+                }
+                sendResponse({ success: false, error: 'Invalid UID or offset' });
+                break;
+            }
             case 'SAVE_FONT_SIZE': {
                 const rawSize = val || obj.fontSize;
                 if (rawSize) {
@@ -255,7 +269,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
             const hasUserSelection = !isEmpty(obj) && obj[uid]?.userSelected === true && obj[uid]?.message === 'OK';
 
-            if (!hasUserSelection && ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val) || (isEmpty(obj) && val))) {
+            if (!hasUserSelection && ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val && obj[uid]?.title != displayTitle) || (isEmpty(obj) && val))) {
                 // Inject Searching UI state
                 await chrome.scripting.executeScript({
                     target: { tabId },
@@ -301,15 +315,24 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 let result = await findLyricsfromSources(tabId, "", val, channel, currentSearchController.signal);
                 let resultObject = JSON.parse(result[0]?.result);
 
+                const existingSavedOffset = (obj && obj[uid] && obj[uid].offset !== undefined && obj[uid].offset !== null && !isNaN(parseFloat(obj[uid].offset)))
+                    ? parseFloat(obj[uid].offset)
+                    : null;
+
                 if (resultObject === undefined || resultObject === null || resultObject.message === 'NOK') {
                     lyrics = '';
                     message = 'NOK';
+                    offset = existingSavedOffset !== null ? existingSavedOffset : 0;
                 } else {
                     lyrics = resultObject.lyrics ? resultObject.lyrics : '';
                     message = resultObject.message ? resultObject.message : '';
                     source = resultObject.source ? resultObject.source : '';
                     synced = resultObject.synced ? resultObject.synced : synced;
-                    offset = resultObject.offset ? resultObject.offset : 0;
+                    offset = existingSavedOffset !== null
+                        ? existingSavedOffset
+                        : ((resultObject.offset !== undefined && resultObject.offset !== null && !isNaN(parseFloat(resultObject.offset)))
+                            ? parseFloat(resultObject.offset)
+                            : 0);
                 }
                 var scroll = 0;
                 var timeCreated = Date.now();
@@ -324,7 +347,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 title = obj[uid]?.title ? obj[uid].title : (displayTitle || '');
                 source = obj[uid]?.source ? obj[uid].source : '';
                 synced = obj[uid]?.synced ? obj[uid].synced : false;
-                offset = obj[uid]?.offset ? obj[uid].offset : 0;
+                const savedOffset = obj[uid]?.offset;
+                offset = (savedOffset !== undefined && savedOffset !== null && !isNaN(parseFloat(savedOffset))) ? parseFloat(savedOffset) : 0;
             }
         } else {
             lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : '';
@@ -332,7 +356,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             title = obj[uid]?.title ? obj[uid].title : '';
             source = obj[uid]?.source ? obj[uid].source : '';
             synced = obj[uid]?.synced ? obj[uid].synced : false;
-            offset = obj[uid]?.offset ? obj[uid].offset : 0;
+            const savedOffset = obj[uid]?.offset;
+            offset = (savedOffset !== undefined && savedOffset !== null && !isNaN(parseFloat(savedOffset))) ? parseFloat(savedOffset) : 0;
         }
 
         if (!profanityCheck || profanityCheck == undefined) {
@@ -615,71 +640,169 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.appendChild(document.createElement('span')).className = 'yf-dd-item-cont';
                                 li.lastChild.textContent = optionText;
 
-                                svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
-                                svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
-                                svgElement.id = 'ytf-offset-decrement';
-                                svgElement.classList.add('sFont', 'material-symbols-outlined');
+                                const decrementBtn = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                decrementBtn.setAttribute("height", "24");
+                                decrementBtn.setAttribute("viewBox", "0 -960 960 960");
+                                decrementBtn.setAttribute("width", "24");
+                                decrementBtn.id = 'ytf-offset-decrement';
+                                decrementBtn.classList.add('sFont', 'material-symbols-outlined');
+                                decrementBtn.setAttribute('title', 'Decrease offset (hold to rapidly decrease)');
+                                decrementBtn.setAttribute('aria-label', 'Decrease offset');
                                 pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "M609.975-454.001q-11.033 0-18.657-7.418-7.625-7.418-7.625-18.384 0-10.966 7.463-18.581t18.496-7.615h215.757q11.033 0 18.658 7.418 7.624 7.418 7.624 18.384 0 10.966-7.463 18.581t-18.495 7.615H609.975Zm-403.58 79.846-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Z");
-                                svgElement.appendChild(pathElement);
-                                li.appendChild(svgElement);
+                                decrementBtn.appendChild(pathElement);
+                                li.appendChild(decrementBtn);
 
-                                li.lastChild.addEventListener('click', async () => {
-                                    var offsetValueElement = li.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT);
-                                    offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
-                                    offset = Math.round((offset - 0.25) * 100) / 100;
-                                    offsetValueElement.value = offset.toFixed(2);
-                                    mediaElem.setAttribute('ytf-data-offset', offset);
-                                    await saveObject(getVideoID(document.URL), { 'offset': offset });
-                                });
+                                const offsetInput = document.createElement('input');
+                                offsetInput.className = 'yf-fontSize yf-clearInput';
+                                offsetInput.id = 'yf-offset-text';
+                                offsetInput.type = 'number';
+                                offsetInput.step = '0.25';
+                                const parsedInitialOffset = typeof offset === 'number' ? offset : (parseFloat(offset) || 0);
+                                offsetInput.value = parsedInitialOffset.toFixed(2);
+                                li.appendChild(offsetInput);
 
-                                li.appendChild(document.createElement('input')).className = 'yf-fontSize yf-clearInput';
-                                li.lastChild.id = 'yf-offset-text';
-                                li.lastChild.type = 'number';
-                                li.lastChild.step = '0.25';
-                                li.lastChild.value = offset ? offset : '0.00';
-
-                                let offsetTimeout;
-                                let lastOffsetValue = offset ? offset : 0;
-
-                                li.lastChild.addEventListener('change', (e) => {
-                                    let val = parseFloat(e.target.value);
-                                    if (isNaN(val) || val === '') {
-                                        e.target.value = '0.00';
-                                        return;
-                                    }
-                                    val = Math.round(val * 100) / 100;
-                                    e.target.value = val.toFixed(2);
-                                    mediaElem.setAttribute('ytf-data-offset', val);
-                                    if (val === lastOffsetValue) return;
-                                    lastOffsetValue = val;
-                                    clearTimeout(offsetTimeout);
-                                    offsetTimeout = setTimeout(async () => {
-                                        await saveObject(getVideoID(document.URL), { 'offset': val });
-                                    }, 500);
-                                });
-
-                                svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
-                                svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
-                                svgElement.classList.add('sFont', 'material-symbols-outlined');
-                                svgElement.id = 'ytf-offset-increment';
+                                const incrementBtn = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                                incrementBtn.setAttribute("height", "24");
+                                incrementBtn.setAttribute("viewBox", "0 -960 960 960");
+                                incrementBtn.setAttribute("width", "24");
+                                incrementBtn.classList.add('sFont', 'material-symbols-outlined');
+                                incrementBtn.id = 'ytf-offset-increment';
+                                incrementBtn.setAttribute('title', 'Increase offset (hold to rapidly increase)');
+                                incrementBtn.setAttribute('aria-label', 'Increase offset');
                                 pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "m206.395-374.155-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Zm468.617-32.253h-82.001q-11.05 0-18.524-7.503-7.475-7.503-7.475-18.492t7.475-18.41q7.474-7.42 18.524-7.42h82.001v-81.689q0-10.984 7.418-18.609 7.418-7.624 18.384-7.624 10.966 0 18.455 7.475 7.49 7.474 7.49 18.524v82.001h82.168q11.086 0 18.585 7.478 7.498 7.479 7.498 18.534 0 11.056-7.498 18.521-7.499 7.465-18.585 7.465H743.44V-372q0 11.05-7.503 18.524-7.503 7.475-18.258 7.475-11.056 0-18.521-7.499-7.465-7.499-7.465-18.584v-82.168Z");
-                                svgElement.appendChild(pathElement);
-                                li.appendChild(svgElement);
+                                incrementBtn.appendChild(pathElement);
+                                li.appendChild(incrementBtn);
 
-                                li.lastChild.addEventListener('click', async () => {
-                                    var offsetValueElement = li.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT);
-                                    offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
-                                    offset = Math.round((offset + 0.25) * 100) / 100;
-                                    offsetValueElement.value = offset.toFixed(2);
-                                    mediaElem.setAttribute('ytf-data-offset', offset);
-                                    await saveObject(getVideoID(document.URL), { 'offset': offset });
-                                });
+                                const persistOffset = (newOffset) => {
+                                    const targetUid = container.getAttribute('data-uid') || uid || getVideoID(window.location.href);
+                                    if (!targetUid || isNaN(newOffset)) return;
+                                    try {
+                                        chrome.runtime.sendMessage({
+                                            type: 'SAVE_OFFSET',
+                                            uid: targetUid,
+                                            offset: newOffset
+                                        });
+                                    } catch (e) {}
+                                    saveObject(targetUid, { 'offset': newOffset });
+                                };
+
+                                const setupOffsetButton = (btn, delta) => {
+                                    let pressTimer = null;
+                                    let repeatInterval = null;
+                                    let isHolding = false;
+                                    let activePointerId = null;
+                                    let intermediateSaveTimer = null;
+
+                                    const applyStep = () => {
+                                        let cur = parseFloat(mediaElem?.getAttribute('ytf-data-offset'));
+                                        if (isNaN(cur)) cur = 0;
+                                        const updated = Math.round((cur + delta) * 100) / 100;
+                                        if (offsetInput) {
+                                            offsetInput.value = updated.toFixed(2);
+                                        }
+                                        if (mediaElem) {
+                                            mediaElem.setAttribute('ytf-data-offset', updated);
+                                            if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                                mediaElem._syncCurrentLyric(true);
+                                            }
+                                        }
+                                        return updated;
+                                    };
+
+                                    const triggerSave = () => {
+                                        const finalVal = parseFloat(mediaElem?.getAttribute('ytf-data-offset')) || 0;
+                                        persistOffset(finalVal);
+                                    };
+
+                                    const onPointerDown = (e) => {
+                                        if (e.button !== undefined && e.button !== 0) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+
+                                        isHolding = true;
+                                        activePointerId = e.pointerId;
+                                        try {
+                                            btn.setPointerCapture(e.pointerId);
+                                        } catch (err) {}
+
+                                        applyStep();
+
+                                        clearTimeout(pressTimer);
+                                        clearInterval(repeatInterval);
+                                        clearTimeout(intermediateSaveTimer);
+
+                                        pressTimer = setTimeout(() => {
+                                            repeatInterval = setInterval(() => {
+                                                applyStep();
+                                                clearTimeout(intermediateSaveTimer);
+                                                intermediateSaveTimer = setTimeout(triggerSave, 400);
+                                            }, 85);
+                                        }, 350);
+                                    };
+
+                                    const onPointerUp = (e) => {
+                                        if (!isHolding) return;
+                                        isHolding = false;
+                                        clearTimeout(pressTimer);
+                                        clearInterval(repeatInterval);
+                                        clearTimeout(intermediateSaveTimer);
+
+                                        if (activePointerId !== null) {
+                                            try {
+                                                if (btn.hasPointerCapture(activePointerId)) {
+                                                    btn.releasePointerCapture(activePointerId);
+                                                }
+                                            } catch (err) {}
+                                            activePointerId = null;
+                                        }
+
+                                        triggerSave();
+                                    };
+
+                                    btn.addEventListener('pointerdown', onPointerDown);
+                                    btn.addEventListener('pointerup', onPointerUp);
+                                    btn.addEventListener('pointercancel', onPointerUp);
+                                    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+                                };
+
+                                setupOffsetButton(decrementBtn, -0.25);
+                                setupOffsetButton(incrementBtn, 0.25);
+
+                                let inputDebounceTimer;
+                                const handleInputChange = (immediate = false) => {
+                                    let val = parseFloat(offsetInput.value);
+                                    if (isNaN(val)) {
+                                        if (immediate) {
+                                            offsetInput.value = '0.00';
+                                            val = 0;
+                                        } else {
+                                            return;
+                                        }
+                                    }
+                                    val = Math.round(val * 100) / 100;
+                                    if (immediate) {
+                                        offsetInput.value = val.toFixed(2);
+                                    }
+                                    if (mediaElem) {
+                                        mediaElem.setAttribute('ytf-data-offset', val);
+                                        if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                            mediaElem._syncCurrentLyric(true);
+                                        }
+                                    }
+                                    clearTimeout(inputDebounceTimer);
+                                    if (immediate) {
+                                        persistOffset(val);
+                                    } else {
+                                        inputDebounceTimer = setTimeout(() => {
+                                            persistOffset(val);
+                                        }, 400);
+                                    }
+                                };
+
+                                offsetInput.addEventListener('input', () => handleInputChange(false));
+                                offsetInput.addEventListener('change', () => handleInputChange(true));
                                 break;
                             }
                             case 'Report': {
@@ -809,7 +932,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                 var offsetInputElement = container.querySelector(YTF_SEL.DROPDOWN.OFFSET_TEXT);
                 if (offsetInputElement) {
-                    offsetInputElement.value = offset.toFixed(2);
+                    const numOffset = typeof offset === 'number' ? offset : (parseFloat(offset) || 0);
+                    offsetInputElement.value = numOffset.toFixed(2);
                 }
 
                 if (npt) {
@@ -1290,6 +1414,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     function applySelectedLyrics(chosenLyrics, isSynced, isWordSync) {
                         const currentUid = container.getAttribute('data-uid') || uid;
+                        const currentOffset = parseFloat(mediaElem?.getAttribute('ytf-data-offset')) || 0;
                         if (currentUid) {
                             chrome.runtime.sendMessage({
                                 type: 'SAVE_SELECTED_LYRICS',
@@ -1300,7 +1425,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                     synced: isSynced,
                                     hasWordSync: isWordSync,
                                     source: 'LRCLIB',
-                                    offset: 0
+                                    offset: currentOffset
                                 }
                             });
                         }
@@ -1795,9 +1920,28 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                 // Pre-feathered multi-stop radial gradients:
                 // Eliminates expensive CSS `filter: blur(90px)` recalculations on every frame!
-                bubbles[0].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble1}E6 0%, ${colors.bubble1}99 35%, ${colors.bubble1}26 62%, transparent 76%)`;
-                bubbles[1].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble2}E6 0%, ${colors.bubble2}99 36%, ${colors.bubble2}26 64%, transparent 78%)`;
-                bubbles[2].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble3}D9 0%, ${colors.bubble3}8C 34%, ${colors.bubble3}22 60%, transparent 75%)`;
+                const applyBubbleThemes = () => {
+                    const isDark = document.documentElement.hasAttribute('dark');
+                    if (isDark) {
+                        bubbles[0].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble1}E6 0%, ${colors.bubble1}99 35%, ${colors.bubble1}26 62%, transparent 76%)`;
+                        bubbles[1].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble2}E6 0%, ${colors.bubble2}99 36%, ${colors.bubble2}26 64%, transparent 78%)`;
+                        bubbles[2].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble3}D9 0%, ${colors.bubble3}8C 34%, ${colors.bubble3}22 60%, transparent 75%)`;
+                        bubbles.forEach(b => { b.style.opacity = '1'; });
+                    } else {
+                        // Soft luminous pastel blooms for light mode
+                        bubbles[0].style.background = `radial-gradient(circle at 50% 50%, rgba(123, 104, 238, 0.40) 0%, rgba(123, 104, 238, 0.22) 35%, rgba(123, 104, 238, 0.06) 62%, transparent 76%)`;
+                        bubbles[1].style.background = `radial-gradient(circle at 50% 50%, rgba(255, 107, 107, 0.35) 0%, rgba(255, 107, 107, 0.18) 36%, rgba(255, 107, 107, 0.05) 64%, transparent 78%)`;
+                        bubbles[2].style.background = `radial-gradient(circle at 50% 50%, rgba(78, 205, 196, 0.38) 0%, rgba(78, 205, 196, 0.20) 34%, rgba(78, 205, 196, 0.05) 60%, transparent 75%)`;
+                        bubbles.forEach(b => { b.style.opacity = '0.85'; });
+                    }
+                };
+
+                applyBubbleThemes();
+
+                const themeObserver = new MutationObserver(() => {
+                    applyBubbleThemes();
+                });
+                themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['dark'] });
 
                 bubbles.forEach(b => {
                     if (b.parentElement !== wrapper) wrapper.appendChild(b);
@@ -1952,6 +2096,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                 window.__ytfVisualizerCleanup = () => {
                     stopLoop();
+                    if (themeObserver) themeObserver.disconnect();
                     resizeObserver.disconnect();
                     intersectionObserver.disconnect();
                     document.removeEventListener('visibilitychange', onVisibilityChange);
