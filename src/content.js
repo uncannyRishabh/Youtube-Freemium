@@ -65,6 +65,57 @@ var YT_SELECTORS, YTF_SELECTORS
 		document.documentElement.classList.toggle(YT_SELECTORS.SHORTS.HIDE_CLASS);
 	}
 
+	function getUrlVideoID(url) {
+		try {
+			const urlObj = new URL(url || window.location.href);
+			return urlObj.searchParams.get('v');
+		} catch (e) {
+			return null;
+		}
+	}
+
+	let lastReportedUid = null;
+
+	function notifyPageReady() {
+		if (window.location.pathname.startsWith('/watch')) {
+			const uid = getUrlVideoID(window.location.href);
+			if (uid && uid !== lastReportedUid) {
+				lastReportedUid = uid;
+				chrome.runtime.sendMessage({
+					type: 'YOUTUBE_PAGE_DATA_UPDATED',
+					uid: uid,
+					url: window.location.href
+				});
+			}
+		} else {
+			lastReportedUid = null;
+		}
+	}
+
+	window.addEventListener('yt-navigate-start', () => {
+		lastReportedUid = null;
+		const container = document.querySelector(YTF_SELECTORS.CONTAINER.CLASS);
+		if (container) {
+			container.removeAttribute('data-uid');
+			const progressbar = container.querySelector(YTF_SELECTORS.HEADER.PROGRESS_BAR);
+			if (progressbar) {
+				progressbar.classList.remove('pure-material-progress-linear');
+				progressbar.classList.add('no-animate');
+			}
+			const existingContent = container.querySelector(YTF_SELECTORS.CONTAINER.SWAP_TARGETS);
+			if (existingContent) {
+				existingContent.innerHTML = '';
+			}
+		}
+	});
+
+	window.addEventListener('yt-page-data-updated', notifyPageReady);
+	window.addEventListener('yt-navigate-finish', notifyPageReady);
+
+	if (window.location.pathname.startsWith('/watch')) {
+		notifyPageReady();
+	}
+
 	chrome.runtime.onMessage.addListener(async (obj, sender, res) => {
 		const { type, val } = obj;
 
@@ -73,38 +124,49 @@ var YT_SELECTORS, YTF_SELECTORS
 		switch (type) {
 			case 'NEW_SEARCH': {
 				if (!ytc) {
-					res({ 'name': '', 'channel': '' })
+					res({ 'name': '', 'channel': '' });
 					break;
 				}
 
-				var container = ytc.querySelector(YTF_SELECTORS.CONTAINER.CLASS)
-				var progressbar = ytc.querySelector(YTF_SELECTORS.HEADER.PROGRESS_BAR)
-				var nowPlaying = ytc.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_LABEL)
-				var music = document.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE)
-				var isMusic = music === null ? false : (music.textContent == 'Music')
+				var container = ytc.querySelector(YTF_SELECTORS.CONTAINER.CLASS);
+				var progressbar = ytc.querySelector(YTF_SELECTORS.HEADER.PROGRESS_BAR);
+				var nowPlaying = ytc.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_LABEL);
 
-				if (container && container.getAttribute('data-uid') === val) {
-					res({ 'name': '', 'channel': '' })
+				const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
+				const domUid = watchFlexy?.getAttribute('video-id');
+
+				// If container already displays this exact video, skip redundant search
+				if (container && container.getAttribute('data-uid') === val && domUid === val) {
+					res({ 'name': '', 'channel': '', 'alreadyRendered': true });
 					break;
 				}
+
+				// If watchFlexy is not ready for the requested video ID, report not ready
+				if (!watchFlexy || (val && domUid !== val)) {
+					res({ 'name': '', 'channel': '', 'notReady': true });
+					break;
+				}
+
+				var music = watchFlexy.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE);
+				var isMusic = music !== null && music.textContent.trim() === 'Music';
 
 				if (isMusic) {
 					if (progressbar) {
-						progressbar.style.visibility = 'visible'
-						progressbar.classList.add("pure-material-progress-linear");
-						progressbar.classList.remove("no-animate")
+						progressbar.style.visibility = 'visible';
+						progressbar.classList.add('pure-material-progress-linear');
+						progressbar.classList.remove('no-animate');
 					}
-					if (nowPlaying) nowPlaying.textContent = 'Searching -'
+					if (nowPlaying) nowPlaying.textContent = 'Searching -';
 				}
-				let title = document.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE)?.textContent.trim();
-				let channel = document.querySelector(YT_SELECTORS.METADATA.FALLBACK_CHANNEL)?.textContent.trim();
-				console.log('Content.js :::: ' + title + " - " + channel)
+
+				let title = watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE)?.textContent.trim();
+				let channel = watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_CHANNEL)?.textContent.trim();
+				console.log('Content.js :::: ' + title + ' - ' + channel);
 
 				if (title && channel) {
-					res({ 'name': title, 'channel': channel })
-				}
-				else {
-					res({ 'name': '', 'channel': '' })
+					res({ 'name': title, 'channel': channel, 'isMusic': isMusic });
+				} else {
+					res({ 'name': '', 'channel': '', 'isMusic': isMusic });
 				}
 
 				break;

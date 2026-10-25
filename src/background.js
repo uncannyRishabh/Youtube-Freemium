@@ -25,6 +25,34 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     const TRANSITION_FORWARD_BACK = 'forward_back';
 
     /**
+     * Clamps font size to a valid range [14px, 36px] with a fallback.
+     */
+    function normalizeFontSize(rawSize, defaultPx = 24) {
+        const parsed = parseFloat(rawSize);
+        const clamped = (!isNaN(parsed) ? Math.min(Math.max(parsed, 14), 36) : defaultPx);
+        return Math.round(clamped) + 'px';
+    }
+
+    /**
+     * Parses an offset value to a finite float, or returns the fallback.
+     */
+    function parseOffset(offsetVal, fallback = 0.0) {
+        const num = parseFloat(offsetVal);
+        return (!isNaN(num) && isFinite(num)) ? num : fallback;
+    }
+
+    /**
+     * Constructs a unified display title combining track title and artist name.
+     */
+    function buildDisplayTitle(title, artist) {
+        if (!title) return '';
+        if (artist && !title.includes(' - ') && !title.toLowerCase().includes(artist.toLowerCase())) {
+            return `${title} - ${artist}`;
+        }
+        return title;
+    }
+
+    /**
      * Handles extension installation/update events
      */
     chrome.runtime.onInstalled.addListener(function (details) {
@@ -114,6 +142,16 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         }
 
         switch (type) {
+            case 'YOUTUBE_PAGE_DATA_UPDATED': {
+                const targetUrl = obj.url || sender.tab?.url;
+                const targetTabId = sender.tab?.id;
+                if (targetUrl && targetTabId && targetUrl.includes(YOUTUBE_WATCH_URL)) {
+                    currentState.tabTitle = sender.tab?.title;
+                    currentState.uid = obj.uid || getVideoID(targetUrl);
+                    main(targetUrl, targetTabId);
+                }
+                break;
+            }
             case 'SEARCH_LRCLIB': {
                 const query = val || obj.query;
                 searchLrclibRecords(query).then((results) => {
@@ -153,7 +191,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             }
             case 'SAVE_OFFSET': {
                 const targetUid = obj.uid;
-                const newOffset = parseFloat(obj.offset !== undefined ? obj.offset : val);
+                const newOffset = parseOffset(obj.offset !== undefined ? obj.offset : val, NaN);
                 if (targetUid && !isNaN(newOffset)) {
                     saveObject(targetUid, { offset: newOffset }).then(() => {
                         sendResponse({ success: true, offset: newOffset });
@@ -168,8 +206,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             case 'SAVE_FONT_SIZE': {
                 const rawSize = val || obj.fontSize;
                 if (rawSize) {
-                    const parsed = parseFloat(rawSize);
-                    const clampedSize = (!isNaN(parsed) ? Math.min(Math.max(parsed, 14), 36) : 24) + 'px';
+                    const clampedSize = normalizeFontSize(rawSize);
                     saveObject('yt-userPrefs', { fontSize: clampedSize }).then(() => {
                         sendResponse({ success: true, fontSize: clampedSize });
                     }).catch((err) => {
@@ -189,12 +226,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             case 'KILL_SHORTS': {
                 saveObject('yt-userPrefs', { 'kill_shorts': val });
                 chrome.tabs.query({ url: "*://*.youtube.com/*" }, function (tabs) {
-                    tabs.forEach(async tab => {
-                        await killShort(tab.id, val);
+                    tabs.forEach(tab => {
+                        killShort(tab.id, val).catch(() => {});
                     });
-                });
-                currentState.tabList.forEach(async (tabId) => {
-                    await killShort(tabId, val);
                 });
                 break;
             }
@@ -213,6 +247,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     async function main(url, tabId) {
         currentState.process = true;
         currentState.reqUrl = url;
+        const targetUid = getVideoID(url);
+        currentState.uid = targetUid;
 
         if (!currentState.tabList.includes(tabId)) {
             currentState.tabList.push(tabId);
@@ -221,7 +257,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         if (currentState.tabList.includes(tabId)) {
             chrome.tabs.sendMessage(tabId, {
                 type: "NEW_SEARCH",
-                'val': getVideoID(currentState.reqUrl)
+                'val': targetUid
             }, (response) => {
                 if (chrome.runtime.lastError) {
                     // Content script not ready yet
@@ -235,129 +271,202 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         }
     }
 
+    /**
+     * Waits until the active watch page DOM inside the tab matches the target video ID
+     * and has rendered its primary metadata, avoiding race conditions with stale DOM.
+     */
+    async function waitForWatchPageReady(tabId, uid, maxWaitMs = 3000) {
+        try {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId },
+                function: (expectedUid, timeout) => {
+                    return new Promise((resolve) => {
+                        const startTime = Date.now();
+
+                        function check() {
+                            const currentUrl = window.location.href;
+                            if (!currentUrl.includes(expectedUid)) {
+                                resolve(false);
+                                return;
+                            }
+
+                            const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
+                            const domUid = watchFlexy?.getAttribute('video-id');
+
+                            if (watchFlexy && domUid === expectedUid) {
+                                const titleEl = watchFlexy.querySelector('#above-the-fold > #title');
+                                const titleText = titleEl?.textContent?.trim();
+                                if (titleText && titleText.length > 0) {
+                                    resolve(true);
+                                    return;
+                                }
+                            }
+
+                            if (Date.now() - startTime >= timeout) {
+                                resolve(Boolean(watchFlexy && domUid === expectedUid));
+                                return;
+                            }
+
+                            setTimeout(check, 100);
+                        }
+
+                        check();
+                    });
+                },
+                args: [uid, maxWaitMs]
+            });
+            return results && results[0]?.result;
+        } catch (e) {
+            console.warn('waitForWatchPageReady error:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Injects the 'Searching lyrics...' UI placeholder into Freemium's container.
+     */
+    async function injectSearchingState(tabId, displayTitle) {
+        return chrome.scripting.executeScript({
+            target: { tabId },
+            function: (searchTitle, YT_SEL, YTF_SEL) => {
+                var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
+                var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
+                if (!container) return;
+
+                var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
+                if (npt) {
+                    npt.value = searchTitle || '';
+                    npt.placeholder = searchTitle || 'Searching...';
+                    npt.setAttribute('data-current-title', searchTitle || '');
+                }
+
+                var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
+                if (progressbar) {
+                    progressbar.classList.remove("no-animate");
+                    progressbar.classList.add("pure-material-progress-linear");
+                }
+
+                var searchingDiv = document.createElement('div');
+                searchingDiv.id = 'searchingDiv';
+                searchingDiv.className = 'not-found';
+                var searchingSpinner = document.createElement('div');
+                searchingSpinner.className = 'yf-search-spinner';
+                var searchingText = document.createElement('span');
+                searchingText.className = 'not-found-title';
+                searchingText.textContent = 'Searching lyrics...';
+                searchingDiv.appendChild(searchingSpinner);
+                searchingDiv.appendChild(searchingText);
+
+                var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
+                if (existingContent) {
+                    container.replaceChild(searchingDiv, existingContent);
+                } else {
+                    container.appendChild(searchingDiv);
+                }
+            },
+            args: [displayTitle, YT_SELECTORS, YTF_SELECTORS]
+        });
+    }
+
     const runInContext = async (url, tabId) => {
         var uid = getVideoID(url);
-        var obj = await getFromStorage(uid);
-        let isMusic = await musicCheck(tabId);
-        var prefs = await getFromStorage('yt-userPrefs');
-        var profanityCheck = prefs['yt-userPrefs']?.profanity;
-        var savedFontSize = prefs['yt-userPrefs']?.fontSize || '24px';
-        const parsedSaved = parseFloat(savedFontSize);
-        savedFontSize = (!isNaN(parsedSaved) ? Math.min(Math.max(parsedSaved, 14), 36) : 24) + 'px';
-        let lyrics, message, title, source = '';
-        let synced = false;
-        let offset = 0.0;
-        var skipAdsState = '';
+        if (!uid) return;
 
         if (currentSearchController) {
             currentSearchController.abort('New search initiated');
         }
         currentSearchController = new AbortController();
+        const searchSignal = currentSearchController.signal;
+
+        // Ensure DOM has loaded and matches the target UID before querying metadata
+        await waitForWatchPageReady(tabId, uid);
+        if (searchSignal.aborted || currentState.uid !== uid) {
+            return;
+        }
+
+        var obj = await getFromStorage(uid);
+        const { isMusic, val, channel } = await getVideoMusicMetadata(tabId, uid);
+        var prefs = await getFromStorage('yt-userPrefs');
+        var profanityCheck = prefs['yt-userPrefs']?.profanity ?? true;
+        var savedFontSize = normalizeFontSize(prefs['yt-userPrefs']?.fontSize);
+        let lyrics = '';
+        let message = 'NOK';
+        let title = '';
+        let source = '';
+        let synced = false;
+        let offset = 0.0;
+        var skipAdsState = '';
 
         if (skipAdsState == 'FULL') {
-            injectClickValidator();
+            injectClickValidator(tabId);
         }
 
         if (isMusic) {
-            let result = await findSongAndArtist(tabId);
-            let { val, channel } = result && result[0]?.result ? JSON.parse(result[0].result) : { val: '', channel: '' };
-
-            let displayTitle = val;
-            if (val && channel && !val.includes(' - ') && !val.toLowerCase().includes(channel.toLowerCase())) {
-                displayTitle = `${val} - ${channel}`;
-            }
-
+            let displayTitle = buildDisplayTitle(val, channel);
             const hasUserSelection = !isEmpty(obj) && obj[uid]?.userSelected === true && obj[uid]?.message === 'OK';
 
             if (!hasUserSelection && ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val && obj[uid]?.title != displayTitle) || (isEmpty(obj) && val))) {
-                // Inject Searching UI state
-                await chrome.scripting.executeScript({
-                    target: { tabId },
-                    function: (searchTitle, YT_SEL, YTF_SEL) => {
-                        var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
-                        var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
-                        if (!container) return;
+                await injectSearchingState(tabId, displayTitle);
 
-                        var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
-                        if (npt) {
-                            npt.value = searchTitle || '';
-                            npt.placeholder = searchTitle || 'Searching...';
-                            npt.setAttribute('data-current-title', searchTitle || '');
-                        }
+                let result = await findLyricsfromSources(tabId, "", val, channel, searchSignal);
+                if (searchSignal.aborted || currentState.uid !== uid) {
+                    return;
+                }
 
-                        var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
-                        if (progressbar) {
-                            progressbar.classList.remove("no-animate");
-                            progressbar.classList.add("pure-material-progress-linear");
-                        }
-
-                        var searchingDiv = document.createElement('div');
-                        searchingDiv.id = 'searchingDiv';
-                        searchingDiv.className = 'not-found';
-                        var searchingSpinner = document.createElement('div');
-                        searchingSpinner.className = 'yf-search-spinner';
-                        var searchingText = document.createElement('span');
-                        searchingText.className = 'not-found-title';
-                        searchingText.textContent = 'Searching lyrics...';
-                        searchingDiv.appendChild(searchingSpinner);
-                        searchingDiv.appendChild(searchingText);
-
-                        var existingContent = container.querySelector(YTF_SEL.CONTAINER.SWAP_TARGETS);
-                        if (existingContent) {
-                            container.replaceChild(searchingDiv, existingContent);
-                        } else {
-                            container.appendChild(searchingDiv);
-                        }
-                    },
-                    args: [displayTitle, YT_SELECTORS, YTF_SELECTORS]
-                });
-
-                let result = await findLyricsfromSources(tabId, "", val, channel, currentSearchController.signal);
-                let resultObject = JSON.parse(result[0]?.result);
-
-                const existingSavedOffset = (obj && obj[uid] && obj[uid].offset !== undefined && obj[uid].offset !== null && !isNaN(parseFloat(obj[uid].offset)))
-                    ? parseFloat(obj[uid].offset)
+                let resultObject = JSON.parse(result[0]?.result || '{}');
+                const existingSavedOffset = (obj && obj[uid] && obj[uid].offset !== undefined && obj[uid].offset !== null)
+                    ? parseOffset(obj[uid].offset, null)
                     : null;
 
-                if (resultObject === undefined || resultObject === null || resultObject.message === 'NOK') {
+                if (!resultObject || resultObject.message === 'NOK') {
                     lyrics = '';
                     message = 'NOK';
-                    offset = existingSavedOffset !== null ? existingSavedOffset : 0;
+                    offset = existingSavedOffset !== null ? existingSavedOffset : 0.0;
                 } else {
-                    lyrics = resultObject.lyrics ? resultObject.lyrics : '';
-                    message = resultObject.message ? resultObject.message : '';
-                    source = resultObject.source ? resultObject.source : '';
-                    synced = resultObject.synced ? resultObject.synced : synced;
+                    lyrics = resultObject.lyrics || '';
+                    message = resultObject.message || '';
+                    source = resultObject.source || '';
+                    synced = resultObject.synced ?? synced;
                     offset = existingSavedOffset !== null
                         ? existingSavedOffset
-                        : ((resultObject.offset !== undefined && resultObject.offset !== null && !isNaN(parseFloat(resultObject.offset)))
-                            ? parseFloat(resultObject.offset)
-                            : 0);
+                        : parseOffset(resultObject.offset, 0.0);
                 }
-                var scroll = 0;
                 var timeCreated = Date.now();
                 title = displayTitle || val;
 
-                if (message === 'OK' && lyrics && lyrics.length > 0) {
-                    saveObject(uid, { lyrics, message, scroll, timeCreated, lastAccessed: timeCreated, title, source, synced, offset });
+                if (message === 'OK' && lyrics && lyrics.length > 0 && !searchSignal.aborted && currentState.uid === uid) {
+                    saveObject(uid, { lyrics, message, scroll: 0, timeCreated, lastAccessed: timeCreated, title, source, synced, offset });
                 }
             } else if (!isEmpty(obj)) {
-                lyrics = obj[uid]?.lyrics ? obj[uid]?.lyrics : '';
-                message = obj[uid]?.message ? obj[uid].message : "NOK";
-                title = obj[uid]?.title ? obj[uid].title : (displayTitle || '');
-                source = obj[uid]?.source ? obj[uid].source : '';
-                synced = obj[uid]?.synced ? obj[uid].synced : false;
-                const savedOffset = obj[uid]?.offset;
-                offset = (savedOffset !== undefined && savedOffset !== null && !isNaN(parseFloat(savedOffset))) ? parseFloat(savedOffset) : 0;
+                lyrics = obj[uid]?.lyrics || '';
+                message = obj[uid]?.message || "NOK";
+                title = obj[uid]?.title || displayTitle || '';
+                source = obj[uid]?.source || '';
+                synced = obj[uid]?.synced ?? false;
+                offset = parseOffset(obj[uid]?.offset, 0.0);
             }
         } else {
-            lyrics = obj[uid]?.lyrics ? obj[uid].lyrics : '';
-            message = obj[uid]?.message ? obj[uid].message : "NOK";
-            title = obj[uid]?.title ? obj[uid].title : '';
-            source = obj[uid]?.source ? obj[uid].source : '';
-            synced = obj[uid]?.synced ? obj[uid].synced : false;
-            const savedOffset = obj[uid]?.offset;
-            offset = (savedOffset !== undefined && savedOffset !== null && !isNaN(parseFloat(savedOffset))) ? parseFloat(savedOffset) : 0;
+            // Non-music video: only restore lyrics if explicitly selected by the user
+            const hasUserSelection = !isEmpty(obj) && obj[uid]?.userSelected === true && obj[uid]?.message === 'OK';
+            if (hasUserSelection) {
+                lyrics = obj[uid]?.lyrics || '';
+                message = obj[uid]?.message || "OK";
+                title = obj[uid]?.title || '';
+                source = obj[uid]?.source || '';
+                synced = obj[uid]?.synced ?? false;
+                offset = parseOffset(obj[uid]?.offset, 0.0);
+            } else {
+                lyrics = '';
+                message = "NOK";
+                title = '';
+                source = '';
+                synced = false;
+                offset = 0.0;
+            }
+        }
+
+        if (searchSignal.aborted || currentState.uid !== uid) {
+            return;
         }
 
         if (!profanityCheck || profanityCheck == undefined) {
@@ -367,6 +476,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         await chrome.scripting.executeScript({
             target: { tabId },
             function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize) => {
+                const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
+                if (!watchFlexy) return;
+                const domUid = watchFlexy.getAttribute('video-id');
+                if (uid && domUid && domUid !== uid) return;
+
                 var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
                 var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
                 var intermediateContainer = ytc?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
@@ -512,50 +626,17 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     const ul = document.createElement('ul');
 
+                    const getTargetVideoID = (url) => {
+                        try {
+                            return new URL(url).searchParams.get('v') || '';
+                        } catch (e) {
+                            return '';
+                        }
+                    };
+
                     ['Font Size', 'Lyric Offset', 'Report'].forEach((optionText) => {
                         const li = ul.appendChild(document.createElement('li'));
                         li.className = 'yf-dd-list';
-
-                        function isEmpty(obj) {
-                            return obj == null || Object.keys(obj).length === 0;
-                        }
-
-                        function getFromStorage(uid) {
-                            return new Promise((resolve) => {
-                                chrome.storage.local.get(uid, (result) => {
-                                    if (chrome.runtime.lastError) {
-                                        resolve({});
-                                        return;
-                                    }
-                                    if (!isEmpty(result) && result[uid]?.title) {
-                                        result[uid].lastAccessed = Date.now();
-                                        chrome.storage.local.set({ [uid]: result[uid] });
-                                    }
-                                    resolve(result || {});
-                                });
-                            });
-                        }
-
-                        function getVideoID(url) {
-                            try {
-                                const urlObject = new URL(url);
-                                const searchParams = new URLSearchParams(urlObject.search);
-                                return searchParams.get('v');
-                            } catch (e) {
-                                return '';
-                            }
-                        }
-
-                        async function saveObject(uid, obj) {
-                            const currentPrefs = await getFromStorage(uid);
-                            const updatedPrefs = { ...currentPrefs[uid], ...obj };
-                            return new Promise((resolve, reject) => {
-                                chrome.storage.local.set({ [uid]: updatedPrefs }, () => {
-                                    if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
-                                    resolve();
-                                });
-                            });
-                        }
 
                         switch (optionText) {
                             case 'Font Size': {
@@ -676,7 +757,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.appendChild(incrementBtn);
 
                                 const persistOffset = (newOffset) => {
-                                    const targetUid = container.getAttribute('data-uid') || uid || getVideoID(window.location.href);
+                                    const targetUid = container.getAttribute('data-uid') || uid || getTargetVideoID(window.location.href);
                                     if (!targetUid || isNaN(newOffset)) return;
                                     try {
                                         chrome.runtime.sendMessage({
@@ -685,7 +766,6 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                             offset: newOffset
                                         });
                                     } catch (e) {}
-                                    saveObject(targetUid, { 'offset': newOffset });
                                 };
 
                                 const setupOffsetButton = (btn, delta) => {
@@ -2107,77 +2187,73 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     };
 
 	/**
-	 * Checks if the current tab is playing a Music
-	 * @param {*} tabId 
-	 * @returns 
+	 * Checks if the current tab is playing music and extracts song metadata.
 	 */
-    async function musicCheck(tabId) {
-        var isMusic = await chrome.scripting.executeScript({
-            target: { tabId },
-            function: (YT_SEL) => {
-                let music = document.querySelector(YT_SEL.METADATA.MUSIC_BADGE)
-                return (music === null) || (music === undefined) ? false : (music.textContent.trim() == 'Music')
-            },
-            args: [YT_SELECTORS]
-        });
-        return isMusic[0].result;
+    async function getVideoMusicMetadata(tabId, uid) {
+        try {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId },
+                function: (expectedUid, YT_SEL) => {
+                    const cleanField = (str) => str?.replace(/\b(feat|ft)\b\.?/i, '').trim() || '';
+
+                    const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
+                    if (!watchFlexy) return JSON.stringify({ isMusic: false, val: '', channel: '' });
+                    const domUid = watchFlexy.getAttribute('video-id');
+                    if (expectedUid && domUid && domUid !== expectedUid) {
+                        return JSON.stringify({ isMusic: false, val: '', channel: '' });
+                    }
+
+                    const musicBadge = watchFlexy.querySelector(YT_SEL.METADATA.MUSIC_BADGE);
+                    const isMusic = musicBadge != null && musicBadge.textContent.trim() === 'Music';
+
+                    let val = '';
+                    let channel = '';
+
+                    if (isMusic) {
+                        const musicCard = watchFlexy.querySelectorAll(YT_SEL.METADATA.MUSIC_HEADER_TITLE);
+                        const cardContainer = YT_SEL.METADATA.MUSIC_CARD_CONTAINERS.find(s => watchFlexy.querySelector(s) !== null);
+
+                        if (musicCard && cardContainer) {
+                            val = cleanField(watchFlexy.querySelector(cardContainer + YT_SEL.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent);
+                            channel = cleanField(watchFlexy.querySelector(cardContainer + YT_SEL.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent);
+                        }
+
+                        if (!val || !channel) {
+                            val = cleanField(watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_TITLE)?.textContent);
+                            channel = cleanField(watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_CHANNEL)?.textContent);
+                        }
+                    }
+
+                    return JSON.stringify({ isMusic, val, channel });
+                },
+                args: [uid, YT_SELECTORS]
+            });
+
+            return results && results[0]?.result ? JSON.parse(results[0].result) : { isMusic: false, val: '', channel: '' };
+        } catch (e) {
+            console.warn('getVideoMusicMetadata error:', e);
+            return { isMusic: false, val: '', channel: '' };
+        }
+    }
+
+    async function musicCheck(tabId, uid) {
+        const metadata = await getVideoMusicMetadata(tabId, uid);
+        return metadata.isMusic;
+    }
+
+    async function findSongAndArtist(tabId, uid) {
+        const metadata = await getVideoMusicMetadata(tabId, uid);
+        return [{ result: JSON.stringify({ val: metadata.val, channel: metadata.channel }) }];
     }
 
     async function killShort(tabId, val) {
         await chrome.scripting.executeScript({
 			target: { tabId },
 			function: (val, YT_SEL) => {
-				if (val) {
-                    console.log("FREEMIUM : KILLSHORT", val)
-                    document.documentElement.classList.toggle(YT_SEL.SHORTS.HIDE_CLASS, true);
-                }
-                else {
-                    console.log("FREEMIUM : KILLSHORT", val)
-                    document.documentElement.classList.toggle(YT_SEL.SHORTS.HIDE_CLASS, false);
-                }
+				document.documentElement.classList.toggle(YT_SEL.SHORTS.HIDE_CLASS, Boolean(val));
             },
             args: [val, YT_SELECTORS]
 		});
-    }
-
-    async function findSongAndArtist(tabId) {
-        return chrome.scripting.executeScript({
-            target: { tabId },
-            function: (YT_SEL) => {
-                //Fallback for fetching song/artist
-                let val, channel
-                let musicCard = document.querySelectorAll(YT_SEL.METADATA.MUSIC_HEADER_TITLE)
-
-                const musicCardSelectors = YT_SEL.METADATA.MUSIC_CARD_CONTAINERS
-
-                var musicCardSelectorFound = musicCardSelectors.find(selector => {
-                    return document.querySelector(selector) !== null
-                })
-
-                if (musicCard && musicCardSelectorFound) {
-                    val = document.querySelector(musicCardSelectorFound + YT_SEL.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent.trim();
-                    channel = document.querySelector(musicCardSelectorFound + YT_SEL.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent.trim();
-                    
-                    val = val?.replace(/\b(feat|ft)\b\.?/i, '').trim();
-	                channel = channel?.replace(/\b(feat|ft)\b\.?/i, '').trim();
-
-                    console.log('getSongAndArtistFromCard => Title : ' + val + ' Artist : ' + channel)
-                }
-
-                if (val == undefined || channel == undefined) {
-                    val = document.querySelector(YT_SEL.METADATA.FALLBACK_TITLE)?.textContent.trim();
-                    channel = document.querySelector(YT_SEL.METADATA.FALLBACK_CHANNEL)?.textContent.trim();
-
-                    val = val?.replace(/\b(feat|ft)\b\.?/i, '').trim();
-	                channel = channel?.replace(/\b(feat|ft)\b\.?/i, '').trim();
-
-                    console.log('getVideoNameAndChannel (FALLBACK) => Title : ' + val + ' Artist : ' + channel)
-                }
-
-                return JSON.stringify({ val: val || '', channel: channel || '' });
-            },
-            args: [YT_SELECTORS]
-        });
     }
 
     async function toggleProfanityFilter(tabId, bool) {
@@ -2192,68 +2268,57 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         });
 
         if (uid[0]?.result) {
-            var lyricsObj = await getFromStorage(uid[0]?.result)
-            var profanity = await getFromStorage('yt-userPrefs')
-            profanity['yt-userPrefs'] = { ...profanity['yt-userPrefs'], profanity: (!bool).toString() }
-            console.log(profanity)
+            const targetUid = uid[0].result;
+            const lyricsObj = await getFromStorage(targetUid);
+            await saveObject('yt-userPrefs', { profanity: (!bool).toString() });
 
             if (isEmpty(lyricsObj)) {
-                return
+                return;
             }
 
-            var lyrics = lyricsObj[uid[0]?.result]?.lyrics
-            var synced = lyricsObj[uid[0]?.result]?.synced
+            const lyrics = lyricsObj[targetUid]?.lyrics;
+            const synced = lyricsObj[targetUid]?.synced;
 
             await chrome.scripting.executeScript({
                 target: { tabId },
                 function: (bool, lyrics, synced, fuzzyProfanityDictionary, YTF_SEL) => {
-                    var container = document.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE)
-                    var lyricContainer = container?.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER)
+                    const container = document.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
+                    const lyricContainer = container?.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
                     if (!lyricContainer) return;
 
-                    console.log('PROFANITY CHECKPOINT !!', bool)
+                    const parsed = parseFloat(localStorage.getItem('fontSize') || '24px');
+                    lyricContainer.style.fontSize = (!isNaN(parsed) ? Math.min(Math.max(parsed, 14), 36) : 24) + 'px';
 
-                    var localFontSize = localStorage.getItem('fontSize') || '24px';
-                    var parsedSize = parseFloat(localFontSize);
-                    if (!isNaN(parsedSize)) {
-                        localFontSize = Math.min(Math.max(parsedSize, 14), 36) + 'px';
-                    }
-                    lyricContainer.style.fontSize = localFontSize;
-
-                    var lyricLines = lyricContainer.querySelectorAll('.lyric-line');
+                    const lyricLines = lyricContainer.querySelectorAll('.lyric-line');
 
                     if (bool) {
-                        lyricContainer.setAttribute('data-profanity', 'true')
-
-                        for(var i=0; i<lyricLines.length; i++){
+                        lyricContainer.setAttribute('data-profanity', 'true');
+                        for (let i = 0; i < lyricLines.length; i++) {
                             if (lyricLines[i].classList.contains("am-interlude-line")) continue;
                             lyricLines[i].textContent = synced ? lyrics[i][1] : lyrics[i];
                         }
-
-                    }
-                    else {
-                        lyricContainer.setAttribute('data-profanity', 'false')
+                    } else {
+                        lyricContainer.setAttribute('data-profanity', 'false');
 
                         const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                         const re = new RegExp(`(${pattern})`, 'giu');
 
                         lyricLines.forEach(l => {
                             if (l.classList.contains("am-interlude-line")) return;
-                            var replacedLine = l.textContent.replaceAll(re, match => {
+                            l.textContent = l.textContent.replaceAll(re, match => {
                                 if (match.length <= 1) return '*';
                                 return match.charAt(0) + '*'.repeat(match.length - 1);
                             });
-                            l.textContent = replacedLine
-                        })
+                        });
                     }
                 },
                 args: [bool, lyrics, synced, fuzzyProfanityDictionary, YTF_SELECTORS]
-            })
+            });
         }
-
     }
 
-    function injectClickValidator() {
+    function injectClickValidator(tabId) {
+        if (!tabId) return;
         chrome.scripting.executeScript({
             target: { tabId },
             world: 'MAIN',
