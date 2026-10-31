@@ -15,13 +15,11 @@ var YT_SELECTORS, YTF_SELECTORS
 			MUSIC_BADGE: 'button-view-model a',
 			MUSIC_HEADER_TITLE: '#header-container #title',
 			MUSIC_CARD_CONTAINERS: [
-				'#items > yt-video-attribute-view-model:nth-child(1)',
-				'ytd-structured-description-content-renderer #items > yt-video-attribute-view-model:nth-child(1)',
 				'.yt-video-attribute-view-model__metadata',
 				'.ytVideoAttributeViewModelContentContainer'
 			],
-			MUSIC_CARD_TITLE_SUFFIX: ' > div.yt-video-attribute-view-model__secondary > div.yt-video-attribute-view-model__title',
-			MUSIC_CARD_ARTIST_SUFFIX: ' > div.yt-video-attribute-view-model__secondary > div.yt-video-attribute-view-model__subtitle',
+			MUSIC_CARD_TITLE_SUFFIX: ' > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)',
+			MUSIC_CARD_ARTIST_SUFFIX: ' > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)',
 			FALLBACK_TITLE: '#above-the-fold h1, ytd-watch-metadata #title, #above-the-fold #title',
 			FALLBACK_CHANNEL: '#upload-info > #channel-name > div > div'
 		},
@@ -101,20 +99,13 @@ var YT_SELECTORS, YTF_SELECTORS
 		let channel = '';
 
 		if (isMusic) {
+			const musicCard = watchFlexy.querySelectorAll(YT_SELECTORS.METADATA.MUSIC_HEADER_TITLE);
 			const cardContainer = YT_SELECTORS.METADATA.MUSIC_CARD_CONTAINERS.find(s => watchFlexy.querySelector(s) !== null);
 
-			if (cardContainer) {
+			if (musicCard && cardContainer) {
 				title = cleanField(watchFlexy.querySelector(cardContainer + YT_SELECTORS.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent);
 				channel = cleanField(watchFlexy.querySelector(cardContainer + YT_SELECTORS.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent);
 			}
-
-			if (!title || !channel) {
-				title = cleanField(watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE)?.textContent);
-				channel = cleanField(watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_CHANNEL)?.textContent);
-			}
-		} else {
-			title = cleanField(watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE)?.textContent);
-			channel = cleanField(watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_CHANNEL)?.textContent);
 		}
 
 		return { isMusic, title, channel };
@@ -145,12 +136,18 @@ var YT_SELECTORS, YTF_SELECTORS
 			return;
 		}
 
+		const { isMusic, title, channel } = extractPageMetadata(watchFlexy);
+
+		// If it's a music video, wait until the music card metadata (title & artist) is populated in DOM
+		if (isMusic && (!title || !channel)) {
+			return;
+		}
+
 		if (currentUid === lastReportedUid) {
 			return;
 		}
 
 		lastReportedUid = currentUid;
-		const { isMusic, title, channel } = extractPageMetadata(watchFlexy);
 
 		// If it's a music video, activate the search indicator immediately
 		if (isMusic) {
@@ -202,7 +199,7 @@ var YT_SELECTORS, YTF_SELECTORS
 			const nowPlayingInput = container.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_INPUT);
 			if (nowPlayingInput) {
 				nowPlayingInput.value = '';
-				nowPlayingInput.placeholder = '';
+				nowPlayingInput.placeholder = 'song - artist';
 				nowPlayingInput.removeAttribute('data-current-title');
 			}
 			const nowPlayingLabel = container.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_LABEL);
@@ -346,18 +343,6 @@ function hideShelfRenderer() {
 	});
 }
 
-// // Initial check in case it's already loaded
-// hideShelfRenderer();
-
-// function observePlayer() {
-// 	if(lyricContainer == null){
-// 		lyricContainer = document.querySelector(window.innerWidth < 1000 ? '#primary > #primary-inner > #below > #yf-container' : '#secondary > #secondary-inner > #yf-container');
-// 	}
-// 	if (insidePrimary && lyricContainer) {
-// 		player.style.width = `${lyricContainer.style.width}px`;
-// 	}
-// }
-
 function windowResize() {
 	const inPrimarySelector = YTF_SELECTORS?.CONTAINER?.IN_PRIMARY || 'ytd-watch-flexy #primary > #primary-inner > #yf-container';
 	const inSecondarySelector = YTF_SELECTORS?.CONTAINER?.IN_SECONDARY || 'ytd-watch-flexy #secondary > #yf-container';
@@ -416,24 +401,4 @@ function moveDivToSecondary() {
 	}
 }
 
-// function getAlbumArtColors() {
-//   const colorThief = new ColorThief();
-//   const img = document.querySelector("#items > yt-video-attribute-view-model > div > a > div.yt-video-attribute-view-model__hero-section > img");
-
-//   if (img) {
-//     img.crossOrigin = "Anonymous";
-//     if (img.complete) {
-//       const palette = colorThief.getPalette(img, 3);
-//       console.log(palette);
-//     } else {
-//       img.addEventListener('load', function() {
-//         const palette = colorThief.getPalette(img, 3);
-//         console.log(palette);
-//       });
-//     }
-//   }
-// }
-
 window.onresize = windowResize;
-
-// getAlbumArtColors();

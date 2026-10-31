@@ -165,17 +165,27 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             }
             case 'SEARCH_LRCLIB': {
                 const query = val || obj.query;
-                searchLrclibRecords(query).then((results) => {
-                    sendResponse({ success: true, results });
+                searchLrclibRecords(query).then((res) => {
+                    if (res && res.rateLimited) {
+                        sendResponse({ success: false, rateLimited: true, retryAfter: res.retryAfter, results: [] });
+                    } else {
+                        const results = Array.isArray(res) ? res : (res?.results || []);
+                        sendResponse({ success: true, rateLimited: false, results });
+                    }
                 }).catch((err) => {
-                    sendResponse({ success: false, error: err.message, results: [] });
+                    const isRateLimited = err?.status === 429 || err?.message === 'Too Many Requests';
+                    sendResponse({ success: false, rateLimited: isRateLimited, retryAfter: err?.retryAfter, error: err.message, results: [] });
                 });
                 return true;
             }
             case 'FETCH_LRCLIB_RECORD': {
                 const recordId = val || obj.id;
                 fetchLrclibRecordById(recordId).then((record) => {
-                    sendResponse({ success: true, record });
+                    if (record && record.rateLimited) {
+                        sendResponse({ success: false, rateLimited: true, retryAfter: record.retryAfter });
+                    } else {
+                        sendResponse({ success: true, record });
+                    }
                 }).catch((err) => {
                     sendResponse({ success: false, error: err.message });
                 });
@@ -367,7 +377,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                 if (npt) {
                     npt.value = searchTitle || '';
-                    npt.placeholder = searchTitle || 'Searching...';
+                    npt.placeholder = 'song - artist';
                     npt.setAttribute('data-current-title', searchTitle || '');
                 }
 
@@ -437,6 +447,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
         let source = '';
         let synced = false;
         let offset = 0.0;
+        let isRateLimited = false;
+        let rateLimitRetryAfter = 0;
         var skipAdsState = '';
 
         if (skipAdsState == 'FULL') {
@@ -464,6 +476,10 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     lyrics = '';
                     message = 'NOK';
                     offset = existingSavedOffset !== null ? existingSavedOffset : 0.0;
+                    if (resultObject?.rateLimited || resultObject?.statusCode === 503) {
+                        isRateLimited = true;
+                        rateLimitRetryAfter = resultObject.retryAfter || 1;
+                    }
                 } else {
                     lyrics = resultObject.lyrics || '';
                     message = resultObject.message || '';
@@ -482,7 +498,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             } else if (!isEmpty(obj)) {
                 lyrics = obj[uid]?.lyrics || '';
                 message = obj[uid]?.message || "NOK";
-                title = obj[uid]?.title || displayTitle || '';
+                title = hasUserSelection ? (obj[uid]?.title || displayTitle || '') : (displayTitle || obj[uid]?.title || '');
                 source = obj[uid]?.source || '';
                 synced = obj[uid]?.synced ?? false;
                 offset = parseOffset(obj[uid]?.offset, 0.0);
@@ -517,7 +533,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize, isMusic) => {
+            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize, isMusic, isRateLimited, rateLimitRetryAfter) => {
                 const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
                 if (!watchFlexy) return;
                 const domUid = watchFlexy.getAttribute('video-id');
@@ -578,8 +594,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     var logoSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
                     logoSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-                    logoSvg.setAttribute("width", "40");
-                    logoSvg.setAttribute("height", "40");
+                    logoSvg.setAttribute("width", "31");
+                    logoSvg.setAttribute("height", "32");
                     logoSvg.setAttribute("viewBox", "0 0 1024 1024");
                     logoSvg.classList.add("yf-logo-svg");
 
@@ -609,11 +625,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     nowPlayingText.id = "now-playing-text-input";
                     nowPlayingText.className = "now-playing-text-input";
                     nowPlayingText.value = title;
-                    nowPlayingText.placeholder = title || "Search song or artist...";
+                    nowPlayingText.placeholder = "song - artist";
                     nowPlayingText.setAttribute("data-current-title", title);
                     nowPlayingText.title = "Click to search or edit song";
 
                     var searchBtn = document.createElement("button");
+                    searchBtn.type = "button";
                     searchBtn.className = "yf-search-btn";
                     searchBtn.title = "Search lyrics";
                     searchBtn.setAttribute("aria-label", "Search lyrics");
@@ -625,23 +642,21 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     nowPlayingText.addEventListener('focus', () => {
                         nowPlayingDiv.classList.add('active-input');
-                        if (nowPlayingText.value === nowPlayingText.getAttribute('data-current-title')) {
+                        if (nowPlayingText.value && nowPlayingText.value === nowPlayingText.getAttribute('data-current-title')) {
                             nowPlayingText.select();
                         }
                     });
 
                     nowPlayingText.addEventListener('blur', () => {
                         nowPlayingDiv.classList.remove('active-input');
-                        if (!nowPlayingText.value.trim()) {
-                            nowPlayingText.value = nowPlayingText.getAttribute('data-current-title') || '';
-                        }
                     });
 
                     nowPlayingText.addEventListener('keydown', (e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
-                            if (container._performSearch) {
-                                container._performSearch(nowPlayingText.value.trim());
+                            const qVal = nowPlayingText.value.trim() || (nowPlayingText.getAttribute('data-current-title') || '').trim();
+                            if (qVal && container._performSearch) {
+                                container._performSearch(qVal);
                             }
                         } else if (e.key === 'Escape') {
                             nowPlayingText.value = nowPlayingText.getAttribute('data-current-title') || '';
@@ -652,19 +667,37 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         }
                     });
 
+                    searchBtn.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                    });
+
                     searchBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        if (container._performSearch) {
-                            container._performSearch(nowPlayingText.value.trim());
+                        const liveInput = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT) || nowPlayingText;
+                        const queryVal = (liveInput.value || '').trim() || (liveInput.getAttribute('data-current-title') || '').trim();
+                        if (queryVal && container._performSearch) {
+                            if (!liveInput.value.trim()) {
+                                liveInput.value = queryVal;
+                            }
+                            container._performSearch(queryVal);
+                        } else {
+                            liveInput.focus();
                         }
                     });
 
                     nowPlayingDiv.appendChild(nowPlayingText);
-                    nowPlayingDiv.appendChild(searchBtn);
 
                     var menuSpan = document.createElement("span");
                     menuSpan.className = "yf-menu";
-                    menuSpan.textContent = "...";
+                    menuSpan.title = "Options";
+                    menuSpan.setAttribute("aria-label", "Options");
+                    menuSpan.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:block;pointer-events:none;">
+                            <circle cx="12" cy="5.5" r="1.75"/>
+                            <circle cx="12" cy="12" r="1.75"/>
+                            <circle cx="12" cy="18.5" r="1.75"/>
+                        </svg>
+                    `;
 
                     var yfDropdown = document.createElement('div');
                     yfDropdown.id = 'yf-dropdown';
@@ -687,9 +720,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         switch (optionText) {
                             case 'Font Size': {
                                 var svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("height", "18");
                                 svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
+                                svgElement.setAttribute("width", "18");
                                 svgElement.classList.add('material-symbols-outlined', 'yf-dd-list-icon');
                                 var pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "M592.54-687.001H432.385q-12.628 0-21.467-8.853-8.84-8.852-8.84-21.499 0-12.646 8.84-21.646 8.839-9 21.467-9h381.307q12.628 0 21.467 8.853 8.84 8.853 8.84 21.499 0 12.647-8.84 21.646-8.839 9-21.467 9H653.537v444.693q0 12.628-8.852 21.467-8.853 8.84-21.5 8.84-12.646 0-21.646-8.952-8.999-8.952-8.999-21.74v-444.308ZM235.232-496.924h-88.924q-12.628 0-21.467-8.853-8.84-8.852-8.84-21.499 0-12.646 8.84-21.646 8.839-9 21.467-9h238.461q12.628 0 21.467 8.853 8.84 8.852 8.84 21.499 0 12.646-8.84 21.646-8.839 9-21.467 9h-88.924v254.616q0 12.628-8.853 21.467-8.852 8.84-21.499 8.84-12.646 0-21.454-8.84-8.807-8.839-8.807-21.467v-254.616Z");
@@ -697,12 +730,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.appendChild(svgElement);
 
                                 li.appendChild(document.createElement('span')).className = 'yf-dd-item-cont';
-                                li.lastChild.textContent = optionText + '\u00A0\u00A0\u00A0\u00A0';
+                                li.lastChild.textContent = optionText;
 
                                 svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("height", "18");
                                 svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
+                                svgElement.setAttribute("width", "18");
                                 svgElement.classList.add('sFont', 'material-symbols-outlined');
                                 pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "M609.975-454.001q-11.033 0-18.657-7.418-7.625-7.418-7.625-18.384 0-10.966 7.463-18.581t18.496-7.615h215.757q11.033 0 18.658 7.418 7.624 7.418 7.624 18.384 0 10.966-7.463 18.581t-18.495 7.615H609.975Zm-403.58 79.846-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Z");
@@ -729,9 +762,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.lastChild.textContent = localFontSize;
 
                                 svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("height", "18");
                                 svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
+                                svgElement.setAttribute("width", "18");
                                 svgElement.classList.add('sFont', 'material-symbols-outlined');
                                 pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "m206.395-374.155-40.781 106.847q-2.846 7.154-9.546 12.23-6.701 5.077-15.653 5.077-13.975 0-22.464-11.75-8.489-11.75-2.412-25.095L275.54-693.231q3.461-7.384 9.696-12.076 6.234-4.692 14.841-4.692h19.493q8.121 0 14.467 4.692t9.808 12.076l160.399 406.022q4.909 13.44-3.293 25.324-8.203 11.884-22.177 11.884-9.466 0-16.529-4.829-7.063-4.83-10.006-13.282l-39.777-106.043H206.395Zm16.681-47.844H394.77l-83.203-219.002h-4.644l-83.847 219.002Zm468.617-32.253h-82.001q-11.05 0-18.524-7.503-7.475-7.503-7.475-18.492t7.475-18.41q7.474-7.42 18.524-7.42h82.001v-81.689q0-10.984 7.418-18.609 7.418-7.624 18.384-7.624 10.966 0 18.455 7.475 7.49 7.474 7.49 18.524v82.001h82.168q11.086 0 18.585 7.478 7.498 7.479 7.498 18.534 0 11.056-7.498 18.521-7.499 7.465-18.585 7.465H743.44V-372q0 11.05-7.503 18.524-7.503 7.475-18.258 7.475-11.056 0-18.521-7.499-7.465-7.499-7.465-18.584v-82.168Z");
@@ -755,9 +788,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             }
                             case 'Lyric Offset': {
                                 var svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("height", "18");
                                 svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
+                                svgElement.setAttribute("width", "18");
                                 svgElement.classList.add('material-symbols-outlined', 'yf-dd-list-icon');
                                 var pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
                                 pathElement.setAttribute("d", "M252.31-400v60h-80q-29.92 0-51.12-21.24Q100-382.48 100-412.31v-375.38q0-29.83 21.24-51.07Q142.48-860 172.31-860h375.38q29.83 0 51.07 21.24Q620-817.52 620-787.69v80h-60v-80q0-5.39-3.46-8.85t-8.85-3.46H172.31q-5.39 0-8.85 3.46t-3.46 8.85v375.38q0 5.39 3.46 8.85t8.85 3.46h80Zm160 300q-29.83 0-51.07-21.24Q340-142.48 340-172.31v-375.38q0-29.83 21.24-51.07Q382.48-620 412.31-620h375.38q29.83 0 51.07 21.24Q860-577.52 860-547.69v375.38q0 29.83-21.24 51.07Q817.52-100 787.69-100H412.31Z");
@@ -768,9 +801,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.lastChild.textContent = optionText;
 
                                 const decrementBtn = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                decrementBtn.setAttribute("height", "24");
+                                decrementBtn.setAttribute("height", "18");
                                 decrementBtn.setAttribute("viewBox", "0 -960 960 960");
-                                decrementBtn.setAttribute("width", "24");
+                                decrementBtn.setAttribute("width", "18");
                                 decrementBtn.id = 'ytf-offset-decrement';
                                 decrementBtn.classList.add('sFont', 'material-symbols-outlined');
                                 decrementBtn.setAttribute('title', 'Decrease offset (hold to rapidly decrease)');
@@ -790,9 +823,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 li.appendChild(offsetInput);
 
                                 const incrementBtn = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                incrementBtn.setAttribute("height", "24");
+                                incrementBtn.setAttribute("height", "18");
                                 incrementBtn.setAttribute("viewBox", "0 -960 960 960");
-                                incrementBtn.setAttribute("width", "24");
+                                incrementBtn.setAttribute("width", "18");
                                 incrementBtn.classList.add('sFont', 'material-symbols-outlined');
                                 incrementBtn.id = 'ytf-offset-increment';
                                 incrementBtn.setAttribute('title', 'Increase offset (hold to rapidly increase)');
@@ -933,12 +966,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             }
                             case 'Report': {
                                 var svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-                                svgElement.setAttribute("height", "24");
+                                svgElement.setAttribute("height", "18");
                                 svgElement.setAttribute("viewBox", "0 -960 960 960");
-                                svgElement.setAttribute("width", "24");
+                                svgElement.setAttribute("width", "18");
                                 svgElement.classList.add('yf-dd-list-icon', 'material-symbols-outlined');
                                 var pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                                pathElement.setAttribute("d", "M479.789-311.539q11.942 0 20.23-8.078t8.288-20.019q0-11.941-8.078-20.229-8.077-8.289-20.018-8.289-11.942 0-20.23 8.078t-8.288 20.019q0 11.941 8.078 20.229 8.077 8.289 20.018 8.289Zm.014-111.23q10.966 0 18.581-7.474 7.615-7.475 7.615-18.525v-189.54q0-11.05-7.418-18.524-7.418-7.475-18.384-7.475-10.966 0-18.581 7.475-7.615 7.474-7.615 18.524v189.54q0 11.05 7.418 18.525 7.418 7.474 18.384 7.474ZM376.385-164.001q-12.855 0-24.504-4.616-11.65-4.615-21.496-14.461L183.078-331.385q-8.889-9.021-13.983-21.195-5.094-12.173-5.094-24.805v-206.23q0-12.855 4.616-24.504 4.615-11.65 14.461-21.496l147.307-147.307q9.846-9.846 21.496-14.461 11.649-4.616 24.504-4.616h207.23q12.855 0 24.504 4.616 11.65 4.615 21.496 14.461l147.307 147.307q9.846 9.846 14.461 21.496 4.616 11.649 4.616 24.504v207.23q0 12.855-4.616 24.504-4.615 11.65-14.461 21.496L628.615-183.078q-9.021 8.889-21.195 13.983-12.173 5.094-24.805 5.094h-206.23ZM371-216h218l155-155v-218L588-744H371L216-589v218l155 155Zm109-264Z");
+                                pathElement.setAttribute("d", "M479.789-311.539q11.942 0 20.23-8.078t8.288-20.019q0-11.941-8.078-20.229-8.077-8.289-20.018-8.289-11.942 0-20.23 8.078t-8.288 20.019q0 11.941 8.078 20.229 8.077 8.289 20.018 8.289Zm.014-111.23q10.966 0 18.581-7.474 7.615-7.475 7.615-18.525v-189.54q0-11.05-7.418-18.524-7.418-7.475-18.384-7.475-10.966 0-18.581 7.475-7.615 7.474-7.615 18.524v189.54q0 11.05 7.418 18.525 7.418 7.474 18.384 7.474ZM376.385-164.001q-12.855 0-24.504-4.616-11.65-4.615-21.496-14.461L183.078-331.385q-8.889-9.021-13.983-21.195-5.094-12.173-5.094-24.805v-206.23q0-12.855 4.616-24.504 4.615-11.65 14.461-21.496l147.307-147.307q9.846-9.846 14.461-14.461 11.649-4.616 24.504-4.616h207.23q12.855 0 24.504 4.616 11.65 4.615 21.496 14.461l147.307 147.307q9.846 9.846 14.461 21.496 4.616 11.649 4.616 24.504v207.23q0 12.855-4.616 24.504-4.615 11.65-14.461 21.496L628.615-183.078q-9.021 8.889-21.195 13.983-12.173 5.094-24.805 5.094h-206.23ZM371-216h218l155-155v-218L588-744H371L216-589v218l155 155Zm109-264Z");
                                 svgElement.appendChild(pathElement);
                                 li.appendChild(svgElement);
 
@@ -958,12 +991,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     yfDropdown.appendChild(ul);
 
-                    menuSpan.addEventListener('click', () => {
+                    menuSpan.addEventListener('click', (e) => {
+                        e.stopPropagation();
                         yfDropdown.style.display = (yfDropdown.style.display === 'none' || yfDropdown.style.display === '') ? 'block' : 'none';
                     });
 
                     ytc?.addEventListener('mousedown', (event) => {
-                        if (!yfDropdown.contains(event.target) && event.target !== menuSpan) {
+                        if (!yfDropdown.contains(event.target) && !menuSpan.contains(event.target)) {
                             yfDropdown.style.display = 'none';
                         }
                     });
@@ -1059,6 +1093,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     var headerBottom = document.createElement("div");
                     headerBottom.className = "yf-header-bottom";
                     headerBottom.appendChild(nowPlayingDiv);
+                    headerBottom.appendChild(searchBtn);
 
                     header.appendChild(headerTop);
                     header.appendChild(headerBottom);
@@ -1118,7 +1153,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 if (npt) {
                     npt.value = title;
                     npt.setAttribute('data-current-title', title);
-                    npt.placeholder = title || 'Search song or artist...';
+                    npt.placeholder = 'song - artist';
                 }
 
                 var effectiveFontSize = clampFontSize(initialFontSize || localStorage.getItem('fontSize') || '24px');
@@ -1305,33 +1340,18 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     });
                 }
 
-                function renderLyricsView(targetLyrics, targetSynced, targetSource, targetProfanity) {
+                function populateLyricContainer(lyricContainer, targetLyrics, targetSynced, targetSource, targetProfanity) {
                     lyricElements = [];
-                    currentLyrics = targetLyrics;
-                    currentSynced = targetSynced;
-                    currentSource = targetSource;
-
-                    intermediateContainer = document.createElement('div');
-                    intermediateContainer.id = 'intermediateContainer';
-                    intermediateContainer.className = 'intermediateContainer';
-
-                    var lyricContainer = document.createElement('div');
-                    lyricContainer.id = 'lyricContainer';
-                    lyricContainer.className = 'lyricContainer lyric sizeM';
+                    lyricContainer.innerHTML = '';
                     lyricContainer.setAttribute('data-profanity', targetProfanity);
+                    lyricContainer.classList.toggle('unsynced-lyrics', !targetSynced);
 
                     var localFontSize = clampFontSize(effectiveFontSize || localStorage.getItem('fontSize') || '24px');
                     if (localFontSize) {
                         lyricContainer.style.fontSize = localFontSize;
                     }
 
-                    let bubblesWrapper = document.createElement('div');
-                    bubblesWrapper.className = 'bubbles-wrapper';
-                    bubblesWrapper.innerHTML = `
-                        <div id="bubble-1" class="bubble"></div>
-                        <div id="bubble-2" class="bubble"></div>
-                        <div id="bubble-3" class="bubble"></div>
-                    `;
+
 
                     const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                     const re = new RegExp(`(${pattern})`, 'giu');
@@ -1356,7 +1376,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         var isBlankInterlude = !rawText || String(rawText).trim() === '' || String(rawText).trim() === '...';
                         var d = document.createElement('span');
 
-                        if (timestamp) {
+                        if (timestamp && targetSynced) {
                             d.setAttribute('data-timestamp', timestamp);
                             d.className = 'lyric-line';
                             d.addEventListener('click', function () {
@@ -1375,7 +1395,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 if (mElem) mElem.currentTime = seconds;
                             });
                         } else {
-                            d.className = 'lyric-line';
+                            d.className = targetSynced ? 'lyric-line' : 'lyric-line unsynced-lyric-line';
                         }
 
                         if (isBlankInterlude && targetSynced) {
@@ -1387,7 +1407,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                     <span class="am-interlude-dot"></span>
                                 </span>
                             `;
-                        } else if (words && words.length > 0) {
+                        } else if (words && words.length > 0 && targetSynced) {
                             d.classList.add('has-word-sync');
                             words.forEach(w => {
                                 var wordSpan = document.createElement('span');
@@ -1428,11 +1448,31 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         lyricContainer.appendChild(creditDiv);
                     }
 
-                    if (targetSynced) {
-                        attachLyricsSync(mediaElem, processedLyrics, lyricContainer, lyricElements);
-                    } else {
-                        detachLyricsSync(mediaElem);
-                    }
+                    return processedLyrics;
+                }
+
+                function renderLyricsView(targetLyrics, targetSynced, targetSource, targetProfanity) {
+                    currentLyrics = targetLyrics;
+                    currentSynced = targetSynced;
+                    currentSource = targetSource;
+
+                    intermediateContainer = document.createElement('div');
+                    intermediateContainer.id = 'intermediateContainer';
+                    intermediateContainer.className = 'intermediateContainer';
+
+                    var lyricContainer = document.createElement('div');
+                    lyricContainer.id = 'lyricContainer';
+                    lyricContainer.className = 'lyricContainer lyric sizeM';
+
+                    let bubblesWrapper = document.createElement('div');
+                    bubblesWrapper.className = 'bubbles-wrapper';
+                    bubblesWrapper.innerHTML = `
+                        <div id="bubble-1" class="bubble"></div>
+                        <div id="bubble-2" class="bubble"></div>
+                        <div id="bubble-3" class="bubble"></div>
+                    `;
+
+                    var processedLyrics = populateLyricContainer(lyricContainer, targetLyrics, targetSynced, targetSource, targetProfanity);
 
                     intermediateContainer.appendChild(bubblesWrapper);
                     intermediateContainer.appendChild(lyricContainer);
@@ -1442,6 +1482,16 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         container.replaceChild(intermediateContainer, existingContent);
                     } else {
                         container.appendChild(intermediateContainer);
+                    }
+
+                    initVisualizer();
+
+                    const activeMedia = document.querySelector(YT_SEL.PLAYER.VIDEO) || mediaElem;
+                    if (targetSynced) {
+                        attachLyricsSync(activeMedia, processedLyrics, lyricContainer, lyricElements);
+                    } else {
+                        detachLyricsSync(activeMedia);
+                        lyricContainer.scrollTop = 0;
                     }
                 }
 
@@ -1454,7 +1504,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     }
                 }
 
-                function renderFloatingSearchDropdown(results, query, videoDuration) {
+                function renderFloatingSearchDropdown(results, query, videoDuration, options) {
+                    options = options || {};
                     closeFloatingSearchDropdown();
 
                     var bottomBar = container.querySelector(YTF_SEL.HEADER.BOTTOM_ROW);
@@ -1469,14 +1520,18 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     var headerTitle = document.createElement('span');
                     headerTitle.className = 'yf-search-dropdown-title';
-                    headerTitle.textContent = results && results.length > 0 ? `Results (${results.length})` : 'Search Results';
+                    if (options.rateLimited) {
+                        headerTitle.textContent = 'Unavailable';
+                    } else {
+                        headerTitle.textContent = results && results.length > 0 ? `Results (${results.length})` : 'Results';
+                    }
 
                     var closeBtn = document.createElement('button');
                     closeBtn.className = 'yf-search-close-btn';
                     closeBtn.title = 'Close';
                     closeBtn.setAttribute('aria-label', 'Close search dropdown');
                     closeBtn.innerHTML = `
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
                             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                         </svg>
                     `;
@@ -1489,17 +1544,26 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     headerDiv.appendChild(closeBtn);
                     searchDropdown.appendChild(headerDiv);
 
-                    if (!results || results.length === 0) {
+                    if (options.rateLimited) {
+                        var rateLimitDiv = document.createElement('div');
+                        rateLimitDiv.className = 'yf-search-status is-rate-limited';
+                        const retryMin = (options.retryAfter && !isNaN(options.retryAfter)) ? parseInt(options.retryAfter, 10) : 1;
+                        rateLimitDiv.innerHTML = `
+                            <svg class="yf-search-status-icon yf-search-rate-limit-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                            </svg>
+                            <span class="yf-search-status-title">Retry after : ${retryMin} min</span>
+                        `;
+                        searchDropdown.appendChild(rateLimitDiv);
+                    } else if (!results || results.length === 0) {
                         var noResDiv = document.createElement('div');
                         noResDiv.className = 'yf-search-status';
-                        const safeQuery = query ? String(query).replace(/"/g, '&quot;') : '';
                         noResDiv.innerHTML = `
-                            <svg class="yf-search-status-icon" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                            <svg class="yf-search-status-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                                 <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                             </svg>
                             <span class="yf-search-status-title">No Lyrics Found</span>
-                            <span class="yf-search-status-text">No matching lyrics found for "${safeQuery}".</span>
-                            <span class="yf-search-status-hint">Tip: Try searching with "Song Title - Artist" format.</span>
+                            <span class="yf-search-status-hint">Format: song name - artist</span>
                         `;
                         searchDropdown.appendChild(noResDiv);
                     } else {
@@ -1588,7 +1652,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     if (npt) {
                         npt.value = chosenTitle;
                         npt.setAttribute('data-current-title', chosenTitle);
-                        npt.placeholder = chosenTitle;
+                        npt.placeholder = 'song - artist';
                     }
 
                     function applySelectedLyrics(chosenLyrics, isSynced, isWordSync) {
@@ -1630,115 +1694,18 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             // Container was Not Found; swap it to intermediate container with lyrics
                             renderLyricsView(chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
                         } else {
-                            // Only update lyrics inside the existing lyricContainer in place!
+                            // Update lyrics inside the existing lyricContainer in place and keep visualizer & theme synced
                             var lyricContainer = existingIntermediate.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
                             if (lyricContainer) {
-                                detachLyricsSync(mediaElem);
-                                lyricElements = [];
-                                lyricContainer.innerHTML = '';
-                                lyricContainer.setAttribute('data-profanity', profanityCheck);
-                                var localFontSize = clampFontSize(effectiveFontSize || localStorage.getItem('fontSize') || '24px');
-                                if (localFontSize) {
-                                    lyricContainer.style.fontSize = localFontSize;
-                                }
-
-                                const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-                                const re = new RegExp(`(${pattern})`, 'giu');
-
-                                var processedLyrics = (chosenLyrics || []).reduce((acc, lItem) => {
-                                    if (Array.isArray(lItem) ? lItem.length >= 2 : (lItem && String(lItem).trim())) {
-                                        acc.push(lItem);
-                                    }
-                                    return acc;
-                                }, []);
-
-                                processedLyrics.forEach((l) => {
-                                    var timestamp;
-                                    var rawText = l;
-                                    var words = null;
-                                    if (Array.isArray(l)) {
-                                        timestamp = l[0];
-                                        rawText = l[1] ? l[1] : '';
-                                        words = Array.isArray(l[2]) && l[2].length > 0 ? l[2] : null;
-                                    }
-
-                                    var isBlankInterlude = !rawText || String(rawText).trim() === '' || String(rawText).trim() === '...';
-                                    var d = document.createElement('span');
-
-                                    if (timestamp) {
-                                        d.setAttribute('data-timestamp', timestamp);
-                                        d.className = 'lyric-line';
-                                        d.addEventListener('click', function () {
-                                            const mElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
-                                            var curOffset = parseFloat(mElem?.getAttribute('ytf-data-offset')) || 0;
-                                            const ts = this.getAttribute('data-timestamp');
-                                            let seconds = 0;
-                                            if (ts) {
-                                                const parts = ts.split(':');
-                                                if (parts.length === 2) {
-                                                    const min = parseInt(parts[0], 10);
-                                                    const sec = parseFloat(parts[1]) - curOffset;
-                                                    seconds = min * 60 + sec;
-                                                }
-                                            }
-                                            if (mElem) mElem.currentTime = seconds;
-                                        });
-                                    } else {
-                                        d.className = 'lyric-line';
-                                    }
-
-                                    if (isBlankInterlude && isSynced) {
-                                        d.classList.add('am-interlude-line');
-                                        d.innerHTML = `
-                                            <span class="am-interlude-dots active">
-                                                <span class="am-interlude-dot"></span>
-                                                <span class="am-interlude-dot"></span>
-                                                <span class="am-interlude-dot"></span>
-                                            </span>
-                                        `;
-                                    } else if (words && words.length > 0) {
-                                        d.classList.add('has-word-sync');
-                                        words.forEach(w => {
-                                            var wordSpan = document.createElement('span');
-                                            wordSpan.className = 'yf-word yf-word-upcoming';
-                                            wordSpan.setAttribute('data-start', w.start);
-                                            wordSpan.setAttribute('data-end', w.end);
-                                            var wordText = w.text || '';
-                                            if (lyricContainer.getAttribute('data-profanity') === 'false') {
-                                                wordText = String(wordText).replaceAll(re, match => {
-                                                    if (match.length <= 1) return '*';
-                                                    return match.charAt(0) + '*'.repeat(match.length - 1);
-                                                });
-                                            }
-                                            wordSpan.textContent = wordText;
-                                            d.appendChild(wordSpan);
-                                        });
-                                    } else {
-                                        if (lyricContainer.getAttribute('data-profanity') === 'false') {
-                                            var replacedLine = String(rawText).replaceAll(re, match => {
-                                                if (match.length <= 1) return '*';
-                                                return match.charAt(0) + '*'.repeat(match.length - 1);
-                                            });
-                                            d.textContent = replacedLine || '...';
-                                        } else {
-                                            d.textContent = rawText || '...';
-                                        }
-                                    }
-
-                                    lyricElements.push(d);
-                                    lyricContainer.appendChild(d);
-                                });
-
-                                var creditDiv = document.createElement('div');
-                                creditDiv.className = 'yf-source-credit';
-                                creditDiv.innerHTML = '<span>Lyrics provided by <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer" class="yf-source-link">LRCLIB</a></span>';
-                                creditDiv.addEventListener('click', (e) => e.stopPropagation());
-                                lyricContainer.appendChild(creditDiv);
-
+                                const activeMedia = document.querySelector(YT_SEL.PLAYER.VIDEO) || mediaElem;
+                                detachLyricsSync(activeMedia);
+                                var processedLyrics = populateLyricContainer(lyricContainer, chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
+                                initVisualizer();
                                 if (isSynced) {
-                                    attachLyricsSync(mediaElem, processedLyrics, lyricContainer, lyricElements);
+                                    attachLyricsSync(activeMedia, processedLyrics, lyricContainer, lyricElements);
+                                } else {
+                                    lyricContainer.scrollTop = 0;
                                 }
-                                lyricContainer.scrollTop = 0;
                             } else {
                                 renderLyricsView(chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
                             }
@@ -1751,6 +1718,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             applySelectedLyrics(parsed.length > 0 ? parsed : parseLrc(item.syncedLyrics), true, parsed.length > 0);
                         } else if (item.id) {
                             chrome.runtime.sendMessage({ type: 'FETCH_LRCLIB_RECORD', id: item.id }, (resp) => {
+                                if (resp && resp.rateLimited) {
+                                    const retryMin = resp.retryAfter ? parseInt(resp.retryAfter, 10) : 1;
+                                    clientRateLimitUntil = Date.now() + (retryMin * 60 * 1000);
+                                    renderFloatingSearchDropdown([], '', 0, { rateLimited: true, retryAfter: retryMin });
+                                    return;
+                                }
                                 if (resp && resp.success && resp.record && resp.record.lyricsfile) {
                                     const parsed = parseLyricsfileYaml(resp.record.lyricsfile);
                                     applySelectedLyrics(parsed.length > 0 ? parsed : parseLrc(item.syncedLyrics), true, parsed.length > 0);
@@ -1774,8 +1747,17 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     }
                 }
 
+                let clientRateLimitUntil = 0;
+
                 function performSearch(query) {
                     if (!query) return;
+
+                    const now = Date.now();
+                    if (clientRateLimitUntil > now) {
+                        const remainingMin = Math.max(1, Math.ceil((clientRateLimitUntil - now) / 60000));
+                        renderFloatingSearchDropdown([], query, 0, { rateLimited: true, retryAfter: remainingMin });
+                        return;
+                    }
 
                     container.removeAttribute('data-manually-closed-uid');
                     try {
@@ -1797,19 +1779,18 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         searchDropdown = document.createElement('div');
                         searchDropdown.id = 'yf-search-dropdown';
                         searchDropdown.className = 'yf-search-dropdown';
-                        const safeQuery = String(query).replace(/"/g, '&quot;');
                         searchDropdown.innerHTML = `
                             <div class="yf-search-dropdown-header">
-                                <span class="yf-search-dropdown-title">Searching...</span>
+                                <span class="yf-search-dropdown-title">Search</span>
                                 <button class="yf-search-close-btn" title="Close" aria-label="Close">
-                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
                                         <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                                     </svg>
                                 </button>
                             </div>
                             <div class="yf-search-status">
                                 <div class="yf-search-spinner"></div>
-                                <span class="yf-search-status-text">Searching lyrics for "${safeQuery}"...</span>
+                                <span class="yf-search-status-text">Searching...</span>
                             </div>
                         `;
                         searchDropdown.querySelector('.yf-search-close-btn')?.addEventListener('click', (e) => {
@@ -1825,10 +1806,19 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             progressbar.classList.add("no-animate");
                         }
 
+                        if (response && response.rateLimited) {
+                            const retryMin = response.retryAfter ? parseInt(response.retryAfter, 10) : 1;
+                            clientRateLimitUntil = Date.now() + (retryMin * 60 * 1000);
+                            renderFloatingSearchDropdown([], query, 0, { rateLimited: true, retryAfter: retryMin });
+                            return;
+                        }
+
                         if (!response || !response.success || !response.results || response.results.length === 0) {
                             renderFloatingSearchDropdown([], query, 0);
                             return;
                         }
+
+                        clientRateLimitUntil = 0;
 
                         // Fetch video duration from DOM (consider even when < 59s)
                         const videoElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
@@ -1841,8 +1831,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     });
                 }
 
-                // Global listener to close search dropdown when clicking outside
-                document.addEventListener('mousedown', (e) => {
+                // Global listener to close search dropdown when clicking outside (bound once)
+                if (container._outsideClickHandler) {
+                    document.removeEventListener('mousedown', container._outsideClickHandler);
+                }
+                container._outsideClickHandler = (e) => {
                     if (searchDropdown && !searchDropdown.contains(e.target)) {
                         const inputElem = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                         const searchBtnElem = container.querySelector(YTF_SEL.HEADER.SEARCH_BTN);
@@ -1850,7 +1843,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         if (searchBtnElem && searchBtnElem.contains(e.target)) return;
                         closeFloatingSearchDropdown();
                     }
-                });
+                };
+                document.addEventListener('mousedown', container._outsideClickHandler);
 
                 container._performSearch = performSearch;
                 container._closeSearchResults = closeFloatingSearchDropdown;
@@ -1877,23 +1871,31 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     var notFoundDiv = document.createElement('div');
                     notFoundDiv.id = 'notFound';
-                    notFoundDiv.className = 'not-found';
+                    notFoundDiv.className = 'not-found' + (isRateLimited ? ' is-rate-limited' : '');
 
                     var notFoundIcon = document.createElement('div');
                     notFoundIcon.className = 'not-found-icon';
-                    notFoundIcon.innerHTML = `
-                        <svg viewBox="0 0 24 24" width="40" height="40" fill="currentColor">
+                    notFoundIcon.innerHTML = isRateLimited ? `
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                    ` : `
+                        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
                             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                         </svg>
                     `;
 
                     var notFoundTitle = document.createElement('span');
                     notFoundTitle.className = 'not-found-title';
-                    notFoundTitle.textContent = 'No Lyrics Available';
+                    notFoundTitle.textContent = isRateLimited
+                        ? `Retry after : ${rateLimitRetryAfter || 1} min`
+                        : 'No Lyrics Available';
 
                     var notFoundSub = document.createElement('span');
                     notFoundSub.className = 'not-found-subtext';
-                    notFoundSub.textContent = 'Use the search bar above to look up lyrics';
+                    notFoundSub.textContent = isRateLimited
+                        ? 'LRCLIB service is temporarily unavailable'
+                        : 'Use the search bar above to look up lyrics';
 
                     notFoundDiv.appendChild(notFoundIcon);
                     notFoundDiv.appendChild(notFoundTitle);
@@ -1943,10 +1945,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 }
 
                 function findActiveLyricIndex(lyricsArr, currentTime, offset) {
-                    let left = 0, right = lyricsArr.length - 1, result = 0;
+                    if (!lyricsArr || lyricsArr.length === 0) return 0;
+                    const effOffset = offset ? offset : 0;
+                    let left = 0, right = lyricsArr.length - 1, result = -1;
                     while (left <= right) {
                         const mid = Math.floor((left + right) / 2);
-                        const lyricTime = timestampToSeconds(lyricsArr[mid][0]) - (offset ? offset : 0);
+                        const lyricTime = timestampToSeconds(lyricsArr[mid][0]) - effOffset;
                         if (lyricTime <= currentTime) {
                             result = mid;
                             left = mid + 1;
@@ -1954,6 +1958,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             right = mid - 1;
                         }
                     }
+                    if (result === -1) return 0;
                     return result;
                 }
 
@@ -1961,6 +1966,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 var currentActiveElement;
 
                 function syncLyricsDisplay(lyricsArr, currentTime, offset, lyricElements, immediate = false) {
+                    if (!lyricsArr || lyricsArr.length === 0 || !lyricElements || lyricElements.length === 0) return;
                     const activeIdx = findActiveLyricIndex(lyricsArr, currentTime, offset);
                     const el = lyricElements[activeIdx];
 
@@ -2025,7 +2031,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         if (parent && parent.classList.contains('lyricContainer')) {
                             const elOffsetTop = el.offsetTop;
                             const parentHeight = parent.clientHeight;
-                            const scrollPosition = elOffsetTop - (parentHeight * 0.22);
+                            const scrollPosition = Math.max(0, elOffsetTop - (parentHeight * 0.25));
 
                             parent.scrollTo({
                                 top: scrollPosition,
@@ -2041,12 +2047,15 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     if (!mediaElem || !lyricsArr || !lyricsContainer) return;
                     detachLyricsSync(mediaElem);
 
+                    // Reset cached active lyric state so newly selected/rendered lyrics always highlight immediately
+                    currentLyricIndex = -1;
+                    currentActiveElement = null;
+
                     let isLyricsVisible = true;
                     const lyricsObserver = new IntersectionObserver((entries) => {
                         const wasVisible = isLyricsVisible;
                         isLyricsVisible = entries[0]?.isIntersecting ?? false;
 
-                        // When coming back onto screen, immediately show and scroll to the active line
                         if (isLyricsVisible && !wasVisible && mediaElem) {
                             var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                             syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, true);
@@ -2057,9 +2066,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     mediaElem._lyricsObserver = lyricsObserver;
 
                     const onVisibilityChange = () => {
-                        if (document.hidden) {
-                            // Document hidden, sync loop idle
-                        } else if (isLyricsVisible && mediaElem) {
+                        if (!document.hidden && isLyricsVisible && mediaElem) {
                             var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                             syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, true);
                         }
@@ -2074,16 +2081,25 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     };
 
                     mediaElem._lyricsSyncHandler = function () {
-                        // Do not perform lyric sync if lyrics are not visible on screen, document is hidden, or container is collapsed
                         if (!isLyricsVisible || document.hidden || container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) return;
                         var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                         syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements);
                     };
                     mediaElem.addEventListener('timeupdate', mediaElem._lyricsSyncHandler);
 
-                    // If container is currently open, highlight active lyric immediately
+                    // Highlight and scroll to the nearest active lyric immediately and after layout settles
                     if (!container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) {
                         mediaElem._syncCurrentLyric(true);
+                        requestAnimationFrame(() => {
+                            if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                mediaElem._syncCurrentLyric(true);
+                            }
+                            setTimeout(() => {
+                                if (typeof mediaElem._syncCurrentLyric === 'function') {
+                                    mediaElem._syncCurrentLyric(true);
+                                }
+                            }, 50);
+                        });
                     }
                 }
 
@@ -2106,217 +2122,233 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         }
                     }
                 }
-            },
-            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, savedFontSize, isMusic]
-        });
 
-        // Apple Music Mesh Lava-Lamp Visualizer (Zero-Repaint GPU Composited)
-        await chrome.scripting.executeScript({
-            target: { tabId },
-            function: (YTF_SEL) => {
-                // Clean up any previous song's animation loop & observers to prevent leaks
-                if (typeof window.__ytfVisualizerCleanup === 'function') {
-                    window.__ytfVisualizerCleanup();
+                function isYouTubeDarkMode() {
+                    const htmlEl = document.documentElement;
+                    if (htmlEl.hasAttribute('dark')) {
+                        const attr = htmlEl.getAttribute('dark');
+                        if (attr !== 'false') return true;
+                    }
+                    const ytdApp = document.querySelector('ytd-app');
+                    if (ytdApp && ytdApp.hasAttribute('dark') && ytdApp.getAttribute('dark') !== 'false') {
+                        return true;
+                    }
+                    try {
+                        const bg = getComputedStyle(ytdApp || htmlEl).backgroundColor;
+                        const m = bg && bg.match(/\d+/g);
+                        if (m && m.length >= 3) {
+                            const lum = (0.299 * Number(m[0])) + (0.587 * Number(m[1])) + (0.114 * Number(m[2]));
+                            if (lum > 0 || bg.includes('0, 0, 0') || bg.includes('15, 15, 15')) {
+                                return lum < 128;
+                            }
+                        }
+                    } catch (e) {}
+                    return false;
                 }
 
-                // Exact same predefined colors
-                const colors = {
-                    bubble1: '#7B68EE', // Medium Slate Blue / Violet
-                    bubble2: '#FF6B6B', // Warm Coral Red
-                    bubble3: '#4ECDC4', // Soft Aqua Teal
-                };
-
-                const wrapper = document.querySelector(YTF_SEL.VISUALIZER.BUBBLES_WRAPPER);
-                if (!wrapper) return;
-
-                const bubbles = YTF_SEL.VISUALIZER.BUBBLE_IDS.map(id => document.getElementById(id));
-                if (!bubbles[0] || !bubbles[1] || !bubbles[2]) return;
-
-                // Pre-feathered multi-stop radial gradients:
-                // Eliminates expensive CSS `filter: blur(90px)` recalculations on every frame!
-                const applyBubbleThemes = () => {
-                    const isDark = document.documentElement.hasAttribute('dark');
-                    if (isDark) {
-                        bubbles[0].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble1}E6 0%, ${colors.bubble1}99 35%, ${colors.bubble1}26 62%, transparent 76%)`;
-                        bubbles[1].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble2}E6 0%, ${colors.bubble2}99 36%, ${colors.bubble2}26 64%, transparent 78%)`;
-                        bubbles[2].style.background = `radial-gradient(circle at 50% 50%, ${colors.bubble3}D9 0%, ${colors.bubble3}8C 34%, ${colors.bubble3}22 60%, transparent 75%)`;
-                        bubbles.forEach(b => { b.style.opacity = '1'; });
-                    } else {
-                        // Soft luminous pastel blooms for light mode
-                        bubbles[0].style.background = `radial-gradient(circle at 50% 50%, rgba(123, 104, 238, 0.40) 0%, rgba(123, 104, 238, 0.22) 35%, rgba(123, 104, 238, 0.06) 62%, transparent 76%)`;
-                        bubbles[1].style.background = `radial-gradient(circle at 50% 50%, rgba(255, 107, 107, 0.35) 0%, rgba(255, 107, 107, 0.18) 36%, rgba(255, 107, 107, 0.05) 64%, transparent 78%)`;
-                        bubbles[2].style.background = `radial-gradient(circle at 50% 50%, rgba(78, 205, 196, 0.38) 0%, rgba(78, 205, 196, 0.20) 34%, rgba(78, 205, 196, 0.05) 60%, transparent 75%)`;
-                        bubbles.forEach(b => { b.style.opacity = '0.85'; });
+                function syncContainerTheme() {
+                    const isDark = isYouTubeDarkMode();
+                    if (container) {
+                        container.setAttribute('data-theme', isDark ? 'dark' : 'light');
                     }
-                };
-
-                applyBubbleThemes();
-
-                const themeObserver = new MutationObserver(() => {
-                    applyBubbleThemes();
-                });
-                themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['dark'] });
-
-                bubbles.forEach(b => {
-                    if (b.parentElement !== wrapper) wrapper.appendChild(b);
-                });
-
-                const videoElem = document.querySelector('video');
-                let viewW = 420, viewH = 560, baseSize = 520;
-
-                const blobConfigs = [
-                    {
-                        homeX: 0.22, homeY: 0.28,
-                        orbitX: 0.34, orbitY: 0.28,
-                        speedX: 0.21, speedY: 0.16,
-                        rotSpeed: 11,
-                        stretchFreq: 0.27,
-                        phase: 0.4
-                    },
-                    {
-                        homeX: 0.76, homeY: 0.68,
-                        orbitX: 0.36, orbitY: 0.30,
-                        speedX: 0.17, speedY: 0.23,
-                        rotSpeed: -14,
-                        stretchFreq: 0.22,
-                        phase: 2.3
-                    },
-                    {
-                        homeX: 0.35, homeY: 0.72,
-                        orbitX: 0.32, orbitY: 0.34,
-                        speedX: 0.25, speedY: 0.19,
-                        rotSpeed: 9,
-                        stretchFreq: 0.31,
-                        phase: 4.1
-                    }
-                ];
-
-                class AppleMeshLobe {
-                    constructor(el, cfg) {
-                        this.el = el;
-                        this.cfg = cfg;
-                        this.t = cfg.phase;
-                        this.angle = cfg.phase * 30;
-                    }
-
-                    applySize() {
-                        this.el.style.width = baseSize + 'px';
-                        this.el.style.height = baseSize + 'px';
-                    }
-
-                    update(dt) {
-                        this.t += dt;
-                        this.angle = (this.angle + this.cfg.rotSpeed * dt) % 360;
-
-                        // Compound sine/cosine Lissajous drift for non-repeating organic paths
-                        const normX = this.cfg.homeX
-                            + Math.sin(this.t * this.cfg.speedX) * this.cfg.orbitX
-                            + Math.cos(this.t * this.cfg.speedY * 0.6) * 0.08;
-                        const normY = this.cfg.homeY
-                            + Math.cos(this.t * this.cfg.speedY) * this.cfg.orbitY
-                            + Math.sin(this.t * this.cfg.speedX * 0.7) * 0.08;
-
-                        const x = (normX * viewW) - (baseSize * 0.5);
-                        const y = (normY * viewH) - (baseSize * 0.5);
-
-                        // Anisotropic elliptical stretching (simulates morphing without border-radius repaint)
-                        const stretch = Math.sin(this.t * this.cfg.stretchFreq);
-                        const scaleX = 1.25 + stretch * 0.28;
-                        const scaleY = 1.25 - stretch * 0.22;
-
-                        this.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) rotate(${this.angle.toFixed(1)}deg) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
-                    }
+                    return isDark;
                 }
 
-                const lobes = bubbles.map((el, i) => new AppleMeshLobe(el, blobConfigs[i]));
+                function initVisualizer() {
+                    if (typeof window.__ytfVisualizerCleanup === 'function') {
+                        window.__ytfVisualizerCleanup();
+                    }
 
-                function updateDimensions() {
-                    const rect = wrapper.getBoundingClientRect();
-                    viewW = rect.width || 420;
-                    viewH = rect.height || 560;
-                    // Oversized lobes (1.35x container max dimension) so edges never show
-                    baseSize = Math.round(Math.max(viewW, viewH, 420) * 1.35);
-                    lobes.forEach(lobe => lobe.applySize());
-                }
+                    syncContainerTheme();
 
-                updateDimensions();
-
-                // Lock frame submission to ~30 FPS (33ms interval):
-                // Visually identical for slow ambient gradients, cuts CPU/GPU wakeups by 50-75%
-                const FRAME_INTERVAL = 1000 / 30;
-                let isVisible = true;
-                let rafId = null;
-                let lastTimestamp = performance.now();
-
-                function tick(now) {
-                    if (!isVisible || document.hidden) {
-                        rafId = null;
+                    const wrapper = container ? container.querySelector(YTF_SEL.VISUALIZER.BUBBLES_WRAPPER) : document.querySelector(YTF_SEL.VISUALIZER.BUBBLES_WRAPPER);
+                    if (!wrapper) {
+                        const themeOnlyObserver = new MutationObserver(() => {
+                            syncContainerTheme();
+                        });
+                        themeOnlyObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['dark', 'style', 'class'] });
+                        window.__ytfVisualizerCleanup = () => {
+                            themeOnlyObserver.disconnect();
+                        };
                         return;
                     }
 
-                    rafId = requestAnimationFrame(tick);
+                    const bubbles = YTF_SEL.VISUALIZER.BUBBLE_IDS.map(id => wrapper.querySelector('#' + id));
+                    if (!bubbles[0] || !bubbles[1] || !bubbles[2]) return;
 
-                    const elapsed = now - lastTimestamp;
-                    if (elapsed < FRAME_INTERVAL) return;
+                    const applyBubbleThemes = () => {
+                        const isDark = syncContainerTheme();
+                        if (isDark) {
+                            bubbles[0].style.background = 'radial-gradient(circle at 50% 50%, rgba(123, 104, 238, 0.42) 0%, rgba(123, 104, 238, 0.22) 35%, rgba(123, 104, 238, 0.06) 62%, transparent 76%)';
+                            bubbles[1].style.background = 'radial-gradient(circle at 50% 50%, rgba(255, 107, 107, 0.36) 0%, rgba(255, 107, 107, 0.18) 36%, rgba(255, 107, 107, 0.05) 64%, transparent 78%)';
+                            bubbles[2].style.background = 'radial-gradient(circle at 50% 50%, rgba(78, 205, 196, 0.34) 0%, rgba(78, 205, 196, 0.16) 34%, rgba(78, 205, 196, 0.04) 60%, transparent 75%)';
+                            bubbles.forEach(b => { b.style.opacity = '0.9'; });
+                        } else {
+                            bubbles[0].style.background = 'radial-gradient(circle at 50% 50%, rgba(123, 104, 238, 0.28) 0%, rgba(123, 104, 238, 0.14) 35%, rgba(123, 104, 238, 0.04) 62%, transparent 76%)';
+                            bubbles[1].style.background = 'radial-gradient(circle at 50% 50%, rgba(255, 107, 107, 0.24) 0%, rgba(255, 107, 107, 0.12) 36%, rgba(255, 107, 107, 0.03) 64%, transparent 78%)';
+                            bubbles[2].style.background = 'radial-gradient(circle at 50% 50%, rgba(78, 205, 196, 0.26) 0%, rgba(78, 205, 196, 0.13) 34%, rgba(78, 205, 196, 0.03) 60%, transparent 75%)';
+                            bubbles.forEach(b => { b.style.opacity = '0.85'; });
+                        }
+                    };
 
-                    // Clamp delta time to avoid jumps after tab switching
-                    const rawDt = Math.min(elapsed / 1000, 0.1);
-                    lastTimestamp = now - (elapsed % FRAME_INTERVAL);
+                    applyBubbleThemes();
 
-                    // Subtle speed modulation: lively when playing, calm idle drift when paused
-                    const playbackMultiplier = (videoElem && !videoElem.paused) ? 1.0 : 0.35;
-                    const dt = rawDt * playbackMultiplier;
+                    const themeObserver = new MutationObserver(() => {
+                        applyBubbleThemes();
+                    });
+                    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['dark', 'style', 'class'] });
 
-                    for (let i = 0; i < lobes.length; i++) {
-                        lobes[i].update(dt);
+                    const videoElem = document.querySelector('video');
+                    let viewW = 420, viewH = 560, baseSize = 520;
+
+                    const blobConfigs = [
+                        {
+                            homeX: 0.22, homeY: 0.28,
+                            orbitX: 0.34, orbitY: 0.28,
+                            speedX: 0.21, speedY: 0.16,
+                            rotSpeed: 11,
+                            stretchFreq: 0.27,
+                            phase: 0.4
+                        },
+                        {
+                            homeX: 0.76, homeY: 0.68,
+                            orbitX: 0.36, orbitY: 0.30,
+                            speedX: 0.17, speedY: 0.23,
+                            rotSpeed: -14,
+                            stretchFreq: 0.22,
+                            phase: 2.3
+                        },
+                        {
+                            homeX: 0.35, homeY: 0.72,
+                            orbitX: 0.32, orbitY: 0.34,
+                            speedX: 0.25, speedY: 0.19,
+                            rotSpeed: 9,
+                            stretchFreq: 0.31,
+                            phase: 4.1
+                        }
+                    ];
+
+                    class AppleMeshLobe {
+                        constructor(el, cfg) {
+                            this.el = el;
+                            this.cfg = cfg;
+                            this.t = cfg.phase;
+                            this.angle = cfg.phase * 30;
+                        }
+
+                        applySize() {
+                            this.el.style.width = baseSize + 'px';
+                            this.el.style.height = baseSize + 'px';
+                        }
+
+                        update(dt) {
+                            this.t += dt;
+                            this.angle = (this.angle + this.cfg.rotSpeed * dt) % 360;
+
+                            const normX = this.cfg.homeX
+                                + Math.sin(this.t * this.cfg.speedX) * this.cfg.orbitX
+                                + Math.cos(this.t * this.cfg.speedY * 0.6) * 0.08;
+                            const normY = this.cfg.homeY
+                                + Math.cos(this.t * this.cfg.speedY) * this.cfg.orbitY
+                                + Math.sin(this.t * this.cfg.speedX * 0.7) * 0.08;
+
+                            const x = (normX * viewW) - (baseSize * 0.5);
+                            const y = (normY * viewH) - (baseSize * 0.5);
+
+                            const stretch = Math.sin(this.t * this.cfg.stretchFreq);
+                            const scaleX = 1.25 + stretch * 0.28;
+                            const scaleY = 1.25 - stretch * 0.22;
+
+                            this.el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) rotate(${this.angle.toFixed(1)}deg) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
+                        }
                     }
-                }
 
-                function startLoop() {
-                    if (!rafId && isVisible && !document.hidden) {
-                        lastTimestamp = performance.now();
-                        rafId = requestAnimationFrame(tick);
+                    const lobes = bubbles.map((el, i) => new AppleMeshLobe(el, blobConfigs[i]));
+
+                    function updateDimensions() {
+                        const rect = wrapper.getBoundingClientRect();
+                        viewW = rect.width || 420;
+                        viewH = rect.height || 560;
+                        baseSize = Math.round(Math.max(viewW, viewH, 420) * 1.35);
+                        lobes.forEach(lobe => lobe.applySize());
                     }
-                }
 
-                function stopLoop() {
-                    if (rafId) {
-                        cancelAnimationFrame(rafId);
-                        rafId = null;
-                    }
-                }
-
-                // Render initial frame immediately
-                lobes.forEach(lobe => lobe.update(0.016));
-
-                const resizeObserver = new ResizeObserver(() => {
                     updateDimensions();
-                    lobes.forEach(lobe => lobe.update(0));
-                });
-                resizeObserver.observe(wrapper);
 
-                const intersectionObserver = new IntersectionObserver((entries) => {
-                    isVisible = entries[0]?.isIntersecting ?? false;
-                    if (isVisible) startLoop();
-                    else stopLoop();
-                }, { threshold: 0.01 });
-                intersectionObserver.observe(wrapper);
+                    const FRAME_INTERVAL = 1000 / 30;
+                    let isVisible = true;
+                    let rafId = null;
+                    let lastTimestamp = performance.now();
 
-                const onVisibilityChange = () => {
-                    if (document.hidden) stopLoop();
-                    else startLoop();
-                };
-                document.addEventListener('visibilitychange', onVisibilityChange);
+                    function tick(now) {
+                        if (!isVisible || document.hidden) {
+                            rafId = null;
+                            return;
+                        }
 
-                window.__ytfVisualizerCleanup = () => {
-                    stopLoop();
-                    if (themeObserver) themeObserver.disconnect();
-                    resizeObserver.disconnect();
-                    intersectionObserver.disconnect();
-                    document.removeEventListener('visibilitychange', onVisibilityChange);
-                };
+                        rafId = requestAnimationFrame(tick);
+
+                        const elapsed = now - lastTimestamp;
+                        if (elapsed < FRAME_INTERVAL) return;
+
+                        const rawDt = Math.min(elapsed / 1000, 0.1);
+                        lastTimestamp = now - (elapsed % FRAME_INTERVAL);
+
+                        const playbackMultiplier = (videoElem && !videoElem.paused) ? 1.0 : 0.35;
+                        const dt = rawDt * playbackMultiplier;
+
+                        for (let i = 0; i < lobes.length; i++) {
+                            lobes[i].update(dt);
+                        }
+                    }
+
+                    function startLoop() {
+                        if (!rafId && isVisible && !document.hidden) {
+                            lastTimestamp = performance.now();
+                            rafId = requestAnimationFrame(tick);
+                        }
+                    }
+
+                    function stopLoop() {
+                        if (rafId) {
+                            cancelAnimationFrame(rafId);
+                            rafId = null;
+                        }
+                    }
+
+                    lobes.forEach(lobe => lobe.update(0.016));
+
+                    const resizeObserver = new ResizeObserver(() => {
+                        updateDimensions();
+                        lobes.forEach(lobe => lobe.update(0));
+                    });
+                    resizeObserver.observe(wrapper);
+
+                    const intersectionObserver = new IntersectionObserver((entries) => {
+                        isVisible = entries[0]?.isIntersecting ?? false;
+                        if (isVisible) startLoop();
+                        else stopLoop();
+                    }, { threshold: 0.01 });
+                    intersectionObserver.observe(wrapper);
+
+                    const onVisibilityChange = () => {
+                        if (document.hidden) stopLoop();
+                        else startLoop();
+                    };
+                    document.addEventListener('visibilitychange', onVisibilityChange);
+
+                    window.__ytfVisualizerCleanup = () => {
+                        stopLoop();
+                        if (themeObserver) themeObserver.disconnect();
+                        resizeObserver.disconnect();
+                        intersectionObserver.disconnect();
+                        document.removeEventListener('visibilitychange', onVisibilityChange);
+                    };
+                }
+
+                initVisualizer();
             },
-            args: [YTF_SELECTORS]
+            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, savedFontSize, isMusic, isRateLimited, rateLimitRetryAfter]
         });
     };
 
@@ -2350,11 +2382,6 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         if (musicCard && cardContainer) {
                             val = cleanField(watchFlexy.querySelector(cardContainer + YT_SEL.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent);
                             channel = cleanField(watchFlexy.querySelector(cardContainer + YT_SEL.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent);
-                        }
-
-                        if (!val || !channel) {
-                            val = cleanField(watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_TITLE)?.textContent);
-                            channel = cleanField(watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_CHANNEL)?.textContent);
                         }
                     }
 

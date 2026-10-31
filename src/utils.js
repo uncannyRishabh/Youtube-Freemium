@@ -114,16 +114,11 @@ export function queryBuilder(q, n) {
 		q = q.replace(/\([^)]*\)/g, ''); // remove contents within 
 		q = q.replace(/\s+/g, ' '); // replace multiple spaces with a single space
 		q = q.replace(/[\t\n]/g, ' '); // replace tabs and newlines with spaces
-		// q = q?.replace(/[\s\t\n]/g, '+') //+
 
-		// if (q.split(' ').length < 2 || (q.length < 4 && !q.includes('-'))) {
 		if (!q.includes(n))
 			q += ' ' + n
-		// }
 
-		//TODO:Append verified creator channel name only if one letter title
 		return q + " lyrics"
-		// return encodeURIComponent(q + "+lyrics")
 	}
 	catch (e) {
 		console.log(e)
@@ -180,35 +175,21 @@ function findLRCLibspecificName(name) {
 }
 
 export async function searchLrclibdotnet(track, artist, signal) {
-	// try {
-		const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
-		const myHeaders = new Headers();
-		myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
-		myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
-		
-		const requestOptions = {
-			method: "GET",
-			redirect: "follow",
-			headers: myHeaders,
-			signal
-		};
+	const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
+	const myHeaders = new Headers();
+	myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
+	myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
+	
+	const requestOptions = {
+		method: "GET",
+		redirect: "follow",
+		headers: myHeaders,
+		signal
+	};
 
-		var url = generateLRCLIBUrl(track, artist)
-		console.log('searching LRCLIB : ', url)
-		return await fetch(url, requestOptions)
-	// } catch (error) {
-	// 	console.log('LRCLIB fetch aborted - previous search cancelled', error);
-        
-    //     return new Response(JSON.stringify({
-    //         "message": "Failed to find specified track",
-    //         "name": "TrackNotFound",
-    //         "statusCode": 404
-    //     }), {
-    //         status: 404,
-    //         statusText: "Not Found",
-    //         headers: { 'Content-Type': 'application/json' }
-    //     });
-    // }
+	var url = generateLRCLIBUrl(track, artist)
+	console.log('searching LRCLIB : ', url)
+	return await fetch(url, requestOptions)
 }
 
 function generateLRCLIBUrl(track, artist){
@@ -238,38 +219,129 @@ function generateLRCLIBUrl(track, artist){
 	return `https://lrclib.net/api/get?artist_name=${artist}&track_name=${track}`;
 }
 
+let lrclibRateLimitUntil = 0;
+
+/**
+ * Helper to convert Retry-After value (in seconds or minutes) to minutes (minimum 1 min).
+ */
+function parseRetryAfterMinutes(rawRetryAfter) {
+	const num = rawRetryAfter ? parseInt(rawRetryAfter, 10) : NaN;
+	if (isNaN(num) || num <= 0) return 1;
+	// If value is >= 60, treat as seconds and convert to minutes; otherwise treat as minutes/ceil
+	return num >= 60 ? Math.max(1, Math.ceil(num / 60)) : num;
+}
+
+/**
+ * Returns current LRCLIB rate limit / 503 cooldown status and remaining minutes.
+ * @returns {{ rateLimited: boolean, retryAfter: number }}
+ */
+export function getLrclibRateLimitInfo() {
+	const now = Date.now();
+	if (lrclibRateLimitUntil > now) {
+		return {
+			rateLimited: true,
+			retryAfter: Math.max(1, Math.ceil((lrclibRateLimitUntil - now) / 60000))
+		};
+	}
+	return { rateLimited: false, retryAfter: 0 };
+}
+
+/**
+ * Marks LRCLIB as unavailable / rate-limited for a given cooldown.
+ * @param {number|string} [retryAfterVal=1]
+ */
+export function setLrclibRateLimited(retryAfterVal) {
+	const mins = parseRetryAfterMinutes(retryAfterVal);
+	lrclibRateLimitUntil = Date.now() + (mins * 60 * 1000);
+	return mins;
+}
+
+/**
+ * Checks whether an HTTP response or parsed JSON payload indicates LRCLIB 503 / 429 cooldown.
+ */
+function extractLrclibCooldown(response, jsonBody) {
+	const status = response?.status;
+	const bodyCode = jsonBody?.statusCode;
+	if (status === 503 || status === 429 || bodyCode === 503 || bodyCode === 429) {
+		const headerVal = response?.headers?.get('Retry-After') || response?.headers?.get('retry-after') || jsonBody?.retryAfter || jsonBody?.['retry-after'];
+		const retryMin = setLrclibRateLimited(headerVal);
+		return {
+			rateLimited: true,
+			statusCode: 503,
+			retryAfter: retryMin
+		};
+	}
+	return null;
+}
+
+/**
+ * Splits a user query into { trackName, artistName } supporting "Song - Artist" format.
+ * Prioritizes spaced dash (" - ") so hyphenated track/artist names (e.g. "Jay-Z", "Anti-Hero") stay intact.
+ */
+function parseSongArtistQuery(rawQuery) {
+	const normalized = String(rawQuery || '')
+		.replace(/\[[^\]]*\]/g, '')
+		.replace(/[\u2010-\u2015\u2212]/g, '-')
+		.trim();
+
+	if (!normalized) {
+		return { cleanQuery: '', trackName: '', artistName: '' };
+	}
+
+	let trackName = normalized;
+	let artistName = '';
+
+	const spacedDashIndex = normalized.indexOf(' - ');
+	if (spacedDashIndex !== -1) {
+		trackName = normalized.substring(0, spacedDashIndex).trim();
+		artistName = normalized.substring(spacedDashIndex + 3).trim();
+	} else if (normalized.includes('-')) {
+		const firstDashIndex = normalized.indexOf('-');
+		trackName = normalized.substring(0, firstDashIndex).trim();
+		artistName = normalized.substring(firstDashIndex + 1).trim();
+	}
+
+	// Clean common YouTube suffix noise from artist and track
+	artistName = artistName.replace(/\s*-\s*Topic$/i, '').replace(/\(.*?\)/g, '').trim();
+	const cleanTrack = trackName.replace(/\(.*?\)/g, '').replace(/\b(feat|ft|featuring)\b\.?.*$/i, '').trim() || trackName;
+
+	return {
+		cleanQuery: normalized,
+		trackName: cleanTrack,
+		artistName
+	};
+}
+
 /**
  * Searches LRCLIB for lyrics records.
- * Supports "Song - Artist" queries (splitting on the first dash into track_name & artist_name)
+ * Supports "Song - Artist" queries (splitting into track_name & artist_name)
  * with graceful fallback to general search.
  * @param {string} query - Track/artist search string
  * @param {AbortSignal} [signal] - Optional abort signal
- * @returns {Promise<Array>} Matching lyrics records
+ * @returns {Promise<Array|{rateLimited: boolean, statusCode: number, retryAfter: number, results: Array}>} Matching lyrics records
  */
 export async function searchLrclibRecords(query, signal) {
+	const rateLimitInfo = getLrclibRateLimitInfo();
+	if (rateLimitInfo.rateLimited) {
+		console.warn(`[LRCLIB] Search blocked by active cooldown (${rateLimitInfo.retryAfter} min remaining)`);
+		return {
+			rateLimited: true,
+			statusCode: 503,
+			retryAfter: rateLimitInfo.retryAfter,
+			results: []
+		};
+	}
+
 	const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
 	const myHeaders = new Headers();
 	myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
 	myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
 
-	const cleanQuery = (query || '')
-		.replace(/\[[^\]]*\]/g, '')
-		.trim();
-
+	const { cleanQuery, trackName, artistName } = parseSongArtistQuery(query);
 	if (!cleanQuery) return [];
 
-	let trackName = cleanQuery;
-	let artistName = '';
-
-	// If query contains dash, split from 1st element
-	if (cleanQuery.includes('-')) {
-		const firstDashIndex = cleanQuery.indexOf('-');
-		trackName = cleanQuery.substring(0, firstDashIndex).trim();
-		artistName = cleanQuery.substring(firstDashIndex + 1).trim();
-	}
-
 	let url = '';
-	if (artistName) {
+	if (trackName && artistName) {
 		url = `https://lrclib.net/api/search?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`;
 	} else {
 		url = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`;
@@ -284,26 +356,52 @@ export async function searchLrclibRecords(query, signal) {
 			signal
 		});
 
-		if (response.status === 429) {
-			console.warn('[LRCLIB] Rate limited (429)');
-			return [];
+		let parsedBody = null;
+		try {
+			parsedBody = await response.json();
+		} catch (e) {
+			parsedBody = null;
 		}
 
-		let data = response.ok ? await response.json() : [];
+		const cooldown = extractLrclibCooldown(response, parsedBody);
+		if (cooldown) {
+			console.warn(`[LRCLIB] Service unavailable / rate limited (${response.status}). Retry-After: ${cooldown.retryAfter}m`);
+			return {
+				...cooldown,
+				results: []
+			};
+		}
+
+		let data = Array.isArray(parsedBody) ? parsedBody : [];
 
 		// If specific track_name & artist_name yielded 0 results, fallback to general query
-		if ((!Array.isArray(data) || data.length === 0) && artistName) {
-			const fallbackUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`;
+		if (data.length === 0 && artistName) {
+			const fallbackQuery = `${trackName} ${artistName}`.trim();
+			const fallbackUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(fallbackQuery)}`;
 			const fallbackResp = await fetch(fallbackUrl, {
 				method: "GET",
 				headers: myHeaders,
 				signal
 			});
-			if (fallbackResp.ok) {
-				const fallbackData = await fallbackResp.json();
-				if (Array.isArray(fallbackData)) {
-					data = fallbackData;
-				}
+
+			let fallbackBody = null;
+			try {
+				fallbackBody = await fallbackResp.json();
+			} catch (e) {
+				fallbackBody = null;
+			}
+
+			const fbCooldown = extractLrclibCooldown(fallbackResp, fallbackBody);
+			if (fbCooldown) {
+				console.warn(`[LRCLIB] Service unavailable / rate limited on fallback. Retry-After: ${fbCooldown.retryAfter}m`);
+				return {
+					...fbCooldown,
+					results: []
+				};
+			}
+
+			if (Array.isArray(fallbackBody)) {
+				data = fallbackBody;
 			}
 		}
 
@@ -322,6 +420,11 @@ export async function searchLrclibRecords(query, signal) {
  */
 export async function fetchLrclibRecordById(id, signal) {
 	if (!id) return null;
+	const rateLimitInfo = getLrclibRateLimitInfo();
+	if (rateLimitInfo.rateLimited) {
+		return { rateLimited: true, statusCode: 503, retryAfter: rateLimitInfo.retryAfter };
+	}
+
 	const extensionStoreUrl = "https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm";
 	const myHeaders = new Headers();
 	myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
@@ -333,8 +436,22 @@ export async function fetchLrclibRecordById(id, signal) {
 			headers: myHeaders,
 			signal
 		});
-		if (response.ok) {
-			return await response.json();
+
+		let parsedBody = null;
+		try {
+			parsedBody = await response.json();
+		} catch (e) {
+			parsedBody = null;
+		}
+
+		const cooldown = extractLrclibCooldown(response, parsedBody);
+		if (cooldown) {
+			console.warn('[LRCLIB] Service unavailable (503/429) on fetch by id. Retry-After:', cooldown.retryAfter);
+			return cooldown;
+		}
+
+		if (response.ok && parsedBody) {
+			return parsedBody;
 		}
 		return null;
 	} catch (error) {
@@ -540,11 +657,17 @@ export async function findLyricsfromSources(tabId, source, val, channel, signal)
 			break;
 		}
 		default: {
-			result = await searchLRCLIB(tabId, val, channel, signal)
-			if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
-				result = await searchA2Z(tabId, val, channel, signal)
-				if (isEmpty(result[0].result) || JSON.parse(result[0].result).message === 'NOK') {
-					result = await searchBing(tabId, val, channel, signal)
+			const lrclibRes = await searchLRCLIB(tabId, val, channel, signal);
+			result = lrclibRes;
+			const lrclibParsed = (!isEmpty(lrclibRes?.[0]?.result)) ? JSON.parse(lrclibRes[0].result) : null;
+			if (!lrclibParsed || lrclibParsed.message === 'NOK') {
+				result = await searchA2Z(tabId, val, channel, signal);
+				if (isEmpty(result?.[0]?.result) || JSON.parse(result[0].result).message === 'NOK') {
+					result = await searchBing(tabId, val, channel, signal);
+				}
+				// If fallback sources also failed and LRCLIB was rate-limited / 503, preserve LRCLIB cooldown info
+				if ((isEmpty(result?.[0]?.result) || JSON.parse(result[0].result).message === 'NOK') && lrclibParsed?.rateLimited) {
+					result = lrclibRes;
 				}
 			}
 		}
@@ -559,19 +682,33 @@ async function searchLRCLIB(tabId, name, channel, signal) {
 		name = name.replace(channel, '')
 	}
 
+	const rateLimitInfo = getLrclibRateLimitInfo();
+	if (rateLimitInfo.rateLimited) {
+		console.warn(`[LRCLIB] searchLRCLIB blocked by active cooldown (${rateLimitInfo.retryAfter}m remaining)`);
+		return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false, statusCode: 503, rateLimited: true, retryAfter: rateLimitInfo.retryAfter }) }];
+	}
+
 	try {
 		const res = await searchLrclibdotnet(name, channel, signal);
-		if (res.status === 429) {
-			const retryAfter = res.headers.get('Retry-After');
-			console.warn(`[LRCLIB] Rate limited (429). Retry-After: ${retryAfter || 'unspecified'}s`);
-			return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false }) }];
+		const response = await res.text();
+		let parsedResp = null;
+		try {
+			parsedResp = JSON.parse(response);
+		} catch (e) {
+			parsedResp = null;
 		}
+
+		const cooldown = extractLrclibCooldown(res, parsedResp);
+		if (cooldown) {
+			console.warn(`[LRCLIB] Service unavailable / rate limited (${res.status}). Retry-After: ${cooldown.retryAfter}m`);
+			return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false, statusCode: 503, rateLimited: true, retryAfter: cooldown.retryAfter }) }];
+		}
+
 		if (!res.ok) {
 			console.warn(`[LRCLIB] Request failed with status ${res.status}`);
 			return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false }) }];
 		}
 
-		var response = await res.text();
 		return await chrome.scripting.executeScript({
 			target: { tabId },
 			function: (resp) => {
@@ -581,19 +718,14 @@ async function searchLRCLIB(tabId, name, channel, signal) {
 				} catch (e) {
 					return JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false });
 				}
+				if (respObj?.statusCode === 503 || respObj?.statusCode === 429) {
+					return JSON.stringify({ lyrics: [], message: 'NOK', source: 'LRCLIB', synced: false, statusCode: 503, rateLimited: true, retryAfter: 1 });
+				}
 				var lyrics = []
 				var message = 'NOK'
 				var source = 'LRCLIB'
 				var synced = false
 				var name = respObj?.name
-
-				/**
-				 * {
-						"message": "Failed to find specified track",
-						"name": "TrackNotFound",
-						"statusCode": 404
-					}
-				*/
 
 				if ((name && name != 'TrackNotFound') && respObj?.plainLyrics != null) {
 					message = 'OK'
@@ -608,8 +740,6 @@ async function searchLRCLIB(tabId, name, channel, signal) {
 				}
 
 			function isValidTimestamp(timestamp) {
-				// \d{2} matches two digits for MM and SS
-				// \.\d{2,3} matches a literal dot followed by 2 or 3 digits for milliseconds
 				const pattern = /^\d{1,2}:\d{1,2}\.\d{2,3}$/;
 				return pattern.test(timestamp);
 			}
@@ -634,14 +764,11 @@ async function searchLRCLIB(tabId, name, channel, signal) {
 					timestamps.forEach(ts => {
 						if (!isValidTimestamp(ts)) return;
 
-						// Find the first index where the existing timestamp is later than the new one
 						const insertIndex = sortedLyrics.findIndex(item => ts.localeCompare(item[0]) < 0);
 
 						if (insertIndex === -1) {
-							// If the timestamp is later than everything currently in the array, push to the end
 							sortedLyrics.push([ts, lyricText]);
 						} else {
-							// Insert the [timestamp, lyric] pair exactly where it fits
 							sortedLyrics.splice(insertIndex, 0, [ts, lyricText]);
 						}
 					});
@@ -697,7 +824,6 @@ async function searchBing(tabId, name, channel, signal) {
 	return await chrome.scripting.executeScript({
 		target: { tabId },
 		function: (resp, selectors) => {
-			// console.log(resp)
 			var lyrics = []
 			var message = ''
 			var source = 'BING'
@@ -716,15 +842,10 @@ async function searchBing(tabId, name, channel, signal) {
 			}
 
 			if (lContainer != null && Object.keys(lContainer).length != 0) {
-				// console.log(lContainer.textContent)
 				message = 'OK'
-				// lContainer.querySelectorAll('span').forEach(span => {
-				// 	lyrics.push(span.textContent.trim());
-				// });
 
 				var raw = ''
 				lContainer.forEach(verse => raw += verse.innerHTML)
-				// console.log(raw)
 				if (raw.length > 0) {
 					var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
 					lyrics = wd.split('<br>').map(line => line.trim()).filter(Boolean);
@@ -732,16 +853,12 @@ async function searchBing(tabId, name, channel, signal) {
 				else {
 					message = 'NOK'
 				}
-
-				// console.log(lyrics);
 			}
 			else {
 				message = 'NOK'
 			}
 
-			//VALIDATE HERE
 			var r = { lyrics, message, source, synced }
-			// console.log(r)
 			return JSON.stringify(r)
 		},
 		args: [response, SCRAPER_SELECTORS.BING]
@@ -767,7 +884,6 @@ async function searchA2Z(tabId, name, channel, signal) {
 	return await chrome.scripting.executeScript({
 		target: { tabId },
 		function: (resp, selectors) => {
-			// console.log(resp)
 			var lyrics = []
 			var message = ''
 			var source = 'A2Z'
@@ -794,7 +910,6 @@ async function searchA2Z(tabId, name, channel, signal) {
 
 			message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK"
 			var r = { lyrics, message, source, synced }
-			// console.log(r)
 			return JSON.stringify(r)
 		},
 		args: [page, SCRAPER_SELECTORS.A2Z]
