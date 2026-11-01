@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, fetchLrclibRecordById, parseLyricsfileYaml } from './utils.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml } from './utils.js';
 import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
 (() => {
@@ -165,12 +165,20 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             }
             case 'SEARCH_LRCLIB': {
                 const query = val || obj.query;
-                searchLrclibRecords(query).then((res) => {
-                    if (res && res.rateLimited) {
-                        sendResponse({ success: false, rateLimited: true, retryAfter: res.retryAfter, results: [] });
+                const tabId = sender.tab?.id;
+                Promise.allSettled([
+                    searchLrclibRecords(query),
+                    searchA2ZRecords(tabId, query)
+                ]).then(([lrcOut, a2zOut]) => {
+                    const lrcRes = lrcOut.status === 'fulfilled' ? lrcOut.value : null;
+                    const a2zResults = (a2zOut.status === 'fulfilled' && Array.isArray(a2zOut.value)) ? a2zOut.value : [];
+                    const lrcResults = Array.isArray(lrcRes) ? lrcRes : (lrcRes?.results || []);
+                    const combined = [...lrcResults, ...a2zResults];
+
+                    if (lrcRes && lrcRes.rateLimited && combined.length === 0) {
+                        sendResponse({ success: false, rateLimited: true, retryAfter: lrcRes.retryAfter, results: [] });
                     } else {
-                        const results = Array.isArray(res) ? res : (res?.results || []);
-                        sendResponse({ success: true, rateLimited: false, results });
+                        sendResponse({ success: true, rateLimited: false, results: combined });
                     }
                 }).catch((err) => {
                     const isRateLimited = err?.status === 429 || err?.message === 'Too Many Requests';
@@ -685,7 +693,30 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         }
                     });
 
+                    var inlineCloseBtn = document.createElement("button");
+                    inlineCloseBtn.type = "button";
+                    inlineCloseBtn.className = "yf-search-close-btn";
+                    inlineCloseBtn.title = "Close search";
+                    inlineCloseBtn.setAttribute("aria-label", "Close search");
+                    inlineCloseBtn.innerHTML = `
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    `;
+                    inlineCloseBtn.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    });
+                    inlineCloseBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (container._closeSearchResults) {
+                            container._closeSearchResults();
+                        }
+                        nowPlayingText.blur();
+                    });
+
                     nowPlayingDiv.appendChild(nowPlayingText);
+                    nowPlayingDiv.appendChild(inlineCloseBtn);
 
                     var menuSpan = document.createElement("span");
                     menuSpan.className = "yf-menu";
@@ -1440,12 +1471,17 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         lyricContainer.appendChild(d);
                     });
 
-                    if (targetSource && targetSource.toUpperCase() === 'LRCLIB') {
-                        var creditDiv = document.createElement('div');
-                        creditDiv.className = 'yf-source-credit';
-                        creditDiv.innerHTML = '<span>Lyrics provided by <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer" class="yf-source-link">LRCLIB</a></span>';
-                        creditDiv.addEventListener('click', (e) => e.stopPropagation());
-                        lyricContainer.appendChild(creditDiv);
+                    if (targetSource) {
+                        const upperSource = targetSource.toUpperCase();
+                        if (upperSource === 'LRCLIB' || upperSource === 'A2Z') {
+                            var creditDiv = document.createElement('div');
+                            creditDiv.className = 'yf-source-credit';
+                            const providerUrl = upperSource === 'A2Z' ? 'https://www.azlyrics.com' : 'https://lrclib.net';
+                            const providerLabel = upperSource === 'A2Z' ? 'AZLyrics' : 'LRCLIB';
+                            creditDiv.innerHTML = `<span>Lyrics provided by <a href="${providerUrl}" target="_blank" rel="noopener noreferrer" class="yf-source-link">${providerLabel}</a></span>`;
+                            creditDiv.addEventListener('click', (e) => e.stopPropagation());
+                            lyricContainer.appendChild(creditDiv);
+                        }
                     }
 
                     return processedLyrics;
@@ -1502,54 +1538,35 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         searchDropdown.remove();
                         searchDropdown = null;
                     }
+                    var inputWrap = container.querySelector('.now-playing-div');
+                    if (inputWrap) {
+                        inputWrap.classList.remove('dropdown-open');
+                    }
+                }
+
+                function mountAttachedSearchDropdown(dropdownEl) {
+                    var inputWrap = container.querySelector('.now-playing-div');
+                    if (!inputWrap) return;
+                    dropdownEl.addEventListener('mousedown', (e) => e.stopPropagation());
+                    dropdownEl.addEventListener('click', (e) => e.stopPropagation());
+                    inputWrap.classList.add('dropdown-open');
+                    inputWrap.appendChild(dropdownEl);
                 }
 
                 function renderFloatingSearchDropdown(results, query, videoDuration, options) {
                     options = options || {};
                     closeFloatingSearchDropdown();
 
-                    var bottomBar = container.querySelector(YTF_SEL.HEADER.BOTTOM_ROW);
-                    if (!bottomBar) return;
-
                     searchDropdown = document.createElement('div');
                     searchDropdown.id = 'yf-search-dropdown';
                     searchDropdown.className = 'yf-search-dropdown';
-
-                    var headerDiv = document.createElement('div');
-                    headerDiv.className = 'yf-search-dropdown-header';
-
-                    var headerTitle = document.createElement('span');
-                    headerTitle.className = 'yf-search-dropdown-title';
-                    if (options.rateLimited) {
-                        headerTitle.textContent = 'Unavailable';
-                    } else {
-                        headerTitle.textContent = results && results.length > 0 ? `Results (${results.length})` : 'Results';
-                    }
-
-                    var closeBtn = document.createElement('button');
-                    closeBtn.className = 'yf-search-close-btn';
-                    closeBtn.title = 'Close';
-                    closeBtn.setAttribute('aria-label', 'Close search dropdown');
-                    closeBtn.innerHTML = `
-                        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    `;
-                    closeBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        closeFloatingSearchDropdown();
-                    });
-
-                    headerDiv.appendChild(headerTitle);
-                    headerDiv.appendChild(closeBtn);
-                    searchDropdown.appendChild(headerDiv);
 
                     if (options.rateLimited) {
                         var rateLimitDiv = document.createElement('div');
                         rateLimitDiv.className = 'yf-search-status is-rate-limited';
                         const retryMin = (options.retryAfter && !isNaN(options.retryAfter)) ? parseInt(options.retryAfter, 10) : 1;
                         rateLimitDiv.innerHTML = `
-                            <svg class="yf-search-status-icon yf-search-rate-limit-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                            <svg class="yf-search-status-icon yf-search-rate-limit-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                             </svg>
                             <span class="yf-search-status-title">Retry after : ${retryMin} min</span>
@@ -1559,9 +1576,6 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         var noResDiv = document.createElement('div');
                         noResDiv.className = 'yf-search-status';
                         noResDiv.innerHTML = `
-                            <svg class="yf-search-status-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-                                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                            </svg>
                             <span class="yf-search-status-title">No Lyrics Found</span>
                             <span class="yf-search-status-hint">Format: song name - artist</span>
                         `;
@@ -1593,7 +1607,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             var metaDiv = document.createElement('div');
                             metaDiv.className = 'yf-result-meta';
 
-                            if (item.hasWordSync) {
+                            if (item.source === 'A2Z') {
+                                var a2zBadge = document.createElement('span');
+                                a2zBadge.className = 'yf-plain-badge yf-a2z-badge';
+                                a2zBadge.title = 'Plain lyrics from AZLyrics';
+                                a2zBadge.textContent = 'A2Z';
+                                metaDiv.appendChild(a2zBadge);
+                            } else if (item.hasWordSync) {
                                 var wsBadge = document.createElement('span');
                                 wsBadge.className = 'yf-wordsync-badge';
                                 wsBadge.title = 'Word-by-word synced lyrics';
@@ -1623,10 +1643,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 metaDiv.appendChild(plainBadge);
                             }
 
-                            var durationSpan = document.createElement('span');
-                            durationSpan.className = 'yf-result-duration';
-                            durationSpan.textContent = formatDuration(item.duration);
-                            metaDiv.appendChild(durationSpan);
+                            if (item.duration && item.duration > 0) {
+                                var durationSpan = document.createElement('span');
+                                durationSpan.className = 'yf-result-duration';
+                                durationSpan.textContent = formatDuration(item.duration);
+                                metaDiv.appendChild(durationSpan);
+                            }
 
                             row.appendChild(infoDiv);
                             row.appendChild(metaDiv);
@@ -1642,13 +1664,14 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         searchDropdown.appendChild(listDiv);
                     }
 
-                    bottomBar.appendChild(searchDropdown);
+                    mountAttachedSearchDropdown(searchDropdown);
                 }
 
                 function selectTrack(item) {
                     closeFloatingSearchDropdown();
 
                     const chosenTitle = `${item.trackName}${item.artistName ? ' - ' + item.artistName : ''}`;
+                    const selectedSource = item.source || 'LRCLIB';
                     if (npt) {
                         npt.value = chosenTitle;
                         npt.setAttribute('data-current-title', chosenTitle);
@@ -1667,7 +1690,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                     title: chosenTitle,
                                     synced: isSynced,
                                     hasWordSync: isWordSync,
-                                    source: 'LRCLIB',
+                                    source: selectedSource,
                                     offset: currentOffset
                                 }
                             });
@@ -1675,7 +1698,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                         currentLyrics = chosenLyrics;
                         currentSynced = isSynced;
-                        currentSource = 'LRCLIB';
+                        currentSource = selectedSource;
 
                         // Explicit user track selection: clear manual collapse for this video and open container
                         container.removeAttribute('data-manually-closed-uid');
@@ -1692,14 +1715,14 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                         if (!existingIntermediate || notFoundElem) {
                             // Container was Not Found; swap it to intermediate container with lyrics
-                            renderLyricsView(chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
+                            renderLyricsView(chosenLyrics, isSynced, selectedSource, profanityCheck);
                         } else {
                             // Update lyrics inside the existing lyricContainer in place and keep visualizer & theme synced
                             var lyricContainer = existingIntermediate.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER);
                             if (lyricContainer) {
                                 const activeMedia = document.querySelector(YT_SEL.PLAYER.VIDEO) || mediaElem;
                                 detachLyricsSync(activeMedia);
-                                var processedLyrics = populateLyricContainer(lyricContainer, chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
+                                var processedLyrics = populateLyricContainer(lyricContainer, chosenLyrics, isSynced, selectedSource, profanityCheck);
                                 initVisualizer();
                                 if (isSynced) {
                                     attachLyricsSync(activeMedia, processedLyrics, lyricContainer, lyricElements);
@@ -1707,7 +1730,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                     lyricContainer.scrollTop = 0;
                                 }
                             } else {
-                                renderLyricsView(chosenLyrics, isSynced, 'LRCLIB', profanityCheck);
+                                renderLyricsView(chosenLyrics, isSynced, selectedSource, profanityCheck);
                             }
                         }
                     }
@@ -1774,31 +1797,16 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     closeFloatingSearchDropdown();
 
-                    var bottomBar = container.querySelector(YTF_SEL.HEADER.BOTTOM_ROW);
-                    if (bottomBar) {
-                        searchDropdown = document.createElement('div');
-                        searchDropdown.id = 'yf-search-dropdown';
-                        searchDropdown.className = 'yf-search-dropdown';
-                        searchDropdown.innerHTML = `
-                            <div class="yf-search-dropdown-header">
-                                <span class="yf-search-dropdown-title">Search</span>
-                                <button class="yf-search-close-btn" title="Close" aria-label="Close">
-                                    <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
-                                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div class="yf-search-status">
-                                <div class="yf-search-spinner"></div>
-                                <span class="yf-search-status-text">Searching...</span>
-                            </div>
-                        `;
-                        searchDropdown.querySelector('.yf-search-close-btn')?.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            closeFloatingSearchDropdown();
-                        });
-                        bottomBar.appendChild(searchDropdown);
-                    }
+                    searchDropdown = document.createElement('div');
+                    searchDropdown.id = 'yf-search-dropdown';
+                    searchDropdown.className = 'yf-search-dropdown';
+                    searchDropdown.innerHTML = `
+                        <div class="yf-search-status is-loading">
+                            <div class="yf-search-spinner"></div>
+                            <span class="yf-search-status-text">Searching...</span>
+                        </div>
+                    `;
+                    mountAttachedSearchDropdown(searchDropdown);
 
                     chrome.runtime.sendMessage({ type: 'SEARCH_LRCLIB', val: query }, (response) => {
                         if (progressbar) {
@@ -1837,9 +1845,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 }
                 container._outsideClickHandler = (e) => {
                     if (searchDropdown && !searchDropdown.contains(e.target)) {
-                        const inputElem = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
+                        const inputWrap = container.querySelector('.now-playing-div');
                         const searchBtnElem = container.querySelector(YTF_SEL.HEADER.SEARCH_BTN);
-                        if (inputElem && inputElem.contains(e.target)) return;
+                        if (inputWrap && inputWrap.contains(e.target)) return;
                         if (searchBtnElem && searchBtnElem.contains(e.target)) return;
                         closeFloatingSearchDropdown();
                     }

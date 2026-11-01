@@ -132,25 +132,35 @@ export function queryBuilder(q, n) {
  * @param {string} channel 
  * @returns 
  */
-export function generateA2ZLyricsUrl(name, channel) {
-	// Remove channel name from song name if present to avoid duplication in URL
-	if (name.includes(channel)) {
-		name = name.replace(channel, '');
+export function generateA2ZLyricsUrl(name, channel, keepParens = false) {
+	name = String(name || '');
+	channel = String(channel || '');
+
+	if (channel && name.toLowerCase().includes(channel.toLowerCase())) {
+		name = name.replace(new RegExp(channel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig'), '');
 	}
-	//remove all characters after first comma
-	let sanitizedArtist = channel.includes(',') ? channel.split(',')[0] : channel;
 
-	//replace all $ with s
-	sanitizedArtist = sanitizedArtist.replaceAll('$', 's').trim();
+	let sanitizedArtist = channel
+		.replace(/\s*-\s*Topic$/i, '')
+		.replace(/\[.*?\]/g, '')
+		.replace(/\(.*?\)/g, '');
+	if (sanitizedArtist.includes(',')) {
+		sanitizedArtist = sanitizedArtist.split(',')[0];
+	}
+	sanitizedArtist = sanitizedArtist
+		.replaceAll('$', 's')
+		.replaceAll(/[^a-zA-Z0-9]/g, '')
+		.toLowerCase();
 
-	// Remove all non-alphanumeric characters and convert to lowercase for channel
-	sanitizedArtist = sanitizedArtist.replaceAll(/[^a-zA-Z0-9]/g, '').toLowerCase();
-
-	// remove all characters between brackets
-	let sanitizedName = name.replaceAll(/\[.*?\]/g, '').trim();
-	
-	// Remove all non-alphanumeric characters and convert to lowercase for song name
-	sanitizedName = sanitizedName.replaceAll(/[^a-zA-Z0-9]/g, '').toLowerCase();
+	let sanitizedName = name
+		.replaceAll(/\[.*?\]/g, '')
+		.replace(/\b(feat|ft|featuring)\b\.?.*$/i, '');
+	if (!keepParens) {
+		sanitizedName = sanitizedName.replaceAll(/\(.*?\)/g, '');
+	}
+	sanitizedName = sanitizedName
+		.replaceAll(/[^a-zA-Z0-9]/g, '')
+		.toLowerCase();
 
 	return `https://www.azlyrics.com/lyrics/${findA2ZspecificName(sanitizedArtist)}/${sanitizedName}.html`;
 }
@@ -275,8 +285,9 @@ function extractLrclibCooldown(response, jsonBody) {
 }
 
 /**
- * Splits a user query into { trackName, artistName } supporting "Song - Artist" format.
- * Prioritizes spaced dash (" - ") so hyphenated track/artist names (e.g. "Jay-Z", "Anti-Hero") stay intact.
+ * Splits a user query into { cleanQuery, trackName, artistName, hasDashSeparator }.
+ * Only splits into trackName & artistName when '-' is explicitly given; if '-' is not
+ * present or some other separator is used, hasDashSeparator is false and it searches as a single string.
  */
 function parseSongArtistQuery(rawQuery) {
 	const normalized = String(rawQuery || '')
@@ -285,37 +296,42 @@ function parseSongArtistQuery(rawQuery) {
 		.trim();
 
 	if (!normalized) {
-		return { cleanQuery: '', trackName: '', artistName: '' };
+		return { cleanQuery: '', trackName: '', artistName: '', hasDashSeparator: false };
 	}
 
-	let trackName = normalized;
+	let trackName = '';
 	let artistName = '';
+	let hasDashSeparator = false;
 
 	const spacedDashIndex = normalized.indexOf(' - ');
 	if (spacedDashIndex !== -1) {
 		trackName = normalized.substring(0, spacedDashIndex).trim();
 		artistName = normalized.substring(spacedDashIndex + 3).trim();
+		hasDashSeparator = Boolean(trackName && artistName);
 	} else if (normalized.includes('-')) {
 		const firstDashIndex = normalized.indexOf('-');
 		trackName = normalized.substring(0, firstDashIndex).trim();
 		artistName = normalized.substring(firstDashIndex + 1).trim();
+		hasDashSeparator = Boolean(trackName && artistName);
 	}
 
-	// Clean common YouTube suffix noise from artist and track
-	artistName = artistName.replace(/\s*-\s*Topic$/i, '').replace(/\(.*?\)/g, '').trim();
-	const cleanTrack = trackName.replace(/\(.*?\)/g, '').replace(/\b(feat|ft|featuring)\b\.?.*$/i, '').trim() || trackName;
+	if (hasDashSeparator) {
+		artistName = artistName.replace(/\s*-\s*Topic$/i, '').replace(/\(.*?\)/g, '').trim();
+		trackName = trackName.replace(/\(.*?\)/g, '').replace(/\b(feat|ft|featuring)\b\.?.*$/i, '').trim() || trackName;
+	}
 
 	return {
 		cleanQuery: normalized,
-		trackName: cleanTrack,
-		artistName
+		trackName,
+		artistName,
+		hasDashSeparator
 	};
 }
 
 /**
- * Searches LRCLIB for lyrics records.
- * Supports "Song - Artist" queries (splitting into track_name & artist_name)
- * with graceful fallback to general search.
+ * Searches LRCLIB for lyrics records with a single request:
+ * - If '-' separator is given: searches separated track_name & artist_name.
+ * - If '-' is not given (or another separator is present): searches as a single query string.
  * @param {string} query - Track/artist search string
  * @param {AbortSignal} [signal] - Optional abort signal
  * @returns {Promise<Array|{rateLimited: boolean, statusCode: number, retryAfter: number, results: Array}>} Matching lyrics records
@@ -337,15 +353,12 @@ export async function searchLrclibRecords(query, signal) {
 	myHeaders.append("X-User-Agent", `Youtube Freemium (${extensionStoreUrl})`);
 	myHeaders.append("Lrclib-Client", `Youtube Freemium (${extensionStoreUrl})`);
 
-	const { cleanQuery, trackName, artistName } = parseSongArtistQuery(query);
+	const { cleanQuery, trackName, artistName, hasDashSeparator } = parseSongArtistQuery(query);
 	if (!cleanQuery) return [];
 
-	let url = '';
-	if (trackName && artistName) {
-		url = `https://lrclib.net/api/search?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`;
-	} else {
-		url = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`;
-	}
+	const url = (hasDashSeparator && trackName && artistName)
+		? `https://lrclib.net/api/search?track_name=${encodeURIComponent(trackName)}&artist_name=${encodeURIComponent(artistName)}`
+		: `https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`;
 
 	console.log('[LRCLIB] Searching records:', url);
 
@@ -372,40 +385,7 @@ export async function searchLrclibRecords(query, signal) {
 			};
 		}
 
-		let data = Array.isArray(parsedBody) ? parsedBody : [];
-
-		// If specific track_name & artist_name yielded 0 results, fallback to general query
-		if (data.length === 0 && artistName) {
-			const fallbackQuery = `${trackName} ${artistName}`.trim();
-			const fallbackUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(fallbackQuery)}`;
-			const fallbackResp = await fetch(fallbackUrl, {
-				method: "GET",
-				headers: myHeaders,
-				signal
-			});
-
-			let fallbackBody = null;
-			try {
-				fallbackBody = await fallbackResp.json();
-			} catch (e) {
-				fallbackBody = null;
-			}
-
-			const fbCooldown = extractLrclibCooldown(fallbackResp, fallbackBody);
-			if (fbCooldown) {
-				console.warn(`[LRCLIB] Service unavailable / rate limited on fallback. Retry-After: ${fbCooldown.retryAfter}m`);
-				return {
-					...fbCooldown,
-					results: []
-				};
-			}
-
-			if (Array.isArray(fallbackBody)) {
-				data = fallbackBody;
-			}
-		}
-
-		return Array.isArray(data) ? data : [];
+		return Array.isArray(parsedBody) ? parsedBody : [];
 	} catch (error) {
 		console.warn('[LRCLIB] Search error or aborted:', error);
 		return [];
@@ -872,46 +852,119 @@ async function searchA2Z(tabId, name, channel, signal) {
 		signal
 	};
 
-	if (name.includes(channel)) {
-		name = name.replace(channel, '')
+	const rawName = String(name || '');
+	const rawChannel = String(channel || '');
+
+	const fetchAndParseA2Z = async (url) => {
+		try {
+			console.log('searching A2Z : ', url);
+			const response = await fetch(encodeURI(url), requestOptions);
+			if (!response.ok) {
+				return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'A2Z', synced: false }) }];
+			}
+			const page = await response.text();
+			if (!tabId) {
+				return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'A2Z', synced: false }) }];
+			}
+			return await chrome.scripting.executeScript({
+				target: { tabId },
+				function: (resp, selectors) => {
+					var lyrics = [];
+					var message = '';
+					var source = 'A2Z';
+					var synced = false;
+					var trackName = '';
+					var artistName = '';
+					const parser = new DOMParser();
+					const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
+					const doc = parser.parseFromString(sanitizedResp, 'text/html');
+
+					const artistHeader = doc.querySelector('.lyricsh h2');
+					if (artistHeader) {
+						artistName = artistHeader.textContent.replace(/\s*Lyrics\s*$/i, '').trim();
+					}
+
+					let look = true;
+					let raw = '';
+					let refDiv = doc.querySelector(selectors.RINGTONE);
+					if (refDiv && refDiv.nextElementSibling) {
+						while (look && refDiv.nextElementSibling) {
+							refDiv = refDiv.nextElementSibling;
+							if (refDiv.tagName === 'B' && !trackName) {
+								trackName = refDiv.textContent.replace(/^["']|["']$/g, '').trim();
+							}
+							if (refDiv.tagName === 'DIV') {
+								look = false;
+								raw = refDiv.textContent;
+							}
+						}
+						var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
+						lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean);
+					}
+
+					message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK";
+					return JSON.stringify({ lyrics, message, source, synced, trackName, artistName });
+				},
+				args: [page, SCRAPER_SELECTORS.A2Z]
+			});
+		} catch (e) {
+			return [{ result: JSON.stringify({ lyrics: [], message: 'NOK', source: 'A2Z', synced: false }) }];
+		}
+	};
+
+	const primaryUrl = generateA2ZLyricsUrl(rawName, rawChannel, false);
+	let res = await fetchAndParseA2Z(primaryUrl);
+	let parsed = (!isEmpty(res?.[0]?.result)) ? JSON.parse(res[0].result) : null;
+
+	if ((!parsed || parsed.message === 'NOK') && /\(.*?\)/.test(rawName)) {
+		const altUrl = generateA2ZLyricsUrl(rawName, rawChannel, true);
+		if (altUrl !== primaryUrl) {
+			res = await fetchAndParseA2Z(altUrl);
+		}
 	}
 
-	var url = generateA2ZLyricsUrl(name, channel)
-	console.log('searching A2Z : ', url)
-	var response = await fetch(encodeURI(url), requestOptions)
-	var page = await response.text()
+	return res;
+}
 
-	return await chrome.scripting.executeScript({
-		target: { tabId },
-		function: (resp, selectors) => {
-			var lyrics = []
-			var message = ''
-			var source = 'A2Z'
-			var synced = false
-			const parser = new DOMParser();
-			// Remove <base> tag to avoid CSP violation
-			const sanitizedResp = resp.replace(/<base\b[^>]*>/gi, '');
-			const doc = parser.parseFromString(sanitizedResp, 'text/html');
+/**
+ * Searches A2Z Lyrics for the search bar dropdown and returns formatted search record(s).
+ */
+export async function searchA2ZRecords(tabId, query, fallbackArtist = '', signal) {
+	if (!tabId || !query) return [];
+	const { cleanQuery, trackName, artistName, hasDashSeparator } = parseSongArtistQuery(query);
+	let targetTrack = trackName;
+	let targetArtist = artistName;
 
-			let look = true;
-			let raw = ''
-			let refDiv = doc.querySelector(selectors.RINGTONE);
-			if (refDiv && refDiv.nextElementSibling) {
-				while (look && refDiv.nextElementSibling) {
-					refDiv = refDiv.nextElementSibling;
-					if (refDiv.tagName === 'DIV') {
-						look = false;
-						raw = refDiv.textContent
-					}
-				}
-				var wd = raw.replaceAll(/<\/?div[^>]*>/g, '');
-				var lyrics = wd.split('\n').map(line => line.trim()).filter(Boolean)
-			}
+	if (!hasDashSeparator) {
+		const sepMatch = cleanQuery.match(/^(.+?)\s*(?:\||\/|,|:|\bby\b)\s*(.+)$/i);
+		if (sepMatch) {
+			targetTrack = sepMatch[1].trim();
+			targetArtist = sepMatch[2].trim();
+		} else if (fallbackArtist) {
+			targetTrack = cleanQuery;
+			targetArtist = fallbackArtist;
+		}
+	}
 
-			message = (lyrics != undefined && lyrics.length > 0) ? "OK" : "NOK"
-			var r = { lyrics, message, source, synced }
-			return JSON.stringify(r)
-		},
-		args: [page, SCRAPER_SELECTORS.A2Z]
-	});
+	if (!targetTrack || !targetArtist) return [];
+
+	try {
+		const res = await searchA2Z(tabId, targetTrack, targetArtist, signal);
+		const parsed = (!isEmpty(res?.[0]?.result)) ? JSON.parse(res[0].result) : null;
+		if (parsed && parsed.message === 'OK' && Array.isArray(parsed.lyrics) && parsed.lyrics.length > 0) {
+			return [{
+				id: `a2z-${Date.now()}`,
+				trackName: parsed.trackName || targetTrack,
+				artistName: parsed.artistName || targetArtist,
+				albumName: 'AZLyrics',
+				plainLyrics: parsed.lyrics.join('\n'),
+				syncedLyrics: null,
+				hasWordSync: false,
+				source: 'A2Z'
+			}];
+		}
+	} catch (e) {
+		console.warn('[A2Z] Search error:', e);
+	}
+	return [];
 }
