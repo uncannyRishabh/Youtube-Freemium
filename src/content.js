@@ -14,6 +14,13 @@ var YT_SELECTORS, YTF_SELECTORS
 		METADATA: {
 			MUSIC_BADGE: 'button-view-model a',
 			MUSIC_HEADER_TITLE: '#header-container #title',
+			ATTRIBUTES_SECTION: 'yt-video-attributes-section-view-model, ytd-video-description-music-section-renderer, ytd-horizontal-card-list-renderer',
+			SECTION_HEADER_TITLE: '.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title',
+			MUSIC_CARD_ELEMENTS: [
+				'yt-video-attribute-view-model',
+				'.yt-video-attribute-view-model__metadata',
+				'.ytVideoAttributeViewModelContentContainer'
+			],
 			MUSIC_CARD_CONTAINERS: [
 				'.yt-video-attribute-view-model__metadata',
 				'.ytVideoAttributeViewModelContentContainer'
@@ -71,6 +78,66 @@ var YT_SELECTORS, YTF_SELECTORS
 		.hide-youtube-shelves ytd-reel-shelf-renderer {
 			display: none !important;
 		}
+
+		#ytf-progressbar {
+			position: absolute !important;
+			top: 0 !important;
+			left: 0 !important;
+			width: 100% !important;
+			height: 2px !important;
+			min-height: 2px !important;
+			z-index: 20 !important;
+			border-radius: 12px 12px 0 0 !important;
+			pointer-events: none !important;
+			box-sizing: border-box !important;
+			border: none !important;
+			-webkit-appearance: none !important;
+			appearance: none !important;
+			background-color: transparent !important;
+		}
+
+		#ytf-progressbar.pure-material-progress-linear {
+			visibility: visible !important;
+			opacity: 1 !important;
+			color: #e21 !important;
+			background-color: var(--yt-spec-raised-background, #212121) !important;
+		}
+
+		#ytf-progressbar.no-animate {
+			visibility: hidden !important;
+			opacity: 0 !important;
+			animation: none !important;
+			background-image: none !important;
+		}
+
+		.yf-container {
+			overflow: hidden !important;
+			transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1) !important;
+		}
+
+		.yf-container.collapsed {
+			max-height: 50px !important;
+			overflow: hidden !important;
+		}
+
+		.yf-container.collapsed .intermediateContainer,
+		.yf-container.collapsed #searchingDiv,
+		.yf-container.collapsed #notFound,
+		.yf-container.collapsed #yf-search-results,
+		.yf-container.collapsed #yf-search-dropdown,
+		.yf-container.collapsed #yf-dropdown {
+			display: none !important;
+		}
+
+		.yf-container.collapsed .yf-header-bottom {
+			display: none !important;
+		}
+
+		.yf-container.collapsed .yf-menu {
+			opacity: 0 !important;
+			visibility: hidden !important;
+			pointer-events: none !important;
+		}
 	`;
 
 	document.head.appendChild(style);
@@ -87,33 +154,258 @@ var YT_SELECTORS, YTF_SELECTORS
 		}
 	}
 
-	let lastReportedUid = null;
+	function normalizeToken(str) {
+		return String(str || '')
+			.toLowerCase()
+			.replace(/[\u2010-\u2015\u2212]/g, '-')
+			.replace(/[^\p{L}\p{N}\s]/gu, ' ')
+			.replace(/\s+/g, ' ')
+			.trim();
+	}
 
-	function extractPageMetadata(watchFlexy) {
-		const cleanField = (str) => str?.replace(/\b(feat|ft)\b\.?/i, '').trim() || '';
+	function cleanField(str) {
+		return String(str || '')
+			.replace(/\b(feat|ft)\b\.?/i, '')
+			.replace(/\s+/g, ' ')
+			.trim();
+	}
 
-		const musicBadge = watchFlexy.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE);
-		const isMusic = musicBadge != null && musicBadge.textContent.trim() === 'Music';
+	function isMusicCardFresh(cardTitle, cardArtist, fallbackTitle, fallbackChannel) {
+		if (!cardTitle) return false;
+		if (cardArtist && /\(born\s+\d{4}\)/i.test(cardArtist)) return false;
+
+		const normCardTitle = normalizeToken(cardTitle);
+		const normCardArtist = normalizeToken(cardArtist);
+		const normFallbackTitle = normalizeToken(fallbackTitle);
+		const normFallbackChannel = normalizeToken(fallbackChannel);
+
+		if (!normCardTitle || !normFallbackTitle) return false;
+
+		if (normFallbackTitle.includes(normCardTitle) || normCardTitle.includes(normFallbackTitle)) {
+			return true;
+		}
+
+		if (normCardArtist && (normFallbackChannel.includes(normCardArtist) || normFallbackTitle.includes(normCardArtist))) {
+			return true;
+		}
+
+		const cardTokens = normCardTitle.split(/\s+/).filter(t => t.length > 2);
+		if (cardTokens.length > 0) {
+			const matchingTokens = cardTokens.filter(t => normFallbackTitle.includes(t));
+			if (matchingTokens.length >= Math.ceil(cardTokens.length * 0.6)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	function extractMusicCard(watchFlexy, fallbackTitle, fallbackChannel) {
+		const isExcludedSection = (sec) => {
+			const header = sec.querySelector(
+				YT_SELECTORS.METADATA.SECTION_HEADER_TITLE || '.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title'
+			)?.textContent?.trim()?.toLowerCase() || '';
+			return header.includes('people') || header.includes('cast') || header.includes('game') || header.includes('place') || header.includes('creator');
+		};
+
+		const isMusicSection = (sec) => {
+			const header = sec.querySelector(
+				YT_SELECTORS.METADATA.SECTION_HEADER_TITLE || '.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title'
+			)?.textContent?.trim()?.toLowerCase() || '';
+			if (
+				header.includes('music') ||
+				header.includes('song') ||
+				header.includes('música') ||
+				header.includes('musique') ||
+				header.includes('musik')
+			) {
+				return true;
+			}
+			const badge = sec.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE);
+			if (badge && badge.textContent.trim().toLowerCase().includes('music')) {
+				return true;
+			}
+			return false;
+		};
+
+		const extractDetailsFromCard = (cardEl) => {
+			if (!cardEl) return null;
+
+			const parentSec = cardEl.closest('yt-video-attributes-section-view-model, ytd-horizontal-card-list-renderer');
+			if (parentSec && isExcludedSection(parentSec)) {
+				return null;
+			}
+
+			let titleEl = cardEl.querySelector(
+				'.ytVideoAttributeViewModelTitle, .yt-video-attribute-view-model__title'
+			);
+			let artistEl = cardEl.querySelector(
+				'.ytVideoAttributeViewModelSubtitle, .yt-video-attribute-view-model__subtitle, .yt-video-attribute-view-model__secondary-subtitle'
+			);
+
+			if (!titleEl) {
+				titleEl = cardEl.querySelector(
+					'.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1), .yt-video-attribute-view-model__metadata > :nth-child(1) > :nth-child(1), .yt-video-attribute-view-model__secondary > :nth-child(1)'
+				);
+			}
+			if (!artistEl) {
+				artistEl = cardEl.querySelector(
+					'.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2), .yt-video-attribute-view-model__metadata > :nth-child(1) > :nth-child(2), .yt-video-attribute-view-model__secondary > :nth-child(2)'
+				);
+			}
+
+			const title = cleanField(titleEl?.textContent);
+			const artist = cleanField(artistEl?.textContent);
+
+			if (!title) return null;
+
+			// Reject biographical person subtitles (e.g. "Rapper (born 1992)")
+			if (artist && /\(born\s+\d{4}\)/i.test(artist)) {
+				return null;
+			}
+
+			return { title, artist };
+		};
+
+		const sectionSelector = YT_SELECTORS.METADATA.ATTRIBUTES_SECTION || 'yt-video-attributes-section-view-model, ytd-video-description-music-section-renderer, ytd-horizontal-card-list-renderer';
+		const sections = Array.from(watchFlexy.querySelectorAll(sectionSelector));
+
+		let musicSections = sections.filter(isMusicSection);
+
+		// If no section explicitly matched "Music", check if music badge is inside a section
+		if (musicSections.length === 0) {
+			const musicBadge = watchFlexy.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE);
+			if (musicBadge) {
+				const badgeSec = musicBadge.closest(sectionSelector);
+				if (badgeSec && !isExcludedSection(badgeSec)) {
+					musicSections.push(badgeSec);
+				}
+			}
+		}
+
+		let candidateCards = [];
+		if (musicSections.length > 0) {
+			for (const sec of musicSections) {
+				let cards = Array.from(sec.querySelectorAll('yt-video-attribute-view-model'));
+				if (cards.length === 0) {
+					cards = Array.from(sec.querySelectorAll('.yt-video-attribute-view-model__metadata, .ytVideoAttributeViewModelContentContainer'));
+				}
+				candidateCards.push(...cards);
+			}
+		} else {
+			const allCards = Array.from(
+				watchFlexy.querySelectorAll(
+					'yt-video-attribute-view-model, .yt-video-attribute-view-model__metadata, .ytVideoAttributeViewModelContentContainer'
+				)
+			);
+			candidateCards = allCards.filter(c => {
+				const sec = c.closest('yt-video-attributes-section-view-model, ytd-horizontal-card-list-renderer');
+				return !sec || !isExcludedSection(sec);
+			});
+		}
+
+		let firstValidCandidate = null;
+		for (const card of candidateCards) {
+			const details = extractDetailsFromCard(card);
+			if (!details) continue;
+
+			if (isMusicCardFresh(details.title, details.artist, fallbackTitle, fallbackChannel)) {
+				return { title: details.title, artist: details.artist, isCardValid: true };
+			}
+
+			if (!firstValidCandidate && musicSections.length > 0) {
+				firstValidCandidate = details;
+			}
+		}
+
+		if (firstValidCandidate) {
+			return { title: firstValidCandidate.title, artist: firstValidCandidate.artist, isCardValid: true };
+		}
+
+		return null;
+	}
+
+	function parseFallbackMetadata(fallbackTitle, fallbackChannel) {
+		let rawTitle = String(fallbackTitle || '').trim();
+		let rawChannel = String(fallbackChannel || '').trim();
+
+		let cleanedTitle = rawTitle
+			.replace(/\[[^\]]*\]/g, '')
+			.replace(/\((?:official\s*(?:video|audio|music\s*video|lyric\s*video)?|lyrics?|visualizer|remastered|audio|hd|4k)\)/gi, '')
+			.replace(/\b(official\s*(?:music\s*)?video|official\s*audio|lyric\s*video)\b/gi, '')
+			.replace(/\s+/g, ' ')
+			.trim();
 
 		let title = '';
 		let channel = '';
 
-		if (isMusic) {
-			const musicCard = watchFlexy.querySelectorAll(YT_SELECTORS.METADATA.MUSIC_HEADER_TITLE);
-			const cardContainer = YT_SELECTORS.METADATA.MUSIC_CARD_CONTAINERS.find(s => watchFlexy.querySelector(s) !== null);
+		const dashMatch = cleanedTitle.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+		if (dashMatch) {
+			const part1 = dashMatch[1].trim();
+			const part2 = dashMatch[2].trim();
+			const normChannel = normalizeToken(rawChannel);
 
-			if (musicCard && cardContainer) {
-				title = cleanField(watchFlexy.querySelector(cardContainer + YT_SELECTORS.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent);
-				channel = cleanField(watchFlexy.querySelector(cardContainer + YT_SELECTORS.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent);
+			if (normChannel && normalizeToken(part1).includes(normChannel)) {
+				channel = part1;
+				title = part2;
+			} else if (normChannel && normalizeToken(part2).includes(normChannel)) {
+				channel = part2;
+				title = part1;
+			} else {
+				channel = part1;
+				title = part2;
+			}
+		} else {
+			title = cleanedTitle;
+			channel = rawChannel.replace(/\s*-\s*Topic$/i, '').trim();
+		}
+
+		return {
+			title: cleanField(title),
+			channel: cleanField(channel)
+		};
+	}
+
+	let lastReportedSignature = null;
+	let pendingRetryTimer = null;
+
+	function extractPageMetadata(watchFlexy) {
+		const musicBadge = watchFlexy.querySelector(YT_SELECTORS.METADATA.MUSIC_BADGE);
+		const isMusic = musicBadge != null && musicBadge.textContent.trim() === 'Music';
+
+		const fallbackTitleEl = watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE);
+		const fallbackTitle = fallbackTitleEl?.textContent?.trim() || '';
+
+		const fallbackChannelEl = watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_CHANNEL);
+		const fallbackChannel = fallbackChannelEl?.textContent?.trim() || '';
+
+		let title = '';
+		let channel = '';
+		let isCardValid = false;
+
+		const cardResult = extractMusicCard(watchFlexy, fallbackTitle, fallbackChannel);
+
+		if (cardResult) {
+			title = cardResult.title;
+			channel = cardResult.artist;
+			isCardValid = cardResult.isCardValid;
+		}
+
+		if (!isCardValid && fallbackTitle) {
+			const fallbackParsed = parseFallbackMetadata(fallbackTitle, fallbackChannel);
+			if (fallbackParsed.title) {
+				title = fallbackParsed.title;
+				channel = fallbackParsed.channel;
 			}
 		}
 
-		return { isMusic, title, channel };
+		return { isMusic, title, channel, isCardValid, fallbackTitle, fallbackChannel };
 	}
 
 	function notifyPageReady() {
 		if (!window.location.pathname.startsWith('/watch')) {
-			lastReportedUid = null;
+			lastReportedSignature = null;
+			if (pendingRetryTimer) clearTimeout(pendingRetryTimer);
 			return;
 		}
 
@@ -131,38 +423,67 @@ var YT_SELECTORS, YTF_SELECTORS
 		}
 
 		const titleEl = watchFlexy.querySelector(YT_SELECTORS.METADATA.FALLBACK_TITLE);
-		const titleText = titleEl?.textContent?.trim();
-		if (!titleText || titleText.length === 0) {
+		const fallbackTitle = titleEl?.textContent?.trim();
+		if (!fallbackTitle || fallbackTitle.length === 0) {
 			return;
 		}
 
-		const { isMusic, title, channel } = extractPageMetadata(watchFlexy);
+		const metadata = extractPageMetadata(watchFlexy);
+		const { isMusic, title, channel, isCardValid } = metadata;
 
-		// If it's a music video, wait until the music card metadata (title & artist) is populated in DOM
-		if (isMusic && (!title || !channel)) {
+		// If music badge exists but card is not fresh yet, YouTube is still rendering the description.
+		// Wait briefly for the fresh music card mutation before dispatching.
+		if (isMusic && !isCardValid) {
+			if (!pendingRetryTimer) {
+				pendingRetryTimer = setTimeout(() => {
+					pendingRetryTimer = null;
+					notifyPageReady();
+				}, 400);
+			}
+			if (!lastReportedSignature || !lastReportedSignature.startsWith(currentUid + ':')) {
+				return;
+			}
+		}
+
+		if (pendingRetryTimer) {
+			clearTimeout(pendingRetryTimer);
+			pendingRetryTimer = null;
+		}
+
+		if (!title) {
 			return;
 		}
 
-		if (currentUid === lastReportedUid) {
+		const currentSignature = `${currentUid}:${isMusic}:${title}:${channel}`;
+		if (currentSignature === lastReportedSignature) {
 			return;
 		}
 
-		lastReportedUid = currentUid;
+		lastReportedSignature = currentSignature;
 
-		// If it's a music video, activate the search indicator immediately
+		// Activate the search indicator immediately
+		const ytc = document.querySelector(YT_SELECTORS.LAYOUT.TARGET(window.innerWidth < 1000));
+		const progressbar = ytc?.querySelector(YTF_SELECTORS.HEADER.PROGRESS_BAR);
+		const nowPlaying = ytc?.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_LABEL);
+		const nowPlayingInput = ytc?.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_INPUT);
+
 		if (isMusic) {
-			const ytc = document.querySelector(YT_SELECTORS.LAYOUT.TARGET(window.innerWidth < 1000));
-			const progressbar = ytc?.querySelector(YTF_SELECTORS.HEADER.PROGRESS_BAR);
-			const nowPlaying = ytc?.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_LABEL);
 			if (progressbar) {
 				progressbar.style.visibility = 'visible';
+				progressbar.style.opacity = '1';
 				progressbar.classList.add('pure-material-progress-linear');
 				progressbar.classList.remove('no-animate');
 			}
 			if (nowPlaying) nowPlaying.textContent = 'Searching -';
+			if (nowPlayingInput && title) {
+				const dispTitle = channel && !title.includes(' - ') && !title.toLowerCase().includes(channel.toLowerCase())
+					? `${title} - ${channel}`
+					: title;
+				nowPlayingInput.value = dispTitle;
+				nowPlayingInput.setAttribute('data-current-title', dispTitle);
+			}
 		} else {
 			// Video is not a music video: ensure container remains closed
-			const ytc = document.querySelector(YT_SELECTORS.LAYOUT.TARGET(window.innerWidth < 1000));
 			const container = ytc?.querySelector(YTF_SELECTORS.CONTAINER.CLASS);
 			if (container) {
 				container.classList.add(YTF_SELECTORS.CONTAINER.COLLAPSED_CLASS);
@@ -182,7 +503,11 @@ var YT_SELECTORS, YTF_SELECTORS
 	}
 
 	window.addEventListener('yt-navigate-start', () => {
-		lastReportedUid = null;
+		lastReportedSignature = null;
+		if (pendingRetryTimer) {
+			clearTimeout(pendingRetryTimer);
+			pendingRetryTimer = null;
+		}
 		chrome.runtime.sendMessage({
 			type: 'YOUTUBE_NAVIGATE_START',
 			url: window.location.href
@@ -195,6 +520,7 @@ var YT_SELECTORS, YTF_SELECTORS
 				progressbar.classList.remove('pure-material-progress-linear');
 				progressbar.classList.add('no-animate');
 				progressbar.style.visibility = 'hidden';
+				progressbar.style.opacity = '0';
 			}
 			const nowPlayingInput = container.querySelector(YTF_SELECTORS.HEADER.NOW_PLAYING_INPUT);
 			if (nowPlayingInput) {

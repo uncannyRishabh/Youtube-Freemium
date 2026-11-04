@@ -393,6 +393,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 if (progressbar) {
                     progressbar.classList.remove("no-animate");
                     progressbar.classList.add("pure-material-progress-linear");
+                    progressbar.style.visibility = "visible";
+                    progressbar.style.opacity = "1";
                 }
 
                 var searchingDiv = document.createElement('div');
@@ -524,7 +526,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             } else {
                 lyrics = '';
                 message = "NOK";
-                title = '';
+                title = buildDisplayTitle(val, channel);
                 source = '';
                 synced = false;
                 offset = 0.0;
@@ -1132,7 +1134,9 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     container.appendChild(header);
 
                     progressbar.id = 'ytf-progressbar';
-                    progressbar.className = "pure-material-progress-linear";
+                    progressbar.className = "pure-material-progress-linear no-animate";
+                    progressbar.style.visibility = 'hidden';
+                    progressbar.style.opacity = '0';
                     container.appendChild(progressbar);
 
                     if (window.innerWidth < 1000) {
@@ -1793,6 +1797,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     if (progressbar) {
                         progressbar.classList.remove("no-animate");
                         progressbar.classList.add("pure-material-progress-linear");
+                        progressbar.style.visibility = "visible";
+                        progressbar.style.opacity = "1";
                     }
 
                     closeFloatingSearchDropdown();
@@ -1812,6 +1818,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         if (progressbar) {
                             progressbar.classList.remove("pure-material-progress-linear");
                             progressbar.classList.add("no-animate");
+                            progressbar.style.visibility = "hidden";
+                            progressbar.style.opacity = "0";
                         }
 
                         if (response && response.rateLimited) {
@@ -1943,6 +1951,8 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 if (progressbar) {
                     progressbar.classList.remove("pure-material-progress-linear");
                     progressbar.classList.add("no-animate");
+                    progressbar.style.visibility = "hidden";
+                    progressbar.style.opacity = "0";
                 }
 
                 function timestampToSeconds(ts) {
@@ -2368,7 +2378,217 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             const results = await chrome.scripting.executeScript({
                 target: { tabId },
                 function: (expectedUid, YT_SEL) => {
-                    const cleanField = (str) => str?.replace(/\b(feat|ft)\b\.?/i, '').trim() || '';
+                    function normalizeToken(str) {
+                        return String(str || '')
+                            .toLowerCase()
+                            .replace(/[\u2010-\u2015\u2212]/g, '-')
+                            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    }
+
+                    function cleanField(str) {
+                        return String(str || '')
+                            .replace(/\b(feat|ft)\b\.?/i, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                    }
+
+                    function isMusicCardFresh(cardTitle, cardArtist, fallbackTitle, fallbackChannel) {
+                        if (!cardTitle) return false;
+                        if (cardArtist && /\(born\s+\d{4}\)/i.test(cardArtist)) return false;
+
+                        const normCardTitle = normalizeToken(cardTitle);
+                        const normCardArtist = normalizeToken(cardArtist);
+                        const normFallbackTitle = normalizeToken(fallbackTitle);
+                        const normFallbackChannel = normalizeToken(fallbackChannel);
+
+                        if (!normCardTitle || !normFallbackTitle) return false;
+
+                        if (normFallbackTitle.includes(normCardTitle) || normCardTitle.includes(normFallbackTitle)) {
+                            return true;
+                        }
+
+                        if (normCardArtist && (normFallbackChannel.includes(normCardArtist) || normFallbackTitle.includes(normCardArtist))) {
+                            return true;
+                        }
+
+                        const cardTokens = normCardTitle.split(/\s+/).filter(t => t.length > 2);
+                        if (cardTokens.length > 0) {
+                            const matchingTokens = cardTokens.filter(t => normFallbackTitle.includes(t));
+                            if (matchingTokens.length >= Math.ceil(cardTokens.length * 0.6)) {
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    }
+
+                    function extractMusicCard(watchFlexy, fallbackTitle, fallbackChannel) {
+                        const isExcludedSection = (sec) => {
+                            const header = sec.querySelector(
+                                YT_SEL.METADATA.SECTION_HEADER_TITLE || '.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title'
+                            )?.textContent?.trim()?.toLowerCase() || '';
+                            return header.includes('people') || header.includes('cast') || header.includes('game') || header.includes('place') || header.includes('creator');
+                        };
+
+                        const isMusicSection = (sec) => {
+                            const header = sec.querySelector(
+                                YT_SEL.METADATA.SECTION_HEADER_TITLE || '.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title'
+                            )?.textContent?.trim()?.toLowerCase() || '';
+                            if (
+                                header.includes('music') ||
+                                header.includes('song') ||
+                                header.includes('música') ||
+                                header.includes('musique') ||
+                                header.includes('musik')
+                            ) {
+                                return true;
+                            }
+                            const badge = sec.querySelector(YT_SEL.METADATA.MUSIC_BADGE);
+                            if (badge && badge.textContent.trim().toLowerCase().includes('music')) {
+                                return true;
+                            }
+                            return false;
+                        };
+
+                        const extractDetailsFromCard = (cardEl) => {
+                            if (!cardEl) return null;
+
+                            const parentSec = cardEl.closest('yt-video-attributes-section-view-model, ytd-horizontal-card-list-renderer');
+                            if (parentSec && isExcludedSection(parentSec)) {
+                                return null;
+                            }
+
+                            let titleEl = cardEl.querySelector(
+                                '.ytVideoAttributeViewModelTitle, .yt-video-attribute-view-model__title'
+                            );
+                            let artistEl = cardEl.querySelector(
+                                '.ytVideoAttributeViewModelSubtitle, .yt-video-attribute-view-model__subtitle, .yt-video-attribute-view-model__secondary-subtitle'
+                            );
+
+                            if (!titleEl) {
+                                titleEl = cardEl.querySelector(
+                                    '.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1), .yt-video-attribute-view-model__metadata > :nth-child(1) > :nth-child(1), .yt-video-attribute-view-model__secondary > :nth-child(1)'
+                                );
+                            }
+                            if (!artistEl) {
+                                artistEl = cardEl.querySelector(
+                                    '.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2), .yt-video-attribute-view-model__metadata > :nth-child(1) > :nth-child(2), .yt-video-attribute-view-model__secondary > :nth-child(2)'
+                                );
+                            }
+
+                            const title = cleanField(titleEl?.textContent);
+                            const artist = cleanField(artistEl?.textContent);
+
+                            if (!title) return null;
+
+                            // Reject biographical person subtitles (e.g. "Rapper (born 1992)")
+                            if (artist && /\(born\s+\d{4}\)/i.test(artist)) {
+                                return null;
+                            }
+
+                            return { title, artist };
+                        };
+
+                        const sectionSelector = YT_SEL.METADATA.ATTRIBUTES_SECTION || 'yt-video-attributes-section-view-model, ytd-video-description-music-section-renderer, ytd-horizontal-card-list-renderer';
+                        const sections = Array.from(watchFlexy.querySelectorAll(sectionSelector));
+
+                        let musicSections = sections.filter(isMusicSection);
+
+                        // If no section explicitly matched "Music", check if music badge is inside a section
+                        if (musicSections.length === 0) {
+                            const musicBadge = watchFlexy.querySelector(YT_SEL.METADATA.MUSIC_BADGE);
+                            if (musicBadge) {
+                                const badgeSec = musicBadge.closest(sectionSelector);
+                                if (badgeSec && !isExcludedSection(badgeSec)) {
+                                    musicSections.push(badgeSec);
+                                }
+                            }
+                        }
+
+                        let candidateCards = [];
+                        if (musicSections.length > 0) {
+                            for (const sec of musicSections) {
+                                let cards = Array.from(sec.querySelectorAll('yt-video-attribute-view-model'));
+                                if (cards.length === 0) {
+                                    cards = Array.from(sec.querySelectorAll('.yt-video-attribute-view-model__metadata, .ytVideoAttributeViewModelContentContainer'));
+                                }
+                                candidateCards.push(...cards);
+                            }
+                        } else {
+                            const allCards = Array.from(
+                                watchFlexy.querySelectorAll(
+                                    'yt-video-attribute-view-model, .yt-video-attribute-view-model__metadata, .ytVideoAttributeViewModelContentContainer'
+                                )
+                            );
+                            candidateCards = allCards.filter(c => {
+                                const sec = c.closest('yt-video-attributes-section-view-model, ytd-horizontal-card-list-renderer');
+                                return !sec || !isExcludedSection(sec);
+                            });
+                        }
+
+                        let firstValidCandidate = null;
+                        for (const card of candidateCards) {
+                            const details = extractDetailsFromCard(card);
+                            if (!details) continue;
+
+                            if (isMusicCardFresh(details.title, details.artist, fallbackTitle, fallbackChannel)) {
+                                return { title: details.title, artist: details.artist, isCardValid: true };
+                            }
+
+                            if (!firstValidCandidate && musicSections.length > 0) {
+                                firstValidCandidate = details;
+                            }
+                        }
+
+                        if (firstValidCandidate) {
+                            return { title: firstValidCandidate.title, artist: firstValidCandidate.artist, isCardValid: true };
+                        }
+
+                        return null;
+                    }
+
+                    function parseFallbackMetadata(fallbackTitle, fallbackChannel) {
+                        let rawTitle = String(fallbackTitle || '').trim();
+                        let rawChannel = String(fallbackChannel || '').trim();
+
+                        let cleanedTitle = rawTitle
+                            .replace(/\[[^\]]*\]/g, '')
+                            .replace(/\((?:official\s*(?:video|audio|music\s*video|lyric\s*video)?|lyrics?|visualizer|remastered|audio|hd|4k)\)/gi, '')
+                            .replace(/\b(official\s*(?:music\s*)?video|official\s*audio|lyric\s*video)\b/gi, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+
+                        let title = '';
+                        let channel = '';
+
+                        const dashMatch = cleanedTitle.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+                        if (dashMatch) {
+                            const part1 = dashMatch[1].trim();
+                            const part2 = dashMatch[2].trim();
+                            const normChannel = normalizeToken(rawChannel);
+
+                            if (normChannel && normalizeToken(part1).includes(normChannel)) {
+                                channel = part1;
+                                title = part2;
+                            } else if (normChannel && normalizeToken(part2).includes(normChannel)) {
+                                channel = part2;
+                                title = part1;
+                            } else {
+                                channel = part1;
+                                title = part2;
+                            }
+                        } else {
+                            title = cleanedTitle;
+                            channel = rawChannel.replace(/\s*-\s*Topic$/i, '').trim();
+                        }
+
+                        return {
+                            title: cleanField(title),
+                            channel: cleanField(channel)
+                        };
+                    }
 
                     const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
                     if (!watchFlexy) return JSON.stringify({ isMusic: false, val: '', channel: '' });
@@ -2380,16 +2600,29 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     const musicBadge = watchFlexy.querySelector(YT_SEL.METADATA.MUSIC_BADGE);
                     const isMusic = musicBadge != null && musicBadge.textContent.trim() === 'Music';
 
+                    const fallbackTitleEl = watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_TITLE);
+                    const fallbackTitle = fallbackTitleEl?.textContent?.trim() || '';
+
+                    const fallbackChannelEl = watchFlexy.querySelector(YT_SEL.METADATA.FALLBACK_CHANNEL);
+                    const fallbackChannel = fallbackChannelEl?.textContent?.trim() || '';
+
                     let val = '';
                     let channel = '';
+                    let isCardValid = false;
 
-                    if (isMusic) {
-                        const musicCard = watchFlexy.querySelectorAll(YT_SEL.METADATA.MUSIC_HEADER_TITLE);
-                        const cardContainer = YT_SEL.METADATA.MUSIC_CARD_CONTAINERS.find(s => watchFlexy.querySelector(s) !== null);
+                    const cardResult = extractMusicCard(watchFlexy, fallbackTitle, fallbackChannel);
 
-                        if (musicCard && cardContainer) {
-                            val = cleanField(watchFlexy.querySelector(cardContainer + YT_SEL.METADATA.MUSIC_CARD_TITLE_SUFFIX)?.textContent);
-                            channel = cleanField(watchFlexy.querySelector(cardContainer + YT_SEL.METADATA.MUSIC_CARD_ARTIST_SUFFIX)?.textContent);
+                    if (cardResult) {
+                        val = cardResult.title;
+                        channel = cardResult.artist;
+                        isCardValid = cardResult.isCardValid;
+                    }
+
+                    if (!isCardValid && fallbackTitle) {
+                        const fallbackParsed = parseFallbackMetadata(fallbackTitle, fallbackChannel);
+                        if (fallbackParsed.title) {
+                            val = fallbackParsed.title;
+                            channel = fallbackParsed.channel;
                         }
                     }
 
@@ -2485,68 +2718,66 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             });
         }
     }
-
     function injectClickValidator(tabId) {
         if (!tabId) return;
+
         chrome.scripting.executeScript({
             target: { tabId },
             world: 'MAIN',
-            args: [YT_SELECTORS.ADS.ALL_SKIP_CLASSES],
-            func: (skipButtonClasses) => {
+            // Inject as early as possible (e.g. document_start via content script or declarative rules)
+            func: () => {
                 'use strict';
+                if (window.__trustedClickOverrideInjected) return;
+                window.__trustedClickOverrideInjected = true;
 
-                if (window.__ytfAdBlockerInjected) {
-                    console.log(':::Ad blocker already injected, skipping:::');
-                    return;
-                }
+                const originalAddEventListener = EventTarget.prototype.addEventListener;
 
-                function isInIframe() {
-                    try {
-                        console.log(':::Checking if in iframe:::');
-                        return window.self !== window.top;
-                    }
-                    catch (e) {
-                        console.log(':::Error In Iframe logic:::');
-                        return true;
-                    }
-                }
-
-                const getEventHandler = (listener) => function handleEvent(e) {
-                    const handler = {
-                        get(_, prop) {
-                            console.log(':::Proxy get handler invoked:::');
-                            if (prop === "isTrusted") {
-                                return true;
-                            }
-                            if (typeof e[prop] === "function") {
-                                return function (...args) {
-                                    return e[prop](...args);
-                                };
-                            }
-                            return e[prop];
-                        },
-                    };
-                    return listener(new Proxy({}, handler));
-                };
-                function overrideAddEventListener() {
-                    const originalAddEventListener = HTMLElement.prototype.addEventListener;
-                    HTMLElement.prototype.addEventListener = function (type, listener, options) {
-                        if (type === "click" && skipButtonClasses.includes(this.className)) {
-                            return originalAddEventListener.call(this, type, getEventHandler(listener), options);
-                        }
+                EventTarget.prototype.addEventListener = function (type, listener, options) {
+                    if (type !== 'click' && type !== 'pointerdown' && type !== 'mousedown') {
                         return originalAddEventListener.call(this, type, listener, options);
-                    };
-                }
-                if (!isInIframe()) {
-                    console.log(':::Youtube trusted click override injected:::')
-                    overrideAddEventListener();
-                }
+                    }
 
-                window.__ytfAdBlockerInjected = true;
+                    // Support both function callbacks and EventListener objects ({ handleEvent })
+                    const isFunction = typeof listener === 'function';
+                    const callback = isFunction ? listener : (listener && listener.handleEvent);
+                    if (!callback) return originalAddEventListener.call(this, type, listener, options);
+
+                    const wrappedCallback = function (event) {
+                        // Check if event was targeted at a skip button or its children (even in Shadow DOM)
+                        const path = event.composedPath ? event.composedPath() : [event.target];
+                        const isTargetButton = path.some(el =>
+                            el && el.classList && (
+                                el.classList.contains('ytp-ad-skip-button-modern') ||
+                                el.classList.contains('ytp-ad-skip-button') ||
+                                el.classList.contains('ytp-skip-ad-button') ||
+                                (el.matches && el.matches('[class*="skip-button"], button[class*="skip"]'))
+                            )
+                        );
+
+                        if (isTargetButton && !event.isTrusted) {
+                            // Proxy the real event object directly (preserves C++ internal slots & methods)
+                            const proxiedEvent = new Proxy(event, {
+                                get(target, prop, receiver) {
+                                    if (prop === 'isTrusted') {
+                                        return true; // Bypass isTrusted check!
+                                    }
+                                    const val = Reflect.get(target, prop, receiver);
+                                    return typeof val === 'function' ? val.bind(target) : val;
+                                }
+                            });
+                            return callback.call(this, proxiedEvent);
+                        }
+
+                        return callback.call(this, event);
+                    };
+
+                    const wrappedListener = isFunction ? wrappedCallback : { handleEvent: wrappedCallback };
+                    return originalAddEventListener.call(this, type, wrappedListener, options);
+                };
             }
         });
     }
-
+    
     function injectAdDetector() {
         chrome.scripting.executeScript({
             target: { tabId },

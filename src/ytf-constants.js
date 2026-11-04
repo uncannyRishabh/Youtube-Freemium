@@ -29,6 +29,13 @@ export const YT_SELECTORS = {
     METADATA: {
         MUSIC_BADGE: 'button-view-model a',
         MUSIC_HEADER_TITLE: '#header-container #title',
+        ATTRIBUTES_SECTION: 'yt-video-attributes-section-view-model, ytd-video-description-music-section-renderer, ytd-horizontal-card-list-renderer',
+        SECTION_HEADER_TITLE: '.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title',
+        MUSIC_CARD_ELEMENTS: [
+            'yt-video-attribute-view-model',
+            '.yt-video-attribute-view-model__metadata',
+            '.ytVideoAttributeViewModelContentContainer'
+        ],
         MUSIC_CARD_CONTAINERS: [
             '.yt-video-attribute-view-model__metadata',
             '.ytVideoAttributeViewModelContentContainer'
