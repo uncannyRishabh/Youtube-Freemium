@@ -87,7 +87,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
     });
 
     function reloadRelevantTabs() {
-        chrome.tabs.query({ url: "*://*.youtube.com/watch?*" }, function (tabs) {
+        chrome.tabs.query({ url: ["*://*.youtube.com/watch?*", "*://music.youtube.com/*"] }, function (tabs) {
             tabs.forEach(tab => {
                 var tabId = tab.id;
                 chrome.scripting.executeScript({
@@ -95,7 +95,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     function: () => {
                         window.location.reload();
                     }
-                });
+                }).catch(() => {});
             });
         });
     }
