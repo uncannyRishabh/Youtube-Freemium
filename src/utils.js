@@ -11,19 +11,19 @@ export function getDefaultUserPrefs(){
 
 export const carouselData = [
     {
-        header: "Lyrics Sync",
-        subtext: "Real-time scrolling for your favorite tracks.",
-        link: "https://www.youtube.com/watch?v=xiZUf98A1Ts&list=RDxiZUf98A1Ts&t=47"
+        header: "YouTube Music Support",
+        subtext: "Real-time synced lyrics directly integrated into music.youtube.com.",
+        link: "https://music.youtube.com"
     },
     {
-        header: "Disable Shorts",
-        subtext: "Clean your feed with a single toggle.",
-        link: "https://github.com/sponsors/uncannyRishabh"
+        header: "M3 Expressive Dock",
+        subtext: "Seamlessly toggle FreeMium & native views with fluid spring animations.",
+        link: "https://github.com/uncannyRishabh/Youtube-Freemium"
     },
     {
-        header: "Adjust Offset",
-        subtext: "Millisecond precision for perfect sync.",
-        link: "https://github.com/sponsors/uncannyRishabh"
+        header: "Cross-Platform Sync",
+        subtext: "Intelligent lexical matching shares cached lyrics across YouTube & YT Music.",
+        link: "https://github.com/uncannyRishabh/Youtube-Freemium"
     }
 ];
 
