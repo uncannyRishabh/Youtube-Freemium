@@ -1,25 +1,45 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml } from './utils.js';
-import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml, findSavedLyricsByLexicalSearch } from './utils.js';
+import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
 (() => {
 
-    let currentSearchController = null;
+    // Per-tab isolated state management to prevent multi-tab concurrency issues
+    const tabSessions = new Map();
 
-    // State management
-    let currentState = {
-        tabTitle: undefined,
-        reqUrl: '',
-        complete: false,
-        process: false,
-        navigation: false,
-        tabList: [],
-        uid: ''
-    };
+    function getTabSession(tabId) {
+        if (!tabSessions.has(tabId)) {
+            tabSessions.set(tabId, {
+                tabId,
+                platform: 'youtube', // 'youtube' | 'ytmusic'
+                uid: '',
+                tabTitle: undefined,
+                reqUrl: '',
+                complete: false,
+                process: false,
+                navigation: false,
+                abortController: null
+            });
+        }
+        return tabSessions.get(tabId);
+    }
+
+    function resetTabSearch(tabId, reason = 'New search initiated') {
+        const session = getTabSession(tabId);
+        if (session.abortController) {
+            session.abortController.abort(reason);
+        }
+        session.abortController = new AbortController();
+        return session.abortController.signal;
+    }
+
+    // Retain global tabList for preferences broadcasting
+    let globalTabList = [];
 
     const ONINSTALL_REASON_INSTALL = 'install';
     const ONINSTALL_REASON_UPDATE = 'update';
     const YOUTUBE_URL = "youtube.com";
     const YOUTUBE_WATCH_URL = YOUTUBE_URL + "/watch";
+    const YTMUSIC_URL = "music.youtube.com";
     const CHANGE_INFO_STATUS_LOADING = 'loading';
     const CHANGE_INFO_STATUS_COMPLETE = 'complete';
     const TRANSITION_FORWARD_BACK = 'forward_back';
@@ -84,23 +104,30 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
      * Handles tab updates
      */
     chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabInfo) {
-        if (tabInfo.url && tabInfo.url.includes(YOUTUBE_WATCH_URL)) {
+        if (tabInfo.url && (tabInfo.url.includes(YOUTUBE_WATCH_URL) || tabInfo.url.includes(YTMUSIC_URL))) {
+            const session = getTabSession(tabId);
+            session.platform = tabInfo.url.includes(YTMUSIC_URL) ? 'ytmusic' : 'youtube';
+
             if (changeInfo.status && changeInfo.status === CHANGE_INFO_STATUS_LOADING) {
-                currentState.complete = false;
-                currentState.navigation = false;
+                session.complete = false;
+                session.navigation = false;
             }
             if (changeInfo.status && changeInfo.status === CHANGE_INFO_STATUS_COMPLETE) {
-                if (currentState.navigation) {
-                    currentState.navigation = false;
-                    currentState.tabTitle = tabInfo.title;
-                    currentState.uid = getVideoID(tabInfo.url);
+                if (session.navigation) {
+                    session.navigation = false;
+                    session.tabTitle = tabInfo.title;
+                    session.uid = getVideoID(tabInfo.url);
                     main(tabInfo.url, tabId);
                 }
             }
             if (changeInfo.title) {
-                currentState.tabTitle = tabInfo.title;
-                currentState.uid = getVideoID(tabInfo.url);
-                main(tabInfo.url, tabId);
+                const newUid = getVideoID(tabInfo.url);
+                // Ignore title updates caused by play/pause toggles if song UID hasn't changed
+                if (newUid && newUid !== session.uid) {
+                    session.tabTitle = tabInfo.title;
+                    session.uid = newUid;
+                    main(tabInfo.url, tabId);
+                }
             }
         }
     });
@@ -109,15 +136,19 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
      * Handles YouTube forward and backward navigation
      */
     chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
-        if (details.url && details.url.includes(YOUTUBE_WATCH_URL)) {
+        if (details.url && (details.url.includes(YOUTUBE_WATCH_URL) || details.url.includes(YTMUSIC_URL))) {
+            const session = getTabSession(details.tabId);
+            session.platform = details.url.includes(YTMUSIC_URL) ? 'ytmusic' : 'youtube';
             chrome.tabs.get(details.tabId, function (tab) {
-                if (tab.title != 'Youtube') currentState.tabTitle = tab.title;
+                if (tab && tab.title && tab.title !== 'Youtube' && tab.title !== 'YouTube Music') {
+                    session.tabTitle = tab.title;
+                }
             });
-            if (details.frameId === 0 && currentState.process != true) {
-                currentState.complete = true;
+            if (details.frameId === 0 && session.process !== true) {
+                session.complete = true;
             }
-            if (details.transitionQualifiers.includes(TRANSITION_FORWARD_BACK)) {
-                currentState.navigation = true;
+            if (details.transitionQualifiers && details.transitionQualifiers.includes(TRANSITION_FORWARD_BACK)) {
+                session.navigation = true;
             }
         }
     });
@@ -126,13 +157,16 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
      * Handles tab closure
      */
     chrome.tabs.onRemoved.addListener((tabId) => {
-        if (currentState.tabList.includes(tabId)) {
-            currentState.tabList = currentState.tabList.filter(id => id !== tabId);
+        const session = tabSessions.get(tabId);
+        if (session?.abortController) {
+            session.abortController.abort('Tab closed');
         }
+        tabSessions.delete(tabId);
+        globalTabList = globalTabList.filter(id => id !== tabId);
     });
 
     /**
-     * Handles messages from content script
+     * Handles messages from content scripts
      */
     chrome.runtime.onMessage.addListener((obj, sender, sendResponse) => {
         const { type, val, action } = obj;
@@ -143,20 +177,44 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
         switch (type) {
             case 'YOUTUBE_NAVIGATE_START': {
-                if (currentSearchController) {
-                    currentSearchController.abort('Navigation started');
+                const targetTabId = sender.tab?.id;
+                if (targetTabId) {
+                    const session = getTabSession(targetTabId);
+                    if (session.abortController) {
+                        session.abortController.abort('Navigation started');
+                    }
+                    session.uid = null;
                 }
-                currentState.uid = null;
                 break;
             }
             case 'YOUTUBE_PAGE_DATA_UPDATED': {
                 const targetUrl = obj.url || sender.tab?.url;
                 const targetTabId = sender.tab?.id;
                 if (targetUrl && targetTabId && targetUrl.includes(YOUTUBE_WATCH_URL)) {
-                    currentState.tabTitle = sender.tab?.title;
-                    currentState.uid = obj.uid || getVideoID(targetUrl);
+                    const session = getTabSession(targetTabId);
+                    session.platform = 'youtube';
+                    session.tabTitle = sender.tab?.title;
+                    session.uid = obj.uid || getVideoID(targetUrl);
                     main(targetUrl, targetTabId, {
+                        platform: 'youtube',
                         isMusic: obj.isMusic,
+                        title: obj.title,
+                        channel: obj.channel
+                    });
+                }
+                break;
+            }
+            case 'YTMUSIC_PAGE_DATA_UPDATED': {
+                const targetUrl = obj.url || sender.tab?.url;
+                const targetTabId = sender.tab?.id;
+                if (targetUrl && targetTabId) {
+                    const session = getTabSession(targetTabId);
+                    session.platform = 'ytmusic';
+                    session.tabTitle = sender.tab?.title;
+                    session.uid = obj.uid || getVideoID(targetUrl);
+                    main(targetUrl, targetTabId, {
+                        platform: 'ytmusic',
+                        isMusic: true,
                         title: obj.title,
                         channel: obj.channel
                     });
@@ -247,7 +305,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 break;
             }
             case 'PROFANITY_TOGGLE': {
-                currentState.tabList.forEach(async (tabId) => {
+                globalTabList.forEach(async (tabId) => {
                     toggleProfanityFilter(tabId, JSON.parse(val));
                 });
                 break;
@@ -271,16 +329,18 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     });
 
     /**
-     * Main processing function for YouTube page changes
+     * Main processing function for YouTube / YouTube Music page changes
      */
     async function main(url, tabId, preloadedMetadata = null) {
-        currentState.process = true;
-        currentState.reqUrl = url;
+        const session = getTabSession(tabId);
+        session.process = true;
+        session.reqUrl = url;
         const targetUid = getVideoID(url);
-        currentState.uid = targetUid;
+        session.uid = targetUid;
+        session.platform = preloadedMetadata?.platform || (url.includes('music.youtube.com') ? 'ytmusic' : 'youtube');
 
-        if (!currentState.tabList.includes(tabId)) {
-            currentState.tabList.push(tabId);
+        if (!globalTabList.includes(tabId)) {
+            globalTabList.push(tabId);
         }
 
         try {
@@ -294,14 +354,23 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
      * Waits until the active watch page DOM inside the tab matches the target video ID
      * and has rendered its primary metadata, using reactive MutationObserver (push-based, no polling).
      */
-    async function waitForWatchPageReady(tabId, uid, maxWaitMs = 3000) {
+    async function waitForWatchPageReady(tabId, uid, maxWaitMs = 3000, platform = 'youtube') {
         try {
             const results = await chrome.scripting.executeScript({
                 target: { tabId },
-                function: (expectedUid, timeout, YT_SEL) => {
+                function: (expectedUid, timeout, YT_SEL, YTM_SEL, currentPlatform) => {
                     return new Promise((resolve) => {
+                        const isYtMusic = currentPlatform === 'ytmusic' || window.location.hostname.includes('music.youtube');
+
                         const checkImmediate = () => {
                             const currentUrl = window.location.href;
+                            if (isYtMusic) {
+                                const bar = document.querySelector(YTM_SEL.PLAYER_BAR.ROOT);
+                                const titleEl = bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE);
+                                const titleText = titleEl?.getAttribute('title') || titleEl?.textContent?.trim();
+                                return Boolean(titleText && titleText.length > 0);
+                            }
+
                             if (!currentUrl.includes(expectedUid)) {
                                 return false;
                             }
@@ -334,6 +403,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             if (timer) clearTimeout(timer);
                             if (observer) observer.disconnect();
                             window.removeEventListener('yt-page-data-updated', onPageData);
+                            window.removeEventListener('yt-navigate-finish', onPageData);
                             resolve(result);
                         };
 
@@ -341,28 +411,31 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             if (checkImmediate()) cleanup(true);
                         };
                         window.addEventListener('yt-page-data-updated', onPageData);
+                        window.addEventListener('yt-navigate-finish', onPageData);
 
                         observer = new MutationObserver(() => {
                             if (checkImmediate()) cleanup(true);
                         });
 
-                        const target = document.querySelector('ytd-page-manager') || document.querySelector('ytd-app') || document.body;
+                        const target = isYtMusic
+                            ? (document.querySelector(YTM_SEL.PLAYER_BAR.ROOT) || document.body)
+                            : (document.querySelector('ytd-page-manager') || document.querySelector('ytd-app') || document.body);
+
                         if (target) {
                             observer.observe(target, {
                                 attributes: true,
-                                attributeFilter: ['video-id', 'hidden'],
                                 childList: true,
                                 subtree: true
                             });
                         }
 
-                        // Single fallback timeout (not a polling loop) to prevent dangling listeners
+                        // Single fallback timeout to prevent dangling listeners
                         timer = setTimeout(() => {
                             cleanup(checkImmediate());
                         }, timeout);
                     });
                 },
-                args: [uid, maxWaitMs, YT_SELECTORS]
+                args: [uid, maxWaitMs, YT_SELECTORS, YTM_SELECTORS, platform]
             });
             return Boolean(results && results[0]?.result);
         } catch (e) {
@@ -374,13 +447,21 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
     /**
      * Injects the 'Searching lyrics...' UI placeholder into Freemium's container.
      */
-    async function injectSearchingState(tabId, displayTitle) {
+    async function injectSearchingState(tabId, displayTitle, platform = 'youtube', uid = null) {
         return chrome.scripting.executeScript({
             target: { tabId },
-            function: (searchTitle, YT_SEL, YTF_SEL) => {
-                var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
-                var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
+            function: (searchTitle, targetUid, YT_SEL, YTF_SEL, YTM_SEL, currentPlatform) => {
+                const isYtMusic = currentPlatform === 'ytmusic' || window.location.hostname.includes('music.youtube');
+
+                var container = document.querySelector(YTF_SEL.CONTAINER.CLASS);
                 if (!container) return;
+
+                // Guard: Do not tear down if container is already rendered for this UID
+                if (targetUid && (container._currentUid === targetUid || container.getAttribute('data-uid') === targetUid)) {
+                    if (container.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER)) {
+                        return;
+                    }
+                }
 
                 var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                 if (npt) {
@@ -415,35 +496,40 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     container.appendChild(searchingDiv);
                 }
             },
-            args: [displayTitle, YT_SELECTORS, YTF_SELECTORS]
+            args: [displayTitle, uid, YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS, platform]
         });
     }
 
     const runInContext = async (url, tabId, preloadedMetadata = null) => {
+        const session = getTabSession(tabId);
         var uid = getVideoID(url);
         if (!uid) return;
 
-        if (currentSearchController) {
-            currentSearchController.abort('New search initiated');
-        }
-        currentSearchController = new AbortController();
-        const searchSignal = currentSearchController.signal;
+        const platform = preloadedMetadata?.platform || (url.includes('music.youtube.com') ? 'ytmusic' : 'youtube');
+        session.platform = platform;
+        session.uid = uid;
+
+        const searchSignal = resetTabSearch(tabId, 'New search initiated');
 
         let metadata = preloadedMetadata;
         if (!metadata || metadata.isMusic === undefined) {
             // Push-based observer wait until DOM is ready for the target UID
-            const isReady = await waitForWatchPageReady(tabId, uid);
-            if (!isReady || searchSignal.aborted || currentState.uid !== uid) {
+            const isReady = await waitForWatchPageReady(tabId, uid, 3000, platform);
+            if (!isReady || searchSignal.aborted || session.uid !== uid) {
                 return;
             }
-            metadata = await getVideoMusicMetadata(tabId, uid);
+            if (platform === 'ytmusic') {
+                metadata = await getYouTubeMusicMetadata(tabId, uid);
+            } else {
+                metadata = await getVideoMusicMetadata(tabId, uid);
+            }
         }
 
-        if (searchSignal.aborted || currentState.uid !== uid) {
+        if (searchSignal.aborted || session.uid !== uid) {
             return;
         }
 
-        const isMusic = Boolean(metadata.isMusic);
+        const isMusic = platform === 'ytmusic' ? true : Boolean(metadata.isMusic);
         const val = metadata.title || metadata.val || '';
         const channel = metadata.channel || '';
 
@@ -470,40 +556,65 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             const hasUserSelection = !isEmpty(obj) && obj[uid]?.userSelected === true && obj[uid]?.message === 'OK';
 
             if (!hasUserSelection && ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val && obj[uid]?.title != displayTitle) || (isEmpty(obj) && val))) {
-                await injectSearchingState(tabId, displayTitle);
+                await injectSearchingState(tabId, displayTitle, platform, uid);
 
-                let result = await findLyricsfromSources(tabId, "", val, channel, searchSignal);
-                if (searchSignal.aborted || currentState.uid !== uid) {
-                    return;
-                }
-
-                let resultObject = JSON.parse(result[0]?.result || '{}');
-                const existingSavedOffset = (obj && obj[uid] && obj[uid].offset !== undefined && obj[uid].offset !== null)
-                    ? parseOffset(obj[uid].offset, null)
-                    : null;
-
-                if (!resultObject || resultObject.message === 'NOK') {
-                    lyrics = '';
-                    message = 'NOK';
-                    offset = existingSavedOffset !== null ? existingSavedOffset : 0.0;
-                    if (resultObject?.rateLimited || resultObject?.statusCode === 503) {
-                        isRateLimited = true;
-                        rateLimitRetryAfter = resultObject.retryAfter || 1;
-                    }
+                // 1. Lexical search against all saved lyrics in local database to reuse cross-platform
+                let lexicalMatch = await findSavedLyricsByLexicalSearch(val, channel);
+                if (lexicalMatch && lexicalMatch.lyrics && lexicalMatch.message === 'OK') {
+                    lyrics = lexicalMatch.lyrics;
+                    message = 'OK';
+                    title = lexicalMatch.title || displayTitle || val;
+                    source = lexicalMatch.source || 'Saved';
+                    synced = lexicalMatch.synced ?? false;
+                    offset = parseOffset(lexicalMatch.offset, 0.0);
+                    const timeCreated = Date.now();
+                    saveObject(uid, {
+                        lyrics,
+                        message,
+                        scroll: 0,
+                        timeCreated,
+                        lastAccessed: timeCreated,
+                        title,
+                        source,
+                        synced,
+                        offset,
+                        reusedFromUid: lexicalMatch.originalUid
+                    });
                 } else {
-                    lyrics = resultObject.lyrics || '';
-                    message = resultObject.message || '';
-                    source = resultObject.source || '';
-                    synced = resultObject.synced ?? synced;
-                    offset = existingSavedOffset !== null
-                        ? existingSavedOffset
-                        : parseOffset(resultObject.offset, 0.0);
-                }
-                var timeCreated = Date.now();
-                title = displayTitle || val;
+                    // 2. Local cache miss: search external lyric providers
+                    let result = await findLyricsfromSources(tabId, "", val, channel, searchSignal);
+                    if (searchSignal.aborted || session.uid !== uid) {
+                        return;
+                    }
 
-                if (message === 'OK' && lyrics && lyrics.length > 0 && !searchSignal.aborted && currentState.uid === uid) {
-                    saveObject(uid, { lyrics, message, scroll: 0, timeCreated, lastAccessed: timeCreated, title, source, synced, offset });
+                    let resultObject = JSON.parse(result[0]?.result || '{}');
+                    const existingSavedOffset = (obj && obj[uid] && obj[uid].offset !== undefined && obj[uid].offset !== null)
+                        ? parseOffset(obj[uid].offset, null)
+                        : null;
+
+                    if (!resultObject || resultObject.message === 'NOK') {
+                        lyrics = '';
+                        message = 'NOK';
+                        offset = existingSavedOffset !== null ? existingSavedOffset : 0.0;
+                        if (resultObject?.rateLimited || resultObject?.statusCode === 503) {
+                            isRateLimited = true;
+                            rateLimitRetryAfter = resultObject.retryAfter || 1;
+                        }
+                    } else {
+                        lyrics = resultObject.lyrics || '';
+                        message = resultObject.message || '';
+                        source = resultObject.source || '';
+                        synced = resultObject.synced ?? synced;
+                        offset = existingSavedOffset !== null
+                            ? existingSavedOffset
+                            : parseOffset(resultObject.offset, 0.0);
+                    }
+                    var timeCreated = Date.now();
+                    title = displayTitle || val;
+
+                    if (message === 'OK' && lyrics && lyrics.length > 0 && !searchSignal.aborted && session.uid === uid) {
+                        saveObject(uid, { lyrics, message, scroll: 0, timeCreated, lastAccessed: timeCreated, title, source, synced, offset });
+                    }
                 }
             } else if (!isEmpty(obj)) {
                 lyrics = obj[uid]?.lyrics || '';
@@ -533,7 +644,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             }
         }
 
-        if (searchSignal.aborted || currentState.uid !== uid) {
+        if (searchSignal.aborted || session.uid !== uid) {
             return;
         }
 
@@ -543,17 +654,76 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
         await chrome.scripting.executeScript({
             target: { tabId },
-            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, initialFontSize, isMusic, isRateLimited, rateLimitRetryAfter) => {
-                const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
-                if (!watchFlexy) return;
-                const domUid = watchFlexy.getAttribute('video-id');
-                if (uid && domUid && domUid !== uid) return;
+            function: (lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SEL, YTF_SEL, YTM_SEL, initialFontSize, isMusic, isRateLimited, rateLimitRetryAfter, currentPlatform) => {
+                function getTrusted(s) {
+                    if (window.trustedTypes && window.trustedTypes.createPolicy) {
+                        if (!window._freemiumPolicy) {
+                            try {
+                                window._freemiumPolicy = window.trustedTypes.createPolicy('freemiumPolicy', {
+                                    createHTML: (raw) => raw
+                                });
+                            } catch (e) {}
+                        }
+                        if (window._freemiumPolicy) return window._freemiumPolicy.createHTML(s);
+                    }
+                    return s;
+                }
 
-                var ytc = document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
-                var container = ytc?.querySelector(YTF_SEL.CONTAINER.CLASS);
-                var intermediateContainer = ytc?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
+                function setSafeHTML(elem, htmlStr) {
+                    elem.innerHTML = getTrusted(htmlStr);
+                }
+
+                const isYtMusic = currentPlatform === 'ytmusic' || window.location.hostname.includes('music.youtube');
+
+                if (!isYtMusic) {
+                    const watchFlexy = document.querySelector('ytd-watch-flexy:not([hidden])');
+                    if (!watchFlexy) return;
+                    const domUid = watchFlexy.getAttribute('video-id');
+                    if (uid && domUid && domUid !== uid) return;
+                } else {
+                    let domUid = null;
+                    try {
+                        const mp = document.getElementById('movie_player');
+                        if (mp && typeof mp.getVideoData === 'function') {
+                            domUid = mp.getVideoData()?.video_id;
+                        }
+                    } catch (e) {}
+                    if (!domUid) {
+                        const urlParams = new URLSearchParams(window.location.search);
+                        domUid = urlParams.get('v');
+                    }
+                    if (uid && domUid && domUid !== uid) return;
+                }
+
+                var ytc = isYtMusic
+                    ? (document.querySelector(YTM_SEL.LAYOUT.SIDE_PANEL) || document.querySelector('ytmusic-player-page #side-panel') || document.querySelector(YTM_SEL.LAYOUT.TAB_RENDERER) || document.body)
+                    : document.querySelector(window.innerWidth < 1000 ? YT_SEL.LAYOUT.PRIMARY : YT_SEL.LAYOUT.SECONDARY);
+
+                var container = document.querySelector(YTF_SEL.CONTAINER.CLASS);
+                var intermediateContainer = container?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
                 var lyricElements = [];
-                const mediaElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
+                const mediaElem = document.querySelector('video');
+
+                if (container && isYtMusic) {
+                    container.setAttribute('data-platform', 'ytmusic');
+                    if (!container.getAttribute('data-ytm-mode')) {
+                        container.setAttribute('data-ytm-mode', 'freemium');
+                    }
+                    container.setAttribute('data-search-state', 'collapsed');
+                    if (ytc && container.parentElement !== ytc) {
+                        ytc.appendChild(container);
+                    }
+                    if (ytc) {
+                        ytc.setAttribute('data-ytf-mode', container.getAttribute('data-ytm-mode'));
+                    }
+                }
+
+                const wasAlreadyRendered = Boolean(
+                    container &&
+                    container._currentUid === uid &&
+                    container.getAttribute('data-uid') === uid &&
+                    container.querySelector(YTF_SEL.CONTAINER.LYRIC_CONTAINER)
+                );
 
                 if (container) {
                     container._currentUid = uid;
@@ -644,11 +814,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     searchBtn.className = "yf-search-btn";
                     searchBtn.title = "Search lyrics";
                     searchBtn.setAttribute("aria-label", "Search lyrics");
-                    searchBtn.innerHTML = `
+                    setSafeHTML(searchBtn, `
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                             <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                         </svg>
-                    `;
+                    `);
 
                     nowPlayingText.addEventListener('focus', () => {
                         nowPlayingDiv.classList.add('active-input');
@@ -700,11 +870,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     inlineCloseBtn.className = "yf-search-close-btn";
                     inlineCloseBtn.title = "Close search";
                     inlineCloseBtn.setAttribute("aria-label", "Close search");
-                    inlineCloseBtn.innerHTML = `
+                    setSafeHTML(inlineCloseBtn, `
                         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
                             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
                         </svg>
-                    `;
+                    `);
                     inlineCloseBtn.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -724,13 +894,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     menuSpan.className = "yf-menu";
                     menuSpan.title = "Options";
                     menuSpan.setAttribute("aria-label", "Options");
-                    menuSpan.innerHTML = `
+                    setSafeHTML(menuSpan, `
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display:block;pointer-events:none;">
                             <circle cx="12" cy="5.5" r="1.75"/>
                             <circle cx="12" cy="12" r="1.75"/>
                             <circle cx="12" cy="18.5" r="1.75"/>
                         </svg>
-                    `;
+                    `);
 
                     var yfDropdown = document.createElement('div');
                     yfDropdown.id = 'yf-dropdown';
@@ -1040,11 +1210,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     collapseBtn.className = "yf-collapse-btn";
                     collapseBtn.title = "Collapse";
                     collapseBtn.setAttribute("aria-label", "Toggle lyrics panel");
-                    collapseBtn.innerHTML = `
+                    setSafeHTML(collapseBtn, `
                         <svg class="yf-collapse-icon" viewBox="0 0 24 24" width="22" height="22">
                             <path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/>
                         </svg>
-                    `;
+                    `);
 
                     const toggleCollapse = (e) => {
                         if (e) e.stopPropagation();
@@ -1125,6 +1295,95 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     var headerBottom = document.createElement("div");
                     headerBottom.className = "yf-header-bottom";
+
+                    if (isYtMusic) {
+                        container.setAttribute('data-platform', 'ytmusic');
+                        if (!container.getAttribute('data-ytm-mode')) {
+                            container.setAttribute('data-ytm-mode', 'freemium');
+                        }
+                        container.setAttribute('data-search-state', 'collapsed');
+
+                        var modeSwitcher = document.createElement('div');
+                        modeSwitcher.className = 'yf-mode-switcher';
+                        setSafeHTML(modeSwitcher, `
+                            <button type="button" class="yf-mode-segment yf-mode-freemium is-active" data-mode="freemium">
+                                <span class="yf-mode-dot">F</span>
+                                <span>FreeMium</span>
+                            </button>
+                            <button type="button" class="yf-mode-segment yf-mode-default" data-mode="default">
+                                <span>Default</span>
+                            </button>
+                        `);
+
+                        const collapseSearchBar = () => {
+                            if (container._closeSearchResults) {
+                                container._closeSearchResults();
+                            }
+                            container.setAttribute('data-search-state', 'collapsed');
+                            nowPlayingText.blur();
+                        };
+
+                        const expandSearchBar = (e) => {
+                            if (container.getAttribute('data-search-state') === 'expanded') return;
+                            if (e) e.stopPropagation();
+                            container.setAttribute('data-search-state', 'expanded');
+                            setTimeout(() => {
+                                nowPlayingText.focus();
+                                if (nowPlayingText.value && nowPlayingText.value === nowPlayingText.getAttribute('data-current-title')) {
+                                    nowPlayingText.select();
+                                }
+                            }, 220);
+                        };
+
+                        modeSwitcher.querySelectorAll('.yf-mode-segment').forEach((btn) => {
+                            btn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                const targetMode = btn.getAttribute('data-mode');
+                                if (targetMode === 'default') {
+                                    collapseSearchBar();
+                                }
+                                container.setAttribute('data-ytm-mode', targetMode);
+                                if (container.parentElement) {
+                                    container.parentElement.setAttribute('data-ytf-mode', targetMode);
+                                }
+                                modeSwitcher.querySelectorAll('.yf-mode-segment').forEach((b) => {
+                                    b.classList.toggle('is-active', b === btn);
+                                });
+                                if (targetMode === 'freemium' && mediaElem && typeof mediaElem._syncCurrentLyric === 'function') {
+                                    requestAnimationFrame(() => mediaElem._syncCurrentLyric(true));
+                                }
+                            });
+                        });
+
+                        headerBottom.appendChild(modeSwitcher);
+
+                        nowPlayingDiv.addEventListener('click', (e) => {
+                            if (container.getAttribute('data-search-state') !== 'expanded') {
+                                expandSearchBar(e);
+                            }
+                        });
+
+                        searchBtn.addEventListener('click', (e) => {
+                            if (container.getAttribute('data-search-state') !== 'expanded') {
+                                e.stopImmediatePropagation();
+                                expandSearchBar(e);
+                            }
+                        }, true);
+
+                        inlineCloseBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            collapseSearchBar();
+                        });
+
+                        document.addEventListener('click', (e) => {
+                            if (container.getAttribute('data-search-state') === 'expanded') {
+                                if (!e.target.closest('.now-playing-div') && !e.target.closest('#yf-search-dropdown') && !e.target.closest('.yf-search-btn')) {
+                                    collapseSearchBar();
+                                }
+                            }
+                        });
+                    }
+
                     headerBottom.appendChild(nowPlayingDiv);
                     headerBottom.appendChild(searchBtn);
 
@@ -1139,7 +1398,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     progressbar.style.opacity = '0';
                     container.appendChild(progressbar);
 
-                    if (window.innerWidth < 1000) {
+                    if (isYtMusic) {
+                        if (ytc) {
+                            ytc.appendChild(container);
+                            ytc.setAttribute('data-ytf-mode', container.getAttribute('data-ytm-mode') || 'freemium');
+                        }
+                    } else if (window.innerWidth < 1000) {
                         ytc.insertBefore(container, ytc.children[1]);
                     } else {
                         ytc.insertBefore(container, ytc.firstChild);
@@ -1435,13 +1699,13 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                         if (isBlankInterlude && targetSynced) {
                             d.classList.add('am-interlude-line');
-                            d.innerHTML = `
+                            setSafeHTML(d, `
                                 <span class="am-interlude-dots active">
                                     <span class="am-interlude-dot"></span>
                                     <span class="am-interlude-dot"></span>
                                     <span class="am-interlude-dot"></span>
                                 </span>
-                            `;
+                            `);
                         } else if (words && words.length > 0 && targetSynced) {
                             d.classList.add('has-word-sync');
                             words.forEach(w => {
@@ -1482,7 +1746,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                             creditDiv.className = 'yf-source-credit';
                             const providerUrl = upperSource === 'A2Z' ? 'https://www.azlyrics.com' : 'https://lrclib.net';
                             const providerLabel = upperSource === 'A2Z' ? 'AZLyrics' : 'LRCLIB';
-                            creditDiv.innerHTML = `<span>Lyrics provided by <a href="${providerUrl}" target="_blank" rel="noopener noreferrer" class="yf-source-link">${providerLabel}</a></span>`;
+                            setSafeHTML(creditDiv, `<span>Lyrics provided by <a href="${providerUrl}" target="_blank" rel="noopener noreferrer" class="yf-source-link">${providerLabel}</a></span>`);
                             creditDiv.addEventListener('click', (e) => e.stopPropagation());
                             lyricContainer.appendChild(creditDiv);
                         }
@@ -1506,11 +1770,11 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     let bubblesWrapper = document.createElement('div');
                     bubblesWrapper.className = 'bubbles-wrapper';
-                    bubblesWrapper.innerHTML = `
+                    setSafeHTML(bubblesWrapper, `
                         <div id="bubble-1" class="bubble"></div>
                         <div id="bubble-2" class="bubble"></div>
                         <div id="bubble-3" class="bubble"></div>
-                    `;
+                    `);
 
                     var processedLyrics = populateLyricContainer(lyricContainer, targetLyrics, targetSynced, targetSource, targetProfanity);
 
@@ -1569,20 +1833,20 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         var rateLimitDiv = document.createElement('div');
                         rateLimitDiv.className = 'yf-search-status is-rate-limited';
                         const retryMin = (options.retryAfter && !isNaN(options.retryAfter)) ? parseInt(options.retryAfter, 10) : 1;
-                        rateLimitDiv.innerHTML = `
+                        setSafeHTML(rateLimitDiv, `
                             <svg class="yf-search-status-icon yf-search-rate-limit-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                             </svg>
                             <span class="yf-search-status-title">Retry after : ${retryMin} min</span>
-                        `;
+                        `);
                         searchDropdown.appendChild(rateLimitDiv);
                     } else if (!results || results.length === 0) {
                         var noResDiv = document.createElement('div');
                         noResDiv.className = 'yf-search-status';
-                        noResDiv.innerHTML = `
+                        setSafeHTML(noResDiv, `
                             <span class="yf-search-status-title">No Lyrics Found</span>
                             <span class="yf-search-status-hint">Format: song name - artist</span>
-                        `;
+                        `);
                         searchDropdown.appendChild(noResDiv);
                     } else {
                         var listDiv = document.createElement('div');
@@ -1621,23 +1885,23 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                                 var wsBadge = document.createElement('span');
                                 wsBadge.className = 'yf-wordsync-badge';
                                 wsBadge.title = 'Word-by-word synced lyrics';
-                                wsBadge.innerHTML = `
+                                setSafeHTML(wsBadge, `
                                     <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
                                         <path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.5-6.2 4.5 2.4-7.4-6.2-4.5h7.6z"/>
                                     </svg>
                                     <span>Word Synced</span>
-                                `;
+                                `);
                                 metaDiv.appendChild(wsBadge);
                             } else if (item.syncedLyrics && item.syncedLyrics.trim()) {
                                 var syncedBadge = document.createElement('span');
                                 syncedBadge.className = 'yf-synced-badge';
                                 syncedBadge.title = 'Time-synced lyrics';
-                                syncedBadge.innerHTML = `
+                                setSafeHTML(syncedBadge, `
                                     <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
                                         <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
                                     </svg>
                                     <span>Synced</span>
-                                `;
+                                `);
                                 metaDiv.appendChild(syncedBadge);
                             } else {
                                 var plainBadge = document.createElement('span');
@@ -1806,12 +2070,12 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                     searchDropdown = document.createElement('div');
                     searchDropdown.id = 'yf-search-dropdown';
                     searchDropdown.className = 'yf-search-dropdown';
-                    searchDropdown.innerHTML = `
+                    setSafeHTML(searchDropdown, `
                         <div class="yf-search-status is-loading">
                             <div class="yf-search-spinner"></div>
                             <span class="yf-search-status-text">Searching...</span>
                         </div>
-                    `;
+                    `);
                     mountAttachedSearchDropdown(searchDropdown);
 
                     chrome.runtime.sendMessage({ type: 'SEARCH_LRCLIB', val: query }, (response) => {
@@ -1873,8 +2137,26 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                 const isManuallyClosedForThisVideo = Boolean(activeUid && manuallyClosedUid === activeUid);
 
                 if (hasLyrics) {
-                    container.setAttribute('data-uid', uid);
-                    renderLyricsView(lyrics, synced, source, profanityCheck);
+                    if (!wasAlreadyRendered) {
+                        container.setAttribute('data-uid', uid);
+                        renderLyricsView(lyrics, synced, source, profanityCheck);
+                    }
+
+                    if (isYtMusic) {
+                        const switchLyricsTab = () => {
+                            const tabs = Array.from(document.querySelectorAll('ytmusic-player-page tp-yt-paper-tab.tab-header, ytmusic-player-page tp-yt-paper-tab, ytmusic-player-page [role="tab"]'));
+                            const lyricsTab = tabs.find(t => t.textContent?.trim().toLowerCase().includes('lyrics'));
+                            if (lyricsTab && !lyricsTab.classList.contains('iron-selected') && lyricsTab.getAttribute('aria-selected') !== 'true') {
+                                lyricsTab.click();
+                                return true;
+                            }
+                            return Boolean(lyricsTab && (lyricsTab.classList.contains('iron-selected') || lyricsTab.getAttribute('aria-selected') === 'true'));
+                        };
+                        if (!switchLyricsTab()) {
+                            setTimeout(switchLyricsTab, 150);
+                            setTimeout(switchLyricsTab, 400);
+                        }
+                    }
 
                     // Opens up when lyrics is found and container is closed, unless closed manually by user
                     if (!isManuallyClosedForThisVideo) {
@@ -1891,7 +2173,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                     var notFoundIcon = document.createElement('div');
                     notFoundIcon.className = 'not-found-icon';
-                    notFoundIcon.innerHTML = isRateLimited ? `
+                    setSafeHTML(notFoundIcon, isRateLimited ? `
                         <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
                         </svg>
@@ -1899,7 +2181,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
                         <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
                             <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
                         </svg>
-                    `;
+                    `);
 
                     var notFoundTitle = document.createElement('span');
                     notFoundTitle.className = 'not-found-title';
@@ -2366,9 +2648,38 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
 
                 initVisualizer();
             },
-            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, savedFontSize, isMusic, isRateLimited, rateLimitRetryAfter]
+            args: [lyrics, message, uid, title, profanityCheck, synced, offset, fuzzyProfanityDictionary, source, YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS, savedFontSize, isMusic, isRateLimited, rateLimitRetryAfter, platform]
         });
     };
+
+    /**
+     * Extracts song metadata from YouTube Music player bar or mediaSession.
+     */
+    async function getYouTubeMusicMetadata(tabId, uid) {
+        try {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId },
+                function: (YTM_SEL) => {
+                    const bar = document.querySelector(YTM_SEL.PLAYER_BAR.ROOT);
+                    let title = bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE)?.getAttribute('title') ||
+                                bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE)?.textContent?.trim() ||
+                                navigator.mediaSession?.metadata?.title || '';
+                    let channel = bar?.querySelector(YTM_SEL.PLAYER_BAR.ARTIST_LINK)?.textContent?.trim() ||
+                                  navigator.mediaSession?.metadata?.artist || '';
+                    if (!channel) {
+                        const byline = bar?.querySelector(YTM_SEL.PLAYER_BAR.BYLINE)?.textContent?.trim() || '';
+                        channel = byline.split('•')[0]?.trim() || '';
+                    }
+                    return { isMusic: true, title, channel };
+                },
+                args: [YTM_SELECTORS]
+            });
+            return results?.[0]?.result || { isMusic: true, title: '', channel: '' };
+        } catch (e) {
+            console.warn('getYouTubeMusicMetadata error:', e);
+            return { isMusic: true, title: '', channel: '' };
+        }
+    }
 
 	/**
 	 * Checks if the current tab is playing music and extracts song metadata.
@@ -2777,7 +3088,7 @@ import { YT_SELECTORS, YTF_SELECTORS } from './ytf-constants.js';
             }
         });
     }
-    
+
     function injectAdDetector() {
         chrome.scripting.executeScript({
             target: { tabId },

@@ -1,9 +1,10 @@
-# Youtube Freemium
+# YouTube Freemium
 
-> Enable synchronized lyrics and enhanced music playback features on YouTube with an Apple Music–inspired experience.
+> Synchronized lyrics and enhanced music playback features on YouTube and YouTube Music with an Apple Music–inspired experience.
 
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Available-4285F4?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/youtube-freemium/pgafgbgnfoiookabcmhjeajkfmmbipnm)
 [![Microsoft Edge Add-ons](https://img.shields.io/badge/Microsoft_Edge-Available-0078D7?logo=microsoftedge&logoColor=white)](https://microsoftedge.microsoft.com/addons/detail/youtube-freemium/cbfhicomoandphidakponcnjeabiofmo)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/uncannyRishabh/Youtube-Freemium)
 
 ---
 
@@ -18,12 +19,44 @@ Install the extension directly from the official web stores:
 
 ## Features
 
-- **Apple Music–Style Lyrics**: Beautiful real-time time-synced lyrics with ambient animated background effects.
-- **Word-by-Word Synchronization**: Karaoke-style word highlighting for supported tracks.
-- **Interactive Header Search**: Search any song or artist directly from the lyrics panel with floating search results and automatic duration matching.
-- **Customizable Typography**: Persistent font size controls (14px – 36px) across reloads and new tabs.
-- **Smart Collapse & Sync**: Collapsible panel that instantly snaps to and highlights the lyric matching the current video timestamp upon opening.
-- **Distraction-Free**: Optional Shorts hiding and profanity filtering.
+### 1. Dual Platform Support (YouTube & YouTube Music)
+- **YouTube (`youtube.com`)**: Integrated directly into watch page layout with responsive positioning for mobile, theater, and wide views.
+- **YouTube Music (`music.youtube.com`)**: Dedicated integration inside YouTube Music's side-panel tab hierarchy (`LYRICS` tab), supporting seamless switching between standard YouTube Music lyrics and Freemium mode.
+
+### 2. Apple Music–Style Synced Lyrics
+- Real-time time-synchronized lyrics with dynamic animated ambient mesh (lava-lamp) backgrounds.
+- Karaoke-style word-by-word and line-by-line active verse highlighting.
+- Click any lyric line to jump directly to that timestamp in the track.
+
+### 3. Material 3 (M3) Expressive Floating Dock (YouTube Music)
+- **Segmented Pill Switcher (`FreeMium | Default`)**: Symmetrically balanced dock keeping the mode switcher centered with zero layout shift during mode toggles.
+- **Morphing Search Bar**: Compact circular search button that smoothly expands inline into a full search bar using iOS spring physics (`cubic-bezier(0.34, 1.25, 0.35, 1)`), elegantly retaining the pill centered above the search input.
+- **Upward-Attached Dropdown**: Floating search results attach smoothly upward from the bottom dock.
+
+### 4. Cross-Platform Lexical Lyrics Reuse
+- Intelligent cross-platform caching and lexical search matching between YouTube and YouTube Music.
+- When track video IDs differ across platforms, fuzzy lexical scoring matches saved lyrics instantly without requiring redundant network lookups.
+
+### 5. Smart Non-Intrusive Video Fullscreen
+- Automatically hides the Freemium container whenever video playback enters fullscreen mode on YouTube or YouTube Music.
+- Restores lyrics immediately upon exiting fullscreen.
+
+### 6. Interactive Search & Customization
+- Live interactive search for songs, remixes, and alternative versions.
+- Customizable typography with persistent font size controls (14px – 36px) across reloads.
+- Adjustable sync offset timer (± seconds) to fine-tune lyrics synchronization.
+- Optional Shorts suppression and profanity filtering.
+
+---
+
+## Keyboard Shortcuts
+
+| Shortcut | Context | Action |
+| :--- | :--- | :--- |
+| `Enter` | Search Input | Execute lyrics search for entered song / artist |
+| `Escape` | Search Input | Clear query / collapse search bar back into dock |
+| `Click` on Lyric Line | Lyrics View | Seek audio/video playback to corresponding timestamp |
+| `Space` / `Enter` | Popup Toggles | Toggle settings (Explicit Filter, Kill Shorts, Font Size) |
 
 ---
 
@@ -45,13 +78,19 @@ Install the extension directly from the official web stores:
 
 ### 1. Release Build (Clean Distribution)
 
-Builds production-ready code into `out/release/` by safely stripping comments (`//` and `/* ... */`), removing `console.log` statements, minifying CSS/JSON, and verifying JavaScript syntax.
+Builds production-ready code into `out/release/` by stripping comments, removing `console.log` statements, minifying CSS/JSON, and verifying JavaScript syntax.
 
-#### macOS / Linux
+#### Direct Script (Recommended)
 
 ```bash
-# Configure build with version (e.g., 3.0.0)
-cmake -DVERSION=3.0.0 .
+node scripts/build-release.js
+```
+
+#### macOS / Linux (CMake)
+
+```bash
+# Configure build with version (e.g., 4.0.0)
+cmake -DVERSION=4.0.0 .
 
 # Build and package release zip
 make package_release
@@ -59,20 +98,14 @@ make package_release
 
 > **Tip:** Run `make release` if you only want to generate the unpacked folder in `out/release/` without creating a zip.
 
-#### Windows
+#### Windows (CMake)
 
 ```cmd
 # Configure build
-cmake -S . -B build -G "Ninja" -DVERSION=3.0.0
+cmake -S . -B build -G "Ninja" -DVERSION=4.0.0
 
 # Build and package release zip
 cmake --build build --target package_release
-```
-
-#### Direct Script (without CMake)
-
-```bash
-node scripts/build-release.js
 ```
 
 The output zip will be placed in:
@@ -89,14 +122,14 @@ Packs raw source files directly from `src/` without modification.
 #### macOS / Linux
 
 ```bash
-cmake -DVERSION=3.0.0 .
+cmake -DVERSION=4.0.0 .
 make extension
 ```
 
 #### Windows
 
 ```cmd
-cmake -S . -B build -G "Ninja" -DVERSION=3.0.0
+cmake -S . -B build -G "Ninja" -DVERSION=4.0.0
 cmake --build build --target package_and_print
 ```
 

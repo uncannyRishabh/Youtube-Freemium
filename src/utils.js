@@ -968,3 +968,131 @@ export async function searchA2ZRecords(tabId, query, fallbackArtist = '', signal
 	}
 	return [];
 }
+
+/**
+ * Normalizes a song title by stripping extraneous bracketed/parenthetical descriptors and noise.
+ */
+export function normalizeSongTitle(str) {
+	return String(str || '')
+		.toLowerCase()
+		.replace(/[\u2010-\u2015\u2212]/g, '-')
+		.replace(/\[[^\]]*\]/g, ' ')
+		.replace(/\((?:official\s*(?:video|audio|music\s*video|lyric\s*video)?|lyrics?|visualizer|remaster(?:ed)?(?:\s*\d+)?|audio|hd|4k)[^\)]*\)/gi, ' ')
+		.replace(/\b(official\s*(?:music\s*)?video|official\s*audio|lyric\s*video|remastered|remaster)\b/gi, ' ')
+		.replace(/\b(feat|ft)\b\.?[^\s-]+/gi, ' ')
+		.replace(/[^\p{L}\p{N}\s]/gu, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * Normalizes an artist or channel name by stripping common platform suffixes.
+ */
+export function normalizeArtistName(str) {
+	return String(str || '')
+		.toLowerCase()
+		.replace(/[\u2010-\u2015\u2212]/g, '-')
+		.replace(/\s*-\s*topic$/i, '')
+		.replace(/vevo$/i, '')
+		.replace(/[^\p{L}\p{N}\s]/gu, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * Calculates a lexical similarity score between two (title, artist) pairs.
+ * Returns a value between 0.0 and 1.0.
+ */
+export function calculateLexicalScore(targetTitle, targetArtist, candidateTitle, candidateArtist) {
+	const normTTitle = normalizeSongTitle(targetTitle);
+	const normCTitle = normalizeSongTitle(candidateTitle);
+	if (!normTTitle || !normCTitle) return 0;
+
+	// Title word token matching
+	const tTokens = new Set(normTTitle.split(/\s+/).filter(t => t.length > 1));
+	const cTokens = new Set(normCTitle.split(/\s+/).filter(t => t.length > 1));
+
+	let titleScore = 0;
+	if (normTTitle === normCTitle) {
+		titleScore = 1.0;
+	} else if (normTTitle.includes(normCTitle) || normCTitle.includes(normTTitle)) {
+		titleScore = 0.9;
+	} else if (tTokens.size > 0 && cTokens.size > 0) {
+		let intersection = 0;
+		for (const tok of tTokens) {
+			if (cTokens.has(tok)) intersection++;
+		}
+		const union = new Set([...tTokens, ...cTokens]).size;
+		titleScore = intersection / union;
+	}
+
+	if (titleScore < 0.6) return 0;
+
+	// Artist matching
+	const normTArtist = normalizeArtistName(targetArtist);
+	const normCArtist = normalizeArtistName(candidateArtist);
+
+	let artistScore = 0.5; // Default neutral if artist info is missing
+	if (normTArtist && normCArtist) {
+		if (normTArtist === normCArtist || normTArtist.includes(normCArtist) || normCArtist.includes(normTArtist)) {
+			artistScore = 1.0;
+		} else {
+			const tArtTokens = new Set(normTArtist.split(/\s+/).filter(t => t.length > 1));
+			const cArtTokens = new Set(normCArtist.split(/\s+/).filter(t => t.length > 1));
+			let artInter = 0;
+			for (const tok of tArtTokens) {
+				if (cArtTokens.has(tok)) artInter++;
+			}
+			if (tArtTokens.size > 0 && artInter > 0) {
+				artistScore = artInter / Math.min(tArtTokens.size, cArtTokens.size);
+			} else {
+				artistScore = 0.1;
+			}
+		}
+	} else if (!normTArtist || !normCArtist) {
+		artistScore = 0.8;
+	}
+
+	return (titleScore * 0.7) + (artistScore * 0.3);
+}
+
+/**
+ * Searches the entire local database for saved lyrics matching a song title and artist.
+ * Enables cross-platform lyrics reuse between YouTube and YouTube Music when UIDs differ.
+ *
+ * @param {string} targetTitle - Title of the track
+ * @param {string} targetArtist - Artist/channel of the track
+ * @returns {Promise<object|null>} Matched saved object or null
+ */
+export async function findSavedLyricsByLexicalSearch(targetTitle, targetArtist) {
+	if (!targetTitle) return null;
+
+	return new Promise((resolve) => {
+		chrome.storage.local.get(null, (allData) => {
+			if (chrome.runtime.lastError || !allData) {
+				resolve(null);
+				return;
+			}
+
+			let bestMatch = null;
+			let highestScore = 0;
+
+			for (const [key, record] of Object.entries(allData)) {
+				if (key === 'yt-userPrefs' || !record || !record.lyrics || record.message !== 'OK') {
+					continue;
+				}
+
+				const candidateTitle = record.title || '';
+				const candidateArtist = record.channel || record.artist || '';
+
+				const score = calculateLexicalScore(targetTitle, targetArtist, candidateTitle, candidateArtist);
+				if (score >= 0.75 && score > highestScore) {
+					highestScore = score;
+					bestMatch = { ...record, originalUid: key };
+				}
+			}
+
+			resolve(bestMatch);
+		});
+	});
+}

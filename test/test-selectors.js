@@ -1,7 +1,8 @@
 /**
  * YouTube Freemium — DOM Query Selector Diagnostic Tool
- * Run this snippet directly in the DevTools Console on any YouTube watch page:
- * https://www.youtube.com/watch?v=...
+ * Run this snippet directly in the DevTools Console on either:
+ * - https://www.youtube.com/watch?v=... (YouTube Video Watch Page)
+ * - https://music.youtube.com/watch?v=... (YouTube Music Player Page)
  */
 (() => {
     console.clear();
@@ -11,7 +12,17 @@
     const warnStyle = 'color: #FF9800; font-weight: bold;';
     const errorStyle = 'color: #F44336; font-weight: bold;';
 
-    console.log('%c[YouTube Freemium] Selector Health & Diagnostics Check', headerStyle);
+    const host = window.location.hostname;
+    const isYTM = host === 'music.youtube.com';
+    const isYT = (host === 'www.youtube.com' || host === 'youtube.com' || (host.endsWith('.youtube.com') && !isYTM));
+
+    if (!isYT && !isYTM) {
+        console.error(`%c[YouTube Freemium] Unsupported host: "${host}". Run this script on youtube.com or music.youtube.com only.`, errorStyle);
+        return { error: 'Unsupported host', host };
+    }
+
+    const platformName = isYTM ? 'YouTube Music (music.youtube.com)' : 'YouTube (youtube.com)';
+    console.log(`%c[YouTube Freemium] ${platformName} Selector Diagnostics`, headerStyle);
 
     const isWatchPage = window.location.pathname.startsWith('/watch');
     const isNarrow = window.innerWidth < 1000;
@@ -59,291 +70,171 @@
     }
 
     // ==========================================
-    // 1. YouTube Native Layout Targets
+    // Playback / Video Elements (Common)
     // ==========================================
-    testSelector('1. Layout', 'Primary Column Inner (Mobile Target)', 'ytd-watch-flexy #primary > #primary-inner', { isOptional: !isNarrow });
-    testSelector('1. Layout', 'Secondary Column (Desktop Target)', 'ytd-watch-flexy #secondary', { isOptional: isNarrow });
-    testSelector('1. Layout', 'Secondary Column Inner', 'ytd-watch-flexy #secondary > #secondary-inner', { isOptional: true });
-    testSelector('1. Layout', 'Active Target Container', isNarrow ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
-
-    // ==========================================
-    // 2. Playback / Video Elements
-    // ==========================================
-    testSelector('2. Playback', 'HTML5 Video Element', 'video', {
-        extract: (el) => `src: ${el.currentSrc ? el.currentSrc.slice(0, 30) + '...' : '(blob/stream)'} | time: ${el.currentTime.toFixed(1)}s`
+    testSelector('Playback', 'HTML5 Video Element', 'video', {
+        extract: (el) => `src: ${el.currentSrc ? el.currentSrc.slice(0, 30) + '...' : '(blob/stream)'} | time: ${el.currentTime ? el.currentTime.toFixed(1) : 0}s`
     });
-    testSelector('2. Playback', 'Movie Player', '#movie_player', {
+    testSelector('Playback', 'Movie Player', '#movie_player', {
+        isOptional: true,
         extract: (el) => el.classList.contains('ad-showing') ? 'Ad currently playing' : 'Normal playback'
     });
 
-    // ==========================================
-    // 3. Music Detection
-    // ==========================================
-    testSelector('3. Music Detection', 'Category Chip/Badge', 'button-view-model a', {
-        extract: (el) => {
-            const isMusic = el.textContent.trim().toLowerCase() === 'music';
-            return `Badge Text: "${el.textContent.trim()}" (isMusic: ${isMusic})`;
-        }
-    });
+    if (isYT) {
+        // ==========================================
+        // 1. YouTube Native Layout Targets
+        // ==========================================
+        testSelector('1. Layout', 'Primary Column Inner (Mobile Target)', 'ytd-watch-flexy #primary > #primary-inner', { isOptional: !isNarrow });
+        testSelector('1. Layout', 'Secondary Column (Desktop Target)', 'ytd-watch-flexy #secondary', { isOptional: isNarrow });
+        testSelector('1. Layout', 'Secondary Column Inner', 'ytd-watch-flexy #secondary > #secondary-inner', { isOptional: true });
+        testSelector('1. Layout', 'Active Target Container', isNarrow ? 'ytd-watch-flexy #primary > #primary-inner' : 'ytd-watch-flexy #secondary');
 
-    // ==========================================
-    // 4. Music Card Metadata
-    // ==========================================
-    testSelector('4. Music Card', 'Music Header Title', '#header-container #title', { isOptional: true });
-    testSelector('4. Music Card', 'Attributes Section Containers', 'yt-video-attributes-section-view-model, ytd-video-description-music-section-renderer, ytd-horizontal-card-list-renderer', {
-        isOptional: true,
-        extract: (el) => {
-            const header = el.querySelector('.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title')?.textContent?.trim() || '(no header)';
-            return `Section Header: "${header}"`;
-        }
-    });
+        // ==========================================
+        // 2. Music Detection (YouTube)
+        // ==========================================
+        testSelector('2. Music Detection', 'Category Chip/Badge', 'button-view-model a', {
+            isOptional: true,
+            extract: (el) => {
+                const isMusic = el.textContent.trim().toLowerCase() === 'music';
+                return `Badge Text: "${el.textContent.trim()}" (isMusic: ${isMusic})`;
+            }
+        });
 
-    const cardContainers = [
-        'yt-video-attribute-view-model',
-        '.yt-video-attribute-view-model__metadata',
-        '.ytVideoAttributeViewModelContentContainer'
-    ];
+        // ==========================================
+        // 3. Music Card Metadata (YouTube)
+        // ==========================================
+        testSelector('3. Music Card', 'Music Header Title', '#header-container #title', { isOptional: true });
+        testSelector('3. Music Card', 'Attributes Section Containers', 'yt-video-attributes-section-view-model, ytd-video-description-music-section-renderer, ytd-horizontal-card-list-renderer', {
+            isOptional: true,
+            extract: (el) => {
+                const header = el.querySelector('.videoAttributesSectionViewModelTitle, .yt-video-attributes-section-view-model__title, #header-container #title, h3, h2, #title')?.textContent?.trim() || '(no header)';
+                return `Section Header: "${header}"`;
+            }
+        });
 
-    let foundCardContainer = null;
-    for (const cSelector of cardContainers) {
-        const res = testSelector('4. Music Card', `Container: ${cSelector}`, cSelector, { isOptional: true });
-        if (res.count > 0 && !foundCardContainer) {
-            foundCardContainer = cSelector;
+        const cardContainers = [
+            'yt-video-attribute-view-model',
+            '.yt-video-attribute-view-model__metadata',
+            '.ytVideoAttributeViewModelContentContainer'
+        ];
+
+        let foundCardContainer = null;
+        for (const cSelector of cardContainers) {
+            const res = testSelector('3. Music Card', `Container: ${cSelector}`, cSelector, { isOptional: true });
+            if (res.count > 0 && !foundCardContainer) {
+                foundCardContainer = cSelector;
+            }
         }
+
+        if (foundCardContainer) {
+            testSelector('3. Music Card', 'Song Title (Suffix)', `${foundCardContainer} > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)`, { isOptional: true });
+            testSelector('3. Music Card', 'Artist Name (Suffix)', `${foundCardContainer} > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)`, { isOptional: true });
+            testSelector('3. Music Card', 'Song Title (.ytVideoAttributeViewModelTitle)', `${foundCardContainer} .ytVideoAttributeViewModelTitle`, { isOptional: true });
+            testSelector('3. Music Card', 'Artist Name (.ytVideoAttributeViewModelSubtitle)', `${foundCardContainer} .ytVideoAttributeViewModelSubtitle`, { isOptional: true });
+        } else {
+            testSelector('3. Music Card', 'Song Title (Card)', '.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)', { isOptional: true });
+            testSelector('3. Music Card', 'Artist Name (Card)', '.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)', { isOptional: true });
+        }
+
+        // ==========================================
+        // 4. Fallback Metadata (YouTube)
+        // ==========================================
+        const fallbackTitleSelector = '#above-the-fold h1, ytd-watch-metadata #title, #above-the-fold #title';
+        testSelector('4. Fallback Metadata', 'Video Title (Fallback)', fallbackTitleSelector, {
+            extract: (el) => el.textContent.trim()
+        });
+        testSelector('4. Fallback Metadata', 'Channel / Artist (Fallback)', '#upload-info > #channel-name > div > div', {
+            extract: (el) => el.textContent.trim()
+        });
+
+        // ==========================================
+        // 5. Shorts Suppression (YouTube)
+        // ==========================================
+        testSelector('5. Shorts Suppression', 'Rich Shelf', 'ytd-rich-shelf-renderer', { isOptional: true });
+        testSelector('5. Shorts Suppression', 'Reel Shelf', 'ytd-reel-shelf-renderer', { isOptional: true });
+        testSelector('5. Shorts Suppression', 'Rich Section Shelf', 'ytd-rich-section-renderer ytd-rich-shelf-renderer', { isOptional: true });
+
+        // ==========================================
+        // 6. Ad Detection (YouTube)
+        // ==========================================
+        testSelector('6. Ads', 'Ad Overlay Layout', '.ytp-ad-player-overlay-layout', { isOptional: true });
+        testSelector('6. Ads', 'Skip Ad Button (Standard)', '.ytp-skip-ad-button', { isOptional: true });
+        testSelector('6. Ads', 'Modern / Legacy Skip Selectors', '.videoAdUiSkipButton, .ytp-ad-skip-button, .ytp-ad-skip-button-modern', { isOptional: true });
+
+        // ==========================================
+        // 7. Freemium Injected UI (YouTube)
+        // ==========================================
+        testSelector('7. YTF Injected UI', 'Freemium Container (#yf-container)', '#yf-container', {
+            isOptional: true,
+            extract: (el) => {
+                const rect = el.getBoundingClientRect();
+                const isCollapsed = el.classList.contains('collapsed');
+                return `Collapsed: ${isCollapsed} | Height: ${Math.round(rect.height)}px`;
+            }
+        });
+        testSelector('7. YTF Injected UI', 'Header Top Row', '.yf-header-top', { isOptional: true });
+        testSelector('7. YTF Injected UI', 'Now Playing Label / Input', '.now-playing, #now-playing-text-input', {
+            isOptional: true,
+            extract: (el) => el.value !== undefined ? `Value: "${el.value}"` : `Text: "${el.textContent.trim()}"`
+        });
+        testSelector('7. YTF Injected UI', 'Header Actions & Controls', '.yf-header-actions, #yf-collapse-btn, .yf-menu, .yf-search-btn', { isOptional: true });
+        testSelector('7. YTF Injected UI', 'Progress Bar (#ytf-progressbar)', '#ytf-progressbar', { isOptional: true });
+        testSelector('7. YTF Injected UI', 'Active Content Surface', '#lyricContainer, #searchingDiv, #notFound, #intermediateContainer', { isOptional: true });
+
+    } else if (isYTM) {
+        // ==========================================
+        // 1. YouTube Music Native Layout Targets
+        // ==========================================
+        testSelector('1. YTM Layout', 'Player Page', 'ytmusic-player-page#player-page');
+        testSelector('1. YTM Layout', 'Main Panel (Video/Canvas)', 'ytmusic-player-page #main-panel');
+        testSelector('1. YTM Layout', 'Side Panel (Lyrics/Queue)', 'ytmusic-player-page #side-panel');
+        testSelector('1. YTM Layout', 'Side Panel Tab Renderer', 'ytmusic-player-page #tab-renderer');
+        testSelector('1. YTM Layout', 'Side Panel Tabs Header', 'ytmusic-player-page tp-yt-paper-tab.tab-header');
+        testSelector('1. YTM Layout', 'Lyrics Tab (When Active)', 'ytmusic-tab-renderer#tab-renderer[page-type="MUSIC_PAGE_TYPE_TRACK_LYRICS"]', { isOptional: true });
+
+        // ==========================================
+        // 2. YouTube Music Persistent Player Bar
+        // ==========================================
+        testSelector('2. YTM Player Bar', 'Player Bar Root', 'ytmusic-player-bar');
+        testSelector('2. YTM Player Bar', 'Song Title', 'ytmusic-player-bar .title', {
+            extract: (el) => el.getAttribute('title') || el.textContent.trim()
+        });
+        testSelector('2. YTM Player Bar', 'Byline / Artist', 'ytmusic-player-bar .byline', {
+            extract: (el) => el.textContent.trim()
+        });
+        testSelector('2. YTM Player Bar', 'Artist Link', 'ytmusic-player-bar .byline a[href*="/channel/"]', { isOptional: true });
+        testSelector('2. YTM Player Bar', 'Play / Pause Button', 'ytmusic-player-bar #play-pause-button', { isOptional: true });
+        testSelector('2. YTM Player Bar', 'Next Track Button', 'ytmusic-player-bar .next-button', { isOptional: true });
+        testSelector('2. YTM Player Bar', 'Previous Track Button', 'ytmusic-player-bar .previous-button', { isOptional: true });
+
+        // ==========================================
+        // 3. YouTube Music Freemium UI Components
+        // ==========================================
+        testSelector('3. YTM Injected UI', 'Mounted Container', 'ytmusic-player-page #side-panel .yf-container[data-platform="ytmusic"]', {
+            isOptional: true,
+            extract: (el) => `Mode: ${el.getAttribute('data-ytm-mode') || 'freemium'} | SearchState: ${el.getAttribute('data-search-state') || 'collapsed'}`
+        });
+        testSelector('3. YTM Injected UI', 'M3 Pill Mode Switcher', '.yf-mode-switcher', { isOptional: true });
+        testSelector('3. YTM Injected UI', 'FreeMium Pill Segment', '.yf-mode-segment.yf-mode-freemium', { isOptional: true });
+        testSelector('3. YTM Injected UI', 'Default Pill Segment', '.yf-mode-segment.yf-mode-default', { isOptional: true });
+        testSelector('3. YTM Injected UI', 'Bottom Dock Search Button', '.yf-header-bottom .yf-search-btn', { isOptional: true });
+        testSelector('3. YTM Injected UI', 'Morphing Search Bar', '.yf-header-bottom .now-playing-div', { isOptional: true });
     }
-
-    if (foundCardContainer) {
-        // Test standard suffix from ytf-constants.js
-        testSelector('4. Music Card', 'Song Title (Suffix)', `${foundCardContainer} > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)`, { isOptional: true });
-        testSelector('4. Music Card', 'Artist Name (Suffix)', `${foundCardContainer} > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)`, { isOptional: true });
-        // Also test direct semantic classnames
-        testSelector('4. Music Card', 'Song Title (.ytVideoAttributeViewModelTitle)', `${foundCardContainer} .ytVideoAttributeViewModelTitle`, { isOptional: true });
-        testSelector('4. Music Card', 'Artist Name (.ytVideoAttributeViewModelSubtitle)', `${foundCardContainer} .ytVideoAttributeViewModelSubtitle`, { isOptional: true });
-    } else {
-        testSelector('4. Music Card', 'Song Title (Card)', '.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)', { isOptional: true });
-        testSelector('4. Music Card', 'Artist Name (Card)', '.ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)', { isOptional: true });
-    }
-
-    // ==========================================
-    // 5. Fallback Metadata (Robust Selectors)
-    // ==========================================
-    const fallbackTitleSelector = '#above-the-fold h1, ytd-watch-metadata #title, #above-the-fold #title';
-    testSelector('5. Fallback Metadata', 'Video Title (Fallback)', fallbackTitleSelector, {
-        extract: (el) => el.textContent.trim()
-    });
-    testSelector('5. Fallback Metadata', 'Channel / Artist (Fallback)', '#upload-info > #channel-name > div > div', {
-        extract: (el) => el.textContent.trim()
-    });
-
-    // ==========================================
-    // 6. Shorts Suppression
-    // ==========================================
-    testSelector('6. Shorts Suppression', 'Rich Shelf', 'ytd-rich-shelf-renderer', { isOptional: true });
-    testSelector('6. Shorts Suppression', 'Reel Shelf', 'ytd-reel-shelf-renderer', { isOptional: true });
-    testSelector('6. Shorts Suppression', 'Rich Section Shelf', 'ytd-rich-section-renderer ytd-rich-shelf-renderer', { isOptional: true });
-
-    // ==========================================
-    // 7. Ad Detection & Skipping
-    // ==========================================
-    testSelector('7. Ads (Beta)', 'Ad Overlay Layout', '.ytp-ad-player-overlay-layout', { isOptional: true });
-    testSelector('7. Ads (Beta)', 'Skip Ad Button (Standard)', '.ytp-skip-ad-button', { isOptional: true });
-    testSelector('7. Ads (Beta)', 'Modern / Legacy Skip Selectors', '.videoAdUiSkipButton, .ytp-ad-skip-button, .ytp-ad-skip-button-modern', { isOptional: true });
-
-    // ==========================================
-    // 8. Freemium Injected UI (if extension active)
-    // ==========================================
-    testSelector('8. YTF Injected UI', 'Freemium Container (#yf-container)', '#yf-container', {
-        isOptional: true,
-        extract: (el) => {
-            const rect = el.getBoundingClientRect();
-            const isCollapsed = el.classList.contains('collapsed');
-            return `Collapsed: ${isCollapsed} | Height: ${Math.round(rect.height)}px (max-height: ${getComputedStyle(el).maxHeight})`;
-        }
-    });
-
-    testSelector('8. YTF Injected UI', 'Header Top Row', '.yf-header-top', { isOptional: true });
-    testSelector('8. YTF Injected UI', 'Now Playing Label / Input', '.now-playing, #now-playing-text-input', {
-        isOptional: true,
-        extract: (el) => el.value !== undefined ? `Value: "${el.value}"` : `Text: "${el.textContent.trim()}"`
-    });
-    testSelector('8. YTF Injected UI', 'Header Actions & Controls', '.yf-header-actions, #yf-collapse-btn, .yf-menu, .yf-search-btn', { isOptional: true });
-
-    testSelector('8. YTF Injected UI', 'Progress Bar (#ytf-progressbar)', '#ytf-progressbar', {
-        isOptional: true,
-        extract: (el) => {
-            const cs = getComputedStyle(el);
-            const isNoAnimate = el.classList.contains('no-animate');
-            const isLinear = el.classList.contains('pure-material-progress-linear');
-            return `State: ${isNoAnimate ? 'idle (no-animate)' : (isLinear ? 'searching (linear)' : 'default')} | pos: ${cs.position} | top: ${cs.top} | h: ${cs.height} | vis: ${cs.visibility} | op: ${cs.opacity}`;
-        }
-    });
-
-    testSelector('8. YTF Injected UI', 'Active Content Surface', '#lyricContainer, #searchingDiv, #notFound, #intermediateContainer', {
-        isOptional: true,
-        extract: (el) => `ID: #${el.id || '(none)'} | Visible: ${getComputedStyle(el).display !== 'none'}`
-    });
-
-    testSelector('8. YTF Injected UI', 'Floating Search Dropdown', '#yf-search-dropdown', {
-        isOptional: true,
-        extract: (el) => `display: ${getComputedStyle(el).display}`
-    });
-
-    testSelector('8. YTF Injected UI', 'Settings Dropdown Menu', '#yf-dropdown', { isOptional: true });
-    testSelector('8. YTF Injected UI', 'Lava Lamp Bubbles Wrapper', '.bubbles-wrapper', { isOptional: true });
 
     // Print diagnostic results table
     console.table(results);
 
-    // ==========================================
-    // 9. Live Song Metadata Resolution Simulation
-    // ==========================================
-    function normalizeToken(str) {
-        return String(str || '')
-            .toLowerCase()
-            .replace(/[\u2010-\u2015\u2212]/g, '-')
-            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-    }
-
-    function isMusicCardFresh(cardTitle, cardArtist, fallbackTitle, fallbackChannel) {
-        if (!cardTitle) return false;
-        const normCardTitle = normalizeToken(cardTitle);
-        const normFallbackTitle = normalizeToken(fallbackTitle);
-
-        if (!normCardTitle || !normFallbackTitle) return false;
-        if (normFallbackTitle.includes(normCardTitle) || normCardTitle.includes(normFallbackTitle)) return true;
-
-        const cardTokens = normCardTitle.split(/\s+/).filter(t => t.length > 2);
-        if (cardTokens.length > 0) {
-            const matched = cardTokens.filter(t => normFallbackTitle.includes(t));
-            if (matched.length / cardTokens.length >= 0.6) return true;
-        }
-
-        const normCardArtist = normalizeToken(cardArtist);
-        const normFallbackChannel = normalizeToken(fallbackChannel);
-        if (normCardArtist && normFallbackChannel) {
-            if (normCardArtist.includes(normFallbackChannel) || normFallbackChannel.includes(normCardArtist)) return true;
-        }
-
-        return false;
-    }
-
-    function parseFallbackMetadata(fallbackTitle, fallbackChannel) {
-        const rawTitle = String(fallbackTitle || '').trim();
-        const rawChannel = String(fallbackChannel || '').trim();
-
-        const cleanedTitle = rawTitle
-            .replace(/\[[^\]]*\]/g, '')
-            .replace(/\((?:official\s*(?:video|audio|music\s*video|lyric\s*video)?|lyrics?|visualizer|remastered|audio|hd|4k)\)/gi, '')
-            .replace(/\b(official\s*(?:music\s*)?video|official\s*audio|lyric\s*video)\b/gi, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        let title = '';
-        let channel = '';
-
-        const dashMatch = cleanedTitle.match(/^(.+?)\s*[-–—]\s*(.+)$/);
-        if (dashMatch) {
-            const part1 = dashMatch[1].trim();
-            const part2 = dashMatch[2].trim();
-            const normChannel = normalizeToken(rawChannel);
-
-            if (normChannel && normalizeToken(part1).includes(normChannel)) {
-                channel = part1;
-                title = part2;
-            } else if (normChannel && normalizeToken(part2).includes(normChannel)) {
-                channel = part2;
-                title = part1;
-            } else {
-                channel = part1;
-                title = part2;
-            }
-        } else {
-            title = cleanedTitle;
-            channel = rawChannel.replace(/\s*-\s*Topic$/i, '').trim();
-        }
-
-        return { title, channel };
-    }
-
-    console.group('%cMetadata Resolution Diagnostic', subheaderStyle);
-    const rawFallbackTitleEl = document.querySelector(fallbackTitleSelector);
-    const rawFallbackChannelEl = document.querySelector('#upload-info > #channel-name > div > div');
-    const rawFallbackTitle = rawFallbackTitleEl?.textContent?.trim() || '';
-    const rawFallbackChannel = rawFallbackChannelEl?.textContent?.trim() || '';
-
-    let cardTitle = '';
-    let cardArtist = '';
-    if (foundCardContainer) {
-        const titleEl = document.querySelector(`${foundCardContainer} .ytVideoAttributeViewModelTitle`) ||
-            document.querySelector(`${foundCardContainer} > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(1)`);
-        const artistEl = document.querySelector(`${foundCardContainer} .ytVideoAttributeViewModelSubtitle`) ||
-            document.querySelector(`${foundCardContainer} > .ytVideoAttributeViewModelMetadata > :nth-child(1) > :nth-child(2)`);
-        cardTitle = titleEl?.textContent?.trim() || '';
-        cardArtist = artistEl?.textContent?.trim() || '';
-    }
-
-    const cardFresh = isMusicCardFresh(cardTitle, cardArtist, rawFallbackTitle, rawFallbackChannel);
-    const parsedFallback = parseFallbackMetadata(rawFallbackTitle, rawFallbackChannel);
-
-    let resolvedTitle = '';
-    let resolvedArtist = '';
-    let sourceStrategy = '';
-
-    if (cardTitle && cardFresh) {
-        resolvedTitle = cardTitle;
-        resolvedArtist = cardArtist;
-        sourceStrategy = 'Music Metadata Card (Verified Fresh)';
-    } else if (parsedFallback.title) {
-        resolvedTitle = parsedFallback.title;
-        resolvedArtist = parsedFallback.channel;
-        sourceStrategy = cardTitle && !cardFresh
-            ? 'Fallback Parser (Card was Stale / Cross-video residual)'
-            : 'Fallback Parser (Cleaned title & channel)';
-    }
-
-    console.log(`Raw Fallback Title:   "${rawFallbackTitle}"`);
-    console.log(`Raw Fallback Channel: "${rawFallbackChannel}"`);
-    console.log(`Music Card Title:     "${cardTitle || '(none)'}"`);
-    console.log(`Music Card Artist:    "${cardArtist || '(none)'}"`);
-    console.log(`Card Freshness Check: ${cardFresh ? '%cFRESH' : '%cSTALE / MISMATCH'}`, cardFresh ? successStyle : warnStyle);
-    console.log(`Strategy Selected:    %c${sourceStrategy}`, 'font-weight: bold;');
-    console.log(`Resolved Search Query: "%c${resolvedTitle} - ${resolvedArtist}%c"`, 'color: #e21; font-weight: bold;', 'color: inherit;');
-    console.groupEnd();
-
-    // ==========================================
-    // 10. Summary & Actionable Verdict
-    // ==========================================
+    // Summary
     const criticalFailures = results.filter(r => r.Status.includes('❌'));
     console.group('%cDiagnostic Summary', subheaderStyle);
-    if (!isWatchPage) {
-        console.warn('⚠️ You are not currently on a YouTube video watch page (/watch?v=...). Navigate to a video to test selectors accurately.');
+    if (isYT && !isWatchPage) {
+        console.warn('⚠️ You are on youtube.com, but not on a watch page (/watch?v=...). Navigate to a video to test selectors accurately.');
     } else if (criticalFailures.length > 0) {
-        console.error(`❌ ${criticalFailures.length} critical selector(s) failed:`, criticalFailures.map(f => `${f.Feature} (${f.Selector})`));
+        console.error(`❌ ${criticalFailures.length} critical selector(s) failed on ${platformName}:`, criticalFailures.map(f => `${f.Feature} (${f.Selector})`));
     } else {
-        console.log('%c🎉 All essential YouTube layout and metadata selectors are WORKING correctly on this page!', successStyle);
-    }
-
-    const ytfContainer = document.querySelector('#yf-container');
-    if (ytfContainer) {
-        console.log('%cℹ️ Freemium extension UI is active and mounted.', successStyle);
-    } else {
-        console.log('%cℹ️ Freemium container is not currently mounted (extension might be disabled or still injecting).', warnStyle);
+        console.log(`%c🎉 All essential ${platformName} selectors are WORKING correctly on this page!`, successStyle);
     }
     console.groupEnd();
 
-    return {
-        results,
-        metadata: {
-            rawFallbackTitle,
-            rawFallbackChannel,
-            cardTitle,
-            cardArtist,
-            cardFresh,
-            resolvedTitle,
-            resolvedArtist,
-            sourceStrategy
-        }
-    };
+    return { platform: platformName, results };
 })();

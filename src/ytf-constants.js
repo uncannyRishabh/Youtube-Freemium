@@ -177,6 +177,41 @@ export const POPUP_SELECTORS = {
 };
 
 /**
+ * YouTube Music Native DOM Selectors
+ * Targets YouTube Music's player bar, side panel tabs, and lyrics shelf.
+ */
+export const YTM_SELECTORS = {
+    LAYOUT: {
+        PLAYER_PAGE: 'ytmusic-player-page#player-page',
+        MAIN_PANEL: '#main-panel',
+        SIDE_PANEL: '#side-panel',
+        TAB_RENDERER: 'ytmusic-player-page #tab-renderer',
+        TABS: 'ytmusic-player-page tp-yt-paper-tab.tab-header',
+        TABS_CONTAINER: 'ytmusic-player-page tp-yt-paper-tabs.tab-header-container',
+        SECTION_LIST: 'ytmusic-tab-renderer#tab-renderer ytmusic-section-list-renderer',
+        DESCRIPTION_SHELF: 'ytmusic-description-shelf-renderer',
+        CONTENTS: 'ytmusic-tab-renderer#tab-renderer ytmusic-section-list-renderer #contents'
+    },
+    PLAYER_BAR: {
+        ROOT: 'ytmusic-player-bar',
+        TITLE: 'ytmusic-player-bar .title',
+        BYLINE: 'ytmusic-player-bar .byline',
+        ARTIST_LINK: 'ytmusic-player-bar .byline a[href*="/channel/"]',
+        NEXT_BTN: 'ytmusic-player-bar .next-button',
+        PREV_BTN: 'ytmusic-player-bar .previous-button',
+        PLAY_PAUSE_BTN: 'ytmusic-player-bar #play-pause-button'
+    },
+    NAV_BAR: {
+        HOME_BTN: 'ytmusic-nav-bar a[href="/"]',
+        SEARCH_BOX: 'ytmusic-search-box input'
+    },
+    PLAYER: {
+        VIDEO: 'video',
+        MOVIE_PLAYER: '#movie_player'
+    }
+};
+
+/**
  * Preserved legacy helper
  */
 export const menu = () => {
