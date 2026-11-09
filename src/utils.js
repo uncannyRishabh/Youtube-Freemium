@@ -11,18 +11,13 @@ export function getDefaultUserPrefs(){
 
 export const carouselData = [
     {
-        header: "YouTube Music Support",
+        header: "Available in YouTube Music",
         subtext: "Real-time synced lyrics directly integrated into music.youtube.com.",
         link: "https://music.youtube.com"
     },
     {
-        header: "M3 Expressive Dock",
-        subtext: "Seamlessly toggle FreeMium & native views with fluid spring animations.",
-        link: "https://github.com/uncannyRishabh/Youtube-Freemium"
-    },
-    {
-        header: "Cross-Platform Sync",
-        subtext: "Intelligent lexical matching shares cached lyrics across YouTube & YT Music.",
+        header: "Word Sync",
+        subtext: "Rolling out slowly: you have to perform search then select (doesn't come by default).",
         link: "https://github.com/uncannyRishabh/Youtube-Freemium"
     }
 ];
