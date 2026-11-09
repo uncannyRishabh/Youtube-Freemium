@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml, findSavedLyricsByLexicalSearch } from './utils.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml, normalizeWordSyncLyrics, findSavedLyricsByLexicalSearch } from './utils.js';
 import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
 (() => {
@@ -569,7 +569,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                 // 1. Lexical search against all saved lyrics in local database to reuse cross-platform
                 let lexicalMatch = await findSavedLyricsByLexicalSearch(val, channel);
                 if (lexicalMatch && lexicalMatch.lyrics && lexicalMatch.message === 'OK') {
-                    lyrics = lexicalMatch.lyrics;
+                    lyrics = normalizeWordSyncLyrics(lexicalMatch.lyrics);
                     message = 'OK';
                     title = lexicalMatch.title || displayTitle || val;
                     source = lexicalMatch.source || 'Saved';
@@ -611,7 +611,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                             rateLimitRetryAfter = resultObject.retryAfter || 1;
                         }
                     } else {
-                        lyrics = resultObject.lyrics || '';
+                        lyrics = normalizeWordSyncLyrics(resultObject.lyrics || '');
                         message = resultObject.message || '';
                         source = resultObject.source || '';
                         synced = resultObject.synced ?? synced;
@@ -627,7 +627,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     }
                 }
             } else if (!isEmpty(obj)) {
-                lyrics = obj[uid]?.lyrics || '';
+                lyrics = normalizeWordSyncLyrics(obj[uid]?.lyrics || '');
                 message = obj[uid]?.message || "NOK";
                 title = hasUserSelection ? (obj[uid]?.title || displayTitle || '') : (displayTitle || obj[uid]?.title || '');
                 source = obj[uid]?.source || '';
@@ -1487,6 +1487,106 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     return `${m}:${s < 10 ? '0' : ''}${s}`;
                 }
 
+                function normalizeWordSyncLyrics(rawLyrics) {
+                    if (!Array.isArray(rawLyrics) || rawLyrics.length === 0) return rawLyrics;
+
+                    const consolidated = [];
+                    let i = 0;
+
+                    while (i < rawLyrics.length) {
+                        const item = rawLyrics[i];
+                        if (!Array.isArray(item)) {
+                            consolidated.push(item);
+                            i++;
+                            continue;
+                        }
+
+                        const ts = item[0];
+                        const lineText = (item[1] || '').trim();
+                        const existingWords = item[2];
+
+                        if (Array.isArray(existingWords) && existingWords.length > 0) {
+                            consolidated.push(item);
+                            i++;
+                            continue;
+                        }
+
+                        let j = i + 1;
+                        let accumulated = '';
+                        const candidateWords = [];
+
+                        while (j < rawLyrics.length) {
+                            const nextItem = rawLyrics[j];
+                            if (!Array.isArray(nextItem)) break;
+
+                            const nextWordText = nextItem[1] || '';
+                            accumulated += nextWordText;
+
+                            const normLine = lineText.toLowerCase().replace(/[\s\p{P}]/gu, '');
+                            const normAcc = accumulated.toLowerCase().replace(/[\s\p{P}]/gu, '');
+
+                            if (!normLine.startsWith(normAcc)) {
+                                break;
+                            }
+
+                            function parseTs(tStr) {
+                                if (!tStr) return 0;
+                                const parts = String(tStr).split(':');
+                                if (parts.length === 2) {
+                                    return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+                                }
+                                return parseFloat(tStr) || 0;
+                            }
+
+                            const wordStart = parseTs(nextItem[0]);
+                            candidateWords.push({
+                                text: nextWordText,
+                                start: wordStart,
+                                end: 0
+                            });
+
+                            if (normAcc === normLine) {
+                                break;
+                            }
+
+                            j++;
+                        }
+
+                        const normLine = lineText.toLowerCase().replace(/[\s\p{P}]/gu, '');
+                        const normAcc = accumulated.toLowerCase().replace(/[\s\p{P}]/gu, '');
+
+                        if (candidateWords.length > 1 && normAcc === normLine) {
+                            function parseTs(tStr) {
+                                if (!tStr) return 0;
+                                const parts = String(tStr).split(':');
+                                if (parts.length === 2) {
+                                    return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+                                }
+                                return parseFloat(tStr) || 0;
+                            }
+
+                            for (let w = 0; w < candidateWords.length; w++) {
+                                if (w + 1 < candidateWords.length) {
+                                    candidateWords[w].end = candidateWords[w + 1].start;
+                                } else {
+                                    const nextLineStart = (j + 1 < rawLyrics.length && rawLyrics[j + 1][0])
+                                        ? parseTs(rawLyrics[j + 1][0])
+                                        : candidateWords[w].start + 1.0;
+                                    candidateWords[w].end = Math.max(candidateWords[w].start + 0.3, nextLineStart);
+                                }
+                            }
+
+                            consolidated.push([ts, item[1], candidateWords]);
+                            i = j + 1;
+                        } else {
+                            consolidated.push(item);
+                            i++;
+                        }
+                    }
+
+                    return consolidated;
+                }
+
                 function parseLyricsfileYaml(yamlStr) {
                     if (!yamlStr || typeof yamlStr !== 'string') return [];
                     const lines = [];
@@ -1495,6 +1595,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     let currentLine = null;
                     let currentWord = null;
                     let inWords = false;
+                    let lineIndent = -1;
 
                     function cleanVal(v) {
                         if (v == null) return '';
@@ -1502,6 +1603,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
                             s = s.slice(1, -1);
                         }
+                        s = s.replace(/''/g, "'");
                         return s;
                     }
 
@@ -1512,19 +1614,41 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
                         if (trimmed === 'lines:') {
                             inWords = false;
+                            currentLine = null;
+                            lineIndent = -1;
                             continue;
                         }
 
                         if (trimmed.startsWith('plain:') || trimmed.startsWith('version:') || trimmed.startsWith('metadata:')) {
                             inWords = false;
                             currentLine = null;
+                            lineIndent = -1;
                             continue;
                         }
 
                         const indent = raw.search(/\S/);
 
-                        if (trimmed.startsWith('-') && indent <= 4) {
+                        if (trimmed === 'words:' || trimmed.startsWith('words:')) {
+                            inWords = true;
+                            currentWord = null;
+                            continue;
+                        }
+
+                        if (trimmed.startsWith('-')) {
+                            if (inWords && (lineIndent === -1 || indent > lineIndent)) {
+                                currentWord = { text: '', start: 0, end: 0 };
+                                if (currentLine) {
+                                    currentLine.words.push(currentWord);
+                                }
+                                const rest = trimmed.slice(1).trim();
+                                if (rest.startsWith('text:')) {
+                                    currentWord.text = cleanVal(rest.slice(5));
+                                }
+                                continue;
+                            }
+
                             inWords = false;
+                            lineIndent = indent;
                             currentLine = { text: '', start_ms: 0, end_ms: 0, words: [] };
                             lines.push(currentLine);
                             currentWord = null;
@@ -1536,59 +1660,57 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                             continue;
                         }
 
-                        if (trimmed === 'words:') {
-                            inWords = true;
-                            continue;
-                        }
-
-                        if (inWords) {
-                            if (trimmed.startsWith('-')) {
-                                currentWord = { text: '', start: 0, end: 0 };
-                                if (currentLine) currentLine.words.push(currentWord);
-
-                                const rest = trimmed.slice(1).trim();
-                                if (rest.startsWith('text:')) {
-                                    currentWord.text = cleanVal(rest.slice(5));
-                                }
-                                continue;
-                            }
-
-                            const colonIdx = trimmed.indexOf(':');
-                            if (colonIdx !== -1) {
-                                const key = trimmed.slice(0, colonIdx).trim();
-                                const val = cleanVal(trimmed.slice(colonIdx + 1));
-                                if (key === 'text' && currentWord) {
-                                    currentWord.text = val;
-                                } else if (key === 'start_ms' && currentWord) {
-                                    currentWord.start = parseInt(val, 10) / 1000;
-                                } else if (key === 'end_ms' && currentWord) {
-                                    currentWord.end = parseInt(val, 10) / 1000;
-                                }
-                            }
-                            continue;
-                        }
-
                         const colonIdx = trimmed.indexOf(':');
-                        if (colonIdx !== -1 && currentLine) {
+                        if (colonIdx !== -1) {
                             const key = trimmed.slice(0, colonIdx).trim();
                             const val = cleanVal(trimmed.slice(colonIdx + 1));
-                            if (key === 'text') {
-                                currentLine.text = val;
-                            } else if (key === 'start_ms') {
-                                currentLine.start_ms = parseInt(val, 10);
-                            } else if (key === 'end_ms') {
-                                currentLine.end_ms = parseInt(val, 10);
+
+                            if (inWords && currentWord && (lineIndent === -1 || indent > lineIndent)) {
+                                if (key === 'text') {
+                                    currentWord.text = val;
+                                } else if (key === 'start_ms') {
+                                    currentWord.start = parseInt(val, 10) / 1000;
+                                } else if (key === 'end_ms') {
+                                    currentWord.end = parseInt(val, 10) / 1000;
+                                }
+                            } else if (currentLine) {
+                                if (key === 'text') {
+                                    currentLine.text = val;
+                                } else if (key === 'start_ms') {
+                                    currentLine.start_ms = parseInt(val, 10);
+                                } else if (key === 'end_ms') {
+                                    currentLine.end_ms = parseInt(val, 10);
+                                }
                             }
                         }
                     }
 
-                    return lines.map(line => {
+                    lines.forEach(line => {
+                        if (line.words && line.words.length > 0) {
+                            for (let w = 0; w < line.words.length; w++) {
+                                const word = line.words[w];
+                                if (!word.end || isNaN(word.end) || word.end <= word.start) {
+                                    if (w + 1 < line.words.length && line.words[w + 1].start > word.start) {
+                                        word.end = line.words[w + 1].start;
+                                    } else if (line.end_ms && line.end_ms / 1000 > word.start) {
+                                        word.end = line.end_ms / 1000;
+                                    } else {
+                                        word.end = word.start + 0.35;
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    const rawMapped = lines.map(line => {
                         const totalSec = (line.start_ms || 0) / 1000;
                         const m = Math.floor(totalSec / 60);
                         const s = (totalSec % 60).toFixed(2);
                         const ts = `${m < 10 ? '0' : ''}${m}:${parseFloat(s) < 10 ? '0' : ''}${s}`;
                         return [ts, line.text || '', line.words || []];
                     });
+
+                    return normalizeWordSyncLyrics(rawMapped);
                 }
 
                 function parseLrc(syncedLyrics) {
@@ -1665,7 +1787,8 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     const pattern = fuzzyProfanityDictionary.map(word => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
                     const re = new RegExp(`(${pattern})`, 'giu');
 
-                    var processedLyrics = (targetLyrics || []).reduce((acc, item) => {
+                    const normalizedLyrics = normalizeWordSyncLyrics(targetLyrics || []);
+                    var processedLyrics = normalizedLyrics.reduce((acc, item) => {
                         if (Array.isArray(item) ? item.length >= 2 : (item && String(item).trim())) {
                             acc.push(item);
                         }

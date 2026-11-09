@@ -441,6 +441,112 @@ export async function fetchLrclibRecordById(id, signal) {
 }
 
 /**
+ * Helper to parse a mm:ss.xx timestamp to numeric seconds
+ */
+export function timestampToSeconds(ts) {
+	if (!ts) return 0;
+	const parts = String(ts).split(':');
+	if (parts.length === 2) {
+		return parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+	}
+	return parseFloat(ts) || 0;
+}
+
+/**
+ * Normalizes and consolidates word-sync lyrics.
+ * If raw lyrics contain full lines followed by individual fragmented word lines (e.g. from LRCLIB YAML misparsing),
+ * this detects the fragmentation and collapses the word lines into wordsArray on the parent line.
+ *
+ * @param {Array} rawLyrics - Array of [ timestampStr, text, wordsArray ]
+ * @returns {Array} Consolidated array with word sync restored
+ */
+export function normalizeWordSyncLyrics(rawLyrics) {
+	if (!Array.isArray(rawLyrics) || rawLyrics.length === 0) return rawLyrics;
+
+	const consolidated = [];
+	let i = 0;
+
+	while (i < rawLyrics.length) {
+		const item = rawLyrics[i];
+		if (!Array.isArray(item)) {
+			consolidated.push(item);
+			i++;
+			continue;
+		}
+
+		const ts = item[0];
+		const lineText = (item[1] || '').trim();
+		const existingWords = item[2];
+
+		// If line already has words populated, keep as is
+		if (Array.isArray(existingWords) && existingWords.length > 0) {
+			consolidated.push(item);
+			i++;
+			continue;
+		}
+
+		// Check if subsequent items are fragmented words of this line
+		let j = i + 1;
+		let accumulated = '';
+		const candidateWords = [];
+
+		while (j < rawLyrics.length) {
+			const nextItem = rawLyrics[j];
+			if (!Array.isArray(nextItem)) break;
+
+			const nextWordText = nextItem[1] || '';
+			accumulated += nextWordText;
+
+			const normLine = lineText.toLowerCase().replace(/[\s\p{P}]/gu, '');
+			const normAcc = accumulated.toLowerCase().replace(/[\s\p{P}]/gu, '');
+
+			if (!normLine.startsWith(normAcc)) {
+				break;
+			}
+
+			const wordStart = timestampToSeconds(nextItem[0]);
+			candidateWords.push({
+				text: nextWordText,
+				start: wordStart,
+				end: 0
+			});
+
+			if (normAcc === normLine) {
+				// Perfect match: reconstructed the whole line from word fragments
+				break;
+			}
+
+			j++;
+		}
+
+		const normLine = lineText.toLowerCase().replace(/[\s\p{P}]/gu, '');
+		const normAcc = accumulated.toLowerCase().replace(/[\s\p{P}]/gu, '');
+
+		if (candidateWords.length > 1 && normAcc === normLine) {
+			// Fill word ends
+			for (let w = 0; w < candidateWords.length; w++) {
+				if (w + 1 < candidateWords.length) {
+					candidateWords[w].end = candidateWords[w + 1].start;
+				} else {
+					const nextLineStart = (j + 1 < rawLyrics.length && rawLyrics[j + 1][0])
+						? timestampToSeconds(rawLyrics[j + 1][0])
+						: candidateWords[w].start + 1.0;
+					candidateWords[w].end = Math.max(candidateWords[w].start + 0.3, nextLineStart);
+				}
+			}
+
+			consolidated.push([ts, item[1], candidateWords]);
+			i = j + 1; // Skip the absorbed word fragments
+		} else {
+			consolidated.push(item);
+			i++;
+		}
+	}
+
+	return consolidated;
+}
+
+/**
  * Parses Lyricsfile YAML format into lines with word timestamps
  * Returns array of [ timestampStr, lineText, wordsArray ]
  * wordsArray = [ { text, start, end } ] in seconds
@@ -455,6 +561,7 @@ export function parseLyricsfileYaml(yamlStr) {
 	let currentLine = null;
 	let currentWord = null;
 	let inWords = false;
+	let lineIndent = -1;
 
 	function cleanVal(v) {
 		if (v == null) return '';
@@ -462,6 +569,8 @@ export function parseLyricsfileYaml(yamlStr) {
 		if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
 			s = s.slice(1, -1);
 		}
+		// Unescape doubled single quotes ('' -> ')
+		s = s.replace(/''/g, "'");
 		return s;
 	}
 
@@ -472,20 +581,43 @@ export function parseLyricsfileYaml(yamlStr) {
 
 		if (trimmed === 'lines:') {
 			inWords = false;
+			currentLine = null;
+			lineIndent = -1;
 			continue;
 		}
 
 		if (trimmed.startsWith('plain:') || trimmed.startsWith('version:') || trimmed.startsWith('metadata:')) {
 			inWords = false;
 			currentLine = null;
+			lineIndent = -1;
 			continue;
 		}
 
 		const indent = raw.search(/\S/);
 
-		// If indent <= 4 and starts with dash, it is definitely a new line item, NOT a word
-		if (trimmed.startsWith('-') && indent <= 4) {
+		if (trimmed === 'words:' || trimmed.startsWith('words:')) {
+			inWords = true;
+			currentWord = null;
+			continue;
+		}
+
+		if (trimmed.startsWith('-')) {
+			// If inside words section and indented deeper than the line, this is a word item
+			if (inWords && (lineIndent === -1 || indent > lineIndent)) {
+				currentWord = { text: '', start: 0, end: 0 };
+				if (currentLine) {
+					currentLine.words.push(currentWord);
+				}
+				const rest = trimmed.slice(1).trim();
+				if (rest.startsWith('text:')) {
+					currentWord.text = cleanVal(rest.slice(5));
+				}
+				continue;
+			}
+
+			// Otherwise, it is a new line item
 			inWords = false;
+			lineIndent = indent;
 			currentLine = { text: '', start_ms: 0, end_ms: 0, words: [] };
 			lines.push(currentLine);
 			currentWord = null;
@@ -497,59 +629,58 @@ export function parseLyricsfileYaml(yamlStr) {
 			continue;
 		}
 
-		if (trimmed === 'words:') {
-			inWords = true;
-			continue;
-		}
-
-		if (inWords) {
-			if (trimmed.startsWith('-')) {
-				currentWord = { text: '', start: 0, end: 0 };
-				if (currentLine) currentLine.words.push(currentWord);
-
-				const rest = trimmed.slice(1).trim();
-				if (rest.startsWith('text:')) {
-					currentWord.text = cleanVal(rest.slice(5));
-				}
-				continue;
-			}
-
-			const colonIdx = trimmed.indexOf(':');
-			if (colonIdx !== -1) {
-				const key = trimmed.slice(0, colonIdx).trim();
-				const val = cleanVal(trimmed.slice(colonIdx + 1));
-				if (key === 'text' && currentWord) {
-					currentWord.text = val;
-				} else if (key === 'start_ms' && currentWord) {
-					currentWord.start = parseInt(val, 10) / 1000;
-				} else if (key === 'end_ms' && currentWord) {
-					currentWord.end = parseInt(val, 10) / 1000;
-				}
-			}
-			continue;
-		}
-
 		const colonIdx = trimmed.indexOf(':');
-		if (colonIdx !== -1 && currentLine) {
+		if (colonIdx !== -1) {
 			const key = trimmed.slice(0, colonIdx).trim();
 			const val = cleanVal(trimmed.slice(colonIdx + 1));
-			if (key === 'text') {
-				currentLine.text = val;
-			} else if (key === 'start_ms') {
-				currentLine.start_ms = parseInt(val, 10);
-			} else if (key === 'end_ms') {
-				currentLine.end_ms = parseInt(val, 10);
+
+			if (inWords && currentWord && (lineIndent === -1 || indent > lineIndent)) {
+				if (key === 'text') {
+					currentWord.text = val;
+				} else if (key === 'start_ms') {
+					currentWord.start = parseInt(val, 10) / 1000;
+				} else if (key === 'end_ms') {
+					currentWord.end = parseInt(val, 10) / 1000;
+				}
+			} else if (currentLine) {
+				if (key === 'text') {
+					currentLine.text = val;
+				} else if (key === 'start_ms') {
+					currentLine.start_ms = parseInt(val, 10);
+				} else if (key === 'end_ms') {
+					currentLine.end_ms = parseInt(val, 10);
+				}
 			}
 		}
 	}
 
-	return lines.map(line => {
+	// Post-processing: fill missing end times for words
+	lines.forEach(line => {
+		if (line.words && line.words.length > 0) {
+			for (let w = 0; w < line.words.length; w++) {
+				const word = line.words[w];
+				if (!word.end || isNaN(word.end) || word.end <= word.start) {
+					if (w + 1 < line.words.length && line.words[w + 1].start > word.start) {
+						word.end = line.words[w + 1].start;
+					} else if (line.end_ms && line.end_ms / 1000 > word.start) {
+						word.end = line.end_ms / 1000;
+					} else {
+						word.end = word.start + 0.35;
+					}
+				}
+			}
+		}
+	});
+
+	const rawMapped = lines.map(line => {
 		const totalSec = (line.start_ms || 0) / 1000;
 		const m = Math.floor(totalSec / 60);
 		const s = (totalSec % 60).toFixed(2);
 		const ts = `${m < 10 ? '0' : ''}${m}:${parseFloat(s) < 10 ? '0' : ''}${s}`;
 		return [ts, line.text || '', line.words || []];
 	});
+
+	return normalizeWordSyncLyrics(rawMapped);
 }
 
 /**
