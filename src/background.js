@@ -697,7 +697,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                 var lyricElements = [];
                 const mediaElem = document.querySelector('video');
 
-                // Ensure live gradient-opacity & progressive blur styles apply immediately even without a full extension reload
+                // Ensure live gradient-opacity, progressive blur & word-sync sweep styles apply immediately
                 let liveBlurStyle = document.getElementById('ytf-live-blur-style');
                 if (!liveBlurStyle) {
                     liveBlurStyle = document.createElement('style');
@@ -746,6 +746,29 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                             animation-timeline: view(block) !important;
                             animation-range: cover 8% cover 92% !important;
                         }
+                    }
+                    .yf-word-upcoming {
+                        color: rgba(255, 255, 255, 0.38) !important;
+                        -webkit-text-fill-color: currentColor !important;
+                        background: none !important;
+                        opacity: 0.75 !important;
+                    }
+                    .yf-word-current {
+                        opacity: 1 !important;
+                        font-weight: 600 !important;
+                        background-image: linear-gradient(90deg, #ffffff 0%, #ffffff var(--yf-word-fill, 0%), rgba(255, 255, 255, 0.38) calc(var(--yf-word-fill, 0%) + 6%), rgba(255, 255, 255, 0.38) 100%) !important;
+                        -webkit-background-clip: text !important;
+                        background-clip: text !important;
+                        -webkit-text-fill-color: transparent !important;
+                        color: transparent !important;
+                        filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.38)) !important;
+                    }
+                    .yf-word-sung {
+                        color: #ffffff !important;
+                        -webkit-text-fill-color: currentColor !important;
+                        background: none !important;
+                        opacity: 1 !important;
+                        font-weight: 600 !important;
                     }
                 `;
 
@@ -2456,6 +2479,34 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                 var currentLyricIndex = -1;
                 var currentActiveElement;
 
+                function updateWordSyncLine(lineEl, currentTime, offset) {
+                    if (!lineEl || !lineEl.classList.contains('has-word-sync')) return;
+                    const wordSpans = lineEl._cachedWords || (lineEl._cachedWords = lineEl.querySelectorAll('.yf-word'));
+                    for (let i = 0; i < wordSpans.length; i++) {
+                        const wSpan = wordSpans[i];
+                        const wStart = (wSpan._wStart !== undefined ? wSpan._wStart : (wSpan._wStart = parseFloat(wSpan.getAttribute('data-start')) || 0)) - offset;
+                        const wEnd = (wSpan._wEnd !== undefined ? wSpan._wEnd : (wSpan._wEnd = parseFloat(wSpan.getAttribute('data-end')) || 0)) - offset;
+                        if (currentTime >= wEnd) {
+                            if (wSpan.className !== 'yf-word yf-word-sung') {
+                                wSpan.className = 'yf-word yf-word-sung';
+                                wSpan.style.removeProperty('--yf-word-fill');
+                            }
+                        } else if (currentTime >= wStart && currentTime < wEnd) {
+                            if (wSpan.className !== 'yf-word yf-word-current') {
+                                wSpan.className = 'yf-word yf-word-current';
+                            }
+                            const dur = Math.max(0.02, wEnd - wStart);
+                            const pct = Math.min(100, Math.max(0, ((currentTime - wStart) / dur) * 100));
+                            wSpan.style.setProperty('--yf-word-fill', pct.toFixed(1) + '%');
+                        } else {
+                            if (wSpan.className !== 'yf-word yf-word-upcoming') {
+                                wSpan.className = 'yf-word yf-word-upcoming';
+                                wSpan.style.removeProperty('--yf-word-fill');
+                            }
+                        }
+                    }
+                }
+
                 function syncLyricsDisplay(lyricsArr, currentTime, offset, lyricElements, immediate = false) {
                     if (!lyricsArr || lyricsArr.length === 0 || !lyricElements || lyricElements.length === 0) return;
                     const activeIdx = findActiveLyricIndex(lyricsArr, currentTime, offset);
@@ -2480,21 +2531,9 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         }
                     }
 
-                    // Real-time word-level synchronization for active line
+                    // Real-time word-level progressive sweep for active line
                     if (el && el.classList.contains('has-word-sync')) {
-                        const wordSpans = el.querySelectorAll('.yf-word');
-                        for (let i = 0; i < wordSpans.length; i++) {
-                            const wSpan = wordSpans[i];
-                            const wStart = parseFloat(wSpan.getAttribute('data-start')) - offset;
-                            const wEnd = parseFloat(wSpan.getAttribute('data-end')) - offset;
-                            if (currentTime >= wEnd) {
-                                if (wSpan.className !== 'yf-word yf-word-sung') wSpan.className = 'yf-word yf-word-sung';
-                            } else if (currentTime >= wStart && currentTime < wEnd) {
-                                if (wSpan.className !== 'yf-word yf-word-current') wSpan.className = 'yf-word yf-word-current';
-                            } else {
-                                if (wSpan.className !== 'yf-word yf-word-upcoming') wSpan.className = 'yf-word yf-word-upcoming';
-                            }
-                        }
+                        updateWordSyncLine(el, currentTime, offset);
                     }
 
                     if (currentLyricIndex !== activeIdx || immediate) {
@@ -2503,14 +2542,20 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                             for (let l = 0; l < lyricElements.length; l++) {
                                 const lineEl = lyricElements[l];
                                 if (!lineEl || !lineEl.classList.contains('has-word-sync') || l === activeIdx) continue;
-                                const words = lineEl.querySelectorAll('.yf-word');
+                                const words = lineEl._cachedWords || (lineEl._cachedWords = lineEl.querySelectorAll('.yf-word'));
                                 if (l < activeIdx) {
                                     for (let w = 0; w < words.length; w++) {
-                                        if (words[w].className !== 'yf-word yf-word-sung') words[w].className = 'yf-word yf-word-sung';
+                                        if (words[w].className !== 'yf-word yf-word-sung') {
+                                            words[w].className = 'yf-word yf-word-sung';
+                                            words[w].style.removeProperty('--yf-word-fill');
+                                        }
                                     }
                                 } else {
                                     for (let w = 0; w < words.length; w++) {
-                                        if (words[w].className !== 'yf-word yf-word-upcoming') words[w].className = 'yf-word yf-word-upcoming';
+                                        if (words[w].className !== 'yf-word yf-word-upcoming') {
+                                            words[w].className = 'yf-word yf-word-upcoming';
+                                            words[w].style.removeProperty('--yf-word-fill');
+                                        }
                                     }
                                 }
                             }
@@ -2556,6 +2601,50 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     currentActiveElement = null;
 
                     let isLyricsVisible = true;
+                    let wordRafId = null;
+
+                    const stopWordSyncRaf = () => {
+                        if (wordRafId !== null) {
+                            cancelAnimationFrame(wordRafId);
+                            wordRafId = null;
+                        }
+                    };
+
+                    const tickWordSyncRaf = () => {
+                        wordRafId = null;
+                        if (
+                            !mediaElem ||
+                            mediaElem.paused ||
+                            !isLyricsVisible ||
+                            document.hidden ||
+                            container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS) ||
+                            !currentActiveElement ||
+                            !currentActiveElement.classList.contains('has-word-sync')
+                        ) {
+                            return;
+                        }
+                        var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
+                        updateWordSyncLine(currentActiveElement, mediaElem.currentTime, offset);
+                        wordRafId = requestAnimationFrame(tickWordSyncRaf);
+                    };
+
+                    const startWordSyncRaf = () => {
+                        if (
+                            wordRafId === null &&
+                            mediaElem &&
+                            !mediaElem.paused &&
+                            isLyricsVisible &&
+                            !document.hidden &&
+                            !container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS) &&
+                            currentActiveElement &&
+                            currentActiveElement.classList.contains('has-word-sync')
+                        ) {
+                            wordRafId = requestAnimationFrame(tickWordSyncRaf);
+                        }
+                    };
+
+                    mediaElem._stopWordSyncRaf = stopWordSyncRaf;
+
                     const lyricsObserver = new IntersectionObserver((entries) => {
                         const wasVisible = isLyricsVisible;
                         isLyricsVisible = entries[0]?.isIntersecting ?? false;
@@ -2563,6 +2652,9 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         if (isLyricsVisible && !wasVisible && mediaElem) {
                             var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                             syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, true);
+                            startWordSyncRaf();
+                        } else if (!isLyricsVisible) {
+                            stopWordSyncRaf();
                         }
                     }, { threshold: 0.01 });
 
@@ -2573,6 +2665,9 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         if (!document.hidden && isLyricsVisible && mediaElem) {
                             var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                             syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, true);
+                            startWordSyncRaf();
+                        } else {
+                            stopWordSyncRaf();
                         }
                     };
                     document.addEventListener('visibilitychange', onVisibilityChange);
@@ -2582,14 +2677,23 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         if (!mediaElem || !lyricsArr || !lyricElements || lyricElements.length === 0) return;
                         var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                         syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements, immediate);
+                        startWordSyncRaf();
                     };
 
                     mediaElem._lyricsSyncHandler = function () {
                         if (!isLyricsVisible || document.hidden || container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) return;
                         var offset = parseFloat(mediaElem.getAttribute('ytf-data-offset')) || 0;
                         syncLyricsDisplay(lyricsArr, mediaElem.currentTime, offset, lyricElements);
+                        startWordSyncRaf();
                     };
+                    mediaElem._lyricsPlayHandler = () => startWordSyncRaf();
+                    mediaElem._lyricsPauseHandler = () => stopWordSyncRaf();
+
                     mediaElem.addEventListener('timeupdate', mediaElem._lyricsSyncHandler);
+                    mediaElem.addEventListener('play', mediaElem._lyricsPlayHandler);
+                    mediaElem.addEventListener('playing', mediaElem._lyricsPlayHandler);
+                    mediaElem.addEventListener('pause', mediaElem._lyricsPauseHandler);
+                    mediaElem.addEventListener('ended', mediaElem._lyricsPauseHandler);
 
                     // Highlight and scroll to the nearest active lyric immediately and after layout settles
                     if (!container.classList.contains(YTF_SEL.CONTAINER.COLLAPSED_CLASS)) {
@@ -2609,6 +2713,10 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
                 function detachLyricsSync(mediaElem) {
                     if (mediaElem) {
+                        if (typeof mediaElem._stopWordSyncRaf === 'function') {
+                            mediaElem._stopWordSyncRaf();
+                            delete mediaElem._stopWordSyncRaf;
+                        }
                         if (mediaElem._lyricsObserver) {
                             mediaElem._lyricsObserver.disconnect();
                             delete mediaElem._lyricsObserver;
@@ -2620,6 +2728,16 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         if (mediaElem._lyricsSyncHandler) {
                             mediaElem.removeEventListener('timeupdate', mediaElem._lyricsSyncHandler);
                             delete mediaElem._lyricsSyncHandler;
+                        }
+                        if (mediaElem._lyricsPlayHandler) {
+                            mediaElem.removeEventListener('play', mediaElem._lyricsPlayHandler);
+                            mediaElem.removeEventListener('playing', mediaElem._lyricsPlayHandler);
+                            delete mediaElem._lyricsPlayHandler;
+                        }
+                        if (mediaElem._lyricsPauseHandler) {
+                            mediaElem.removeEventListener('pause', mediaElem._lyricsPauseHandler);
+                            mediaElem.removeEventListener('ended', mediaElem._lyricsPauseHandler);
+                            delete mediaElem._lyricsPauseHandler;
                         }
                         if (mediaElem._syncCurrentLyric) {
                             delete mediaElem._syncCurrentLyric;

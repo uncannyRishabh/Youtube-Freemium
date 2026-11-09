@@ -1437,7 +1437,7 @@ html:not([dark]) .yf-search-spinner,
 	}
 }
 
-/* --- Word-Level Synchronization Styles --- */
+/* --- Word-Level Synchronization Styles (Apple Music Left-to-Right Sweep) --- */
 .lyric-line.has-word-sync {
 	cursor: pointer;
 	column-gap: 0;
@@ -1447,44 +1447,77 @@ html:not([dark]) .yf-search-spinner,
 
 .yf-word {
 	display: inline-block;
-	transition: color 0.12s ease, opacity 0.12s ease, text-shadow 0.12s ease;
 	white-space: pre;
+	transition: opacity 0.12s ease, transform 0.15s ease;
 }
 
 .yf-word-upcoming {
-	color: rgba(255, 255, 255, 0.45);
-	opacity: 0.55;
+	color: rgba(255, 255, 255, 0.38);
+	-webkit-text-fill-color: currentColor;
+	background: none;
+	opacity: 0.75;
+}
+
+.yf-word-current {
+	--yf-word-fill: 0%;
+	opacity: 1 !important;
+	font-weight: 600;
+	background-image: linear-gradient(
+		90deg,
+		#ffffff 0%,
+		#ffffff var(--yf-word-fill, 0%),
+		rgba(255, 255, 255, 0.38) calc(var(--yf-word-fill, 0%) + 6%),
+		rgba(255, 255, 255, 0.38) 100%
+	);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent !important;
+	filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.38));
+	will-change: background-image;
 }
 
 .yf-word-sung {
 	color: #ffffff !important;
+	-webkit-text-fill-color: currentColor;
+	background: none;
 	opacity: 1 !important;
-}
-
-.yf-word-current {
-	color: #ffffff !important;
-	opacity: 1 !important;
-	text-shadow: 0 0 10px rgba(255, 255, 255, 0.85);
 	font-weight: 600;
 }
 
 html:not([dark]) .yf-word-upcoming,
 .yf-container[data-theme="light"] .yf-word-upcoming {
-	color: var(--yt-spec-text-secondary, #606060);
-	opacity: 0.55;
+	color: rgba(15, 15, 15, 0.38);
+	-webkit-text-fill-color: currentColor;
+	background: none;
+	opacity: 0.75;
+}
+
+html:not([dark]) .yf-word-current,
+.yf-container[data-theme="light"] .yf-word-current {
+	--yf-word-fill: 0%;
+	opacity: 1 !important;
+	font-weight: 600;
+	background-image: linear-gradient(
+		90deg,
+		var(--yt-spec-text-primary, #0f0f0f) 0%,
+		var(--yt-spec-text-primary, #0f0f0f) var(--yf-word-fill, 0%),
+		rgba(15, 15, 15, 0.38) calc(var(--yf-word-fill, 0%) + 6%),
+		rgba(15, 15, 15, 0.38) 100%
+	);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	color: transparent !important;
+	filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.14));
 }
 
 html:not([dark]) .yf-word-sung,
 .yf-container[data-theme="light"] .yf-word-sung {
 	color: var(--yt-spec-text-primary, #0f0f0f) !important;
+	-webkit-text-fill-color: currentColor;
+	background: none;
 	opacity: 1 !important;
-}
-
-html:not([dark]) .yf-word-current,
-.yf-container[data-theme="light"] .yf-word-current {
-	color: var(--yt-spec-text-primary, #0f0f0f) !important;
-	opacity: 1 !important;
-	text-shadow: 0 0 8px rgba(0, 0, 0, 0.22);
 	font-weight: 600;
 }
 
