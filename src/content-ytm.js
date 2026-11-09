@@ -107,8 +107,30 @@
 	 * Detects whether YouTube Music has changed songs and notifies background script.
 	 */
 	function notifyTrackChange() {
-		const currentUid = getUrlVideoID(window.location.href);
-		const { title, artist } = extractTrackMetadata();
+		let urlUid = null;
+		try {
+			const urlObj = new URL(window.location.href);
+			urlUid = urlObj.searchParams.get('v');
+		} catch (e) {}
+
+		const moviePlayer = document.getElementById('movie_player');
+		const mpData = (moviePlayer && typeof moviePlayer.getVideoData === 'function')
+			? moviePlayer.getVideoData()
+			: null;
+
+		// Guard: If URL specifies a video ID but moviePlayer is still holding the previous track's video ID,
+		// the player has not completed switching yet. Wait for the transition to avoid stale metadata broadcast.
+		if (urlUid && mpData?.video_id && mpData.video_id !== urlUid) {
+			return;
+		}
+
+		let currentUid = (mpData && mpData.video_id) ? mpData.video_id : urlUid;
+		let title = (mpData && mpData.title) ? cleanField(mpData.title) : '';
+		let artist = (mpData && mpData.author) ? cleanField(mpData.author) : '';
+
+		const domMeta = extractTrackMetadata();
+		if (!title) title = domMeta.title;
+		if (!artist) artist = domMeta.artist;
 
 		if (!title) {
 			return;
@@ -121,9 +143,12 @@
 
 		lastReportedSignature = currentSignature;
 
-		// Immediately reflect searching indicator on live container if present
+		// Immediately reflect searching indicator and reset stale data-uid on live container if present
 		const container = document.querySelector(YTM_SELECTORS.YTF.CONTAINER_CLASS);
 		if (container) {
+			container.removeAttribute('data-uid');
+			container._currentUid = null;
+
 			const progressbar = container.querySelector(YTM_SELECTORS.YTF.PROGRESS_BAR);
 			const nowPlaying = container.querySelector(YTM_SELECTORS.YTF.NOW_PLAYING_LABEL);
 			const nowPlayingInput = container.querySelector(YTM_SELECTORS.YTF.NOW_PLAYING_INPUT);
@@ -165,9 +190,19 @@
 	}
 
 	// 1. Listen to YouTube Music navigation events
+	window.addEventListener('yt-navigate-start', () => {
+		chrome.runtime.sendMessage({ type: 'YOUTUBE_NAVIGATE_START' });
+	});
 	window.addEventListener('yt-navigate-finish', debouncedTrackChange);
 	window.addEventListener('yt-page-data-updated', debouncedTrackChange);
 	window.addEventListener('popstate', debouncedTrackChange);
+
+	// Also catch video element metadata changes directly
+	document.addEventListener('loadedmetadata', (e) => {
+		if (e.target && e.target.tagName === 'VIDEO') {
+			debouncedTrackChange();
+		}
+	}, true);
 
 	// 2. Observe mutations on the persistent YouTube Music player bar
 	let playerBarObserver = null;

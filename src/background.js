@@ -335,7 +335,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
         const session = getTabSession(tabId);
         session.process = true;
         session.reqUrl = url;
-        const targetUid = getVideoID(url);
+        const targetUid = getVideoID(url) || preloadedMetadata?.uid;
         session.uid = targetUid;
         session.platform = preloadedMetadata?.platform || (url.includes('music.youtube.com') ? 'ytmusic' : 'youtube');
 
@@ -365,10 +365,15 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         const checkImmediate = () => {
                             const currentUrl = window.location.href;
                             if (isYtMusic) {
+                                const moviePlayer = document.getElementById('movie_player');
+                                const mpData = moviePlayer?.getVideoData ? moviePlayer.getVideoData() : null;
+                                if (expectedUid && mpData?.video_id && mpData.video_id !== expectedUid) {
+                                    return false; // Still on previous track!
+                                }
                                 const bar = document.querySelector(YTM_SEL.PLAYER_BAR.ROOT);
                                 const titleEl = bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE);
-                                const titleText = titleEl?.getAttribute('title') || titleEl?.textContent?.trim();
-                                return Boolean(titleText && titleText.length > 0);
+                                const titleText = mpData?.title || titleEl?.getAttribute('title') || titleEl?.textContent?.trim();
+                                return Boolean(titleText && titleText.length > 0 && (!expectedUid || !mpData?.video_id || mpData.video_id === expectedUid));
                             }
 
                             if (!currentUrl.includes(expectedUid)) {
@@ -463,6 +468,9 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     }
                 }
 
+                container.removeAttribute('data-uid');
+                container._currentUid = null;
+
                 var npt = container.querySelector(YTF_SEL.HEADER.NOW_PLAYING_INPUT);
                 if (npt) {
                     npt.value = searchTitle || '';
@@ -502,7 +510,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
     const runInContext = async (url, tabId, preloadedMetadata = null) => {
         const session = getTabSession(tabId);
-        var uid = getVideoID(url);
+        var uid = getVideoID(url) || preloadedMetadata?.uid;
         if (!uid) return;
 
         const platform = preloadedMetadata?.platform || (url.includes('music.youtube.com') ? 'ytmusic' : 'youtube');
@@ -575,6 +583,8 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         timeCreated,
                         lastAccessed: timeCreated,
                         title,
+                        channel,
+                        artist: channel,
                         source,
                         synced,
                         offset,
@@ -613,7 +623,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     title = displayTitle || val;
 
                     if (message === 'OK' && lyrics && lyrics.length > 0 && !searchSignal.aborted && session.uid === uid) {
-                        saveObject(uid, { lyrics, message, scroll: 0, timeCreated, lastAccessed: timeCreated, title, source, synced, offset });
+                        saveObject(uid, { lyrics, message, scroll: 0, timeCreated, lastAccessed: timeCreated, title, channel, artist: channel, source, synced, offset });
                     }
                 }
             } else if (!isEmpty(obj)) {
@@ -2659,20 +2669,34 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
         try {
             const results = await chrome.scripting.executeScript({
                 target: { tabId },
-                function: (YTM_SEL) => {
+                function: (expectedUid, YTM_SEL) => {
+                    const moviePlayer = document.getElementById('movie_player');
+                    const mpData = moviePlayer?.getVideoData ? moviePlayer.getVideoData() : null;
                     const bar = document.querySelector(YTM_SEL.PLAYER_BAR.ROOT);
-                    let title = bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE)?.getAttribute('title') ||
+                    let title = '';
+                    let channel = '';
+
+                    if (mpData && (!expectedUid || mpData.video_id === expectedUid)) {
+                        title = mpData.title || '';
+                        channel = mpData.author || '';
+                    }
+
+                    if (!title) {
+                        title = bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE)?.getAttribute('title') ||
                                 bar?.querySelector(YTM_SEL.PLAYER_BAR.TITLE)?.textContent?.trim() ||
                                 navigator.mediaSession?.metadata?.title || '';
-                    let channel = bar?.querySelector(YTM_SEL.PLAYER_BAR.ARTIST_LINK)?.textContent?.trim() ||
+                    }
+                    if (!channel) {
+                        channel = bar?.querySelector(YTM_SEL.PLAYER_BAR.ARTIST_LINK)?.textContent?.trim() ||
                                   navigator.mediaSession?.metadata?.artist || '';
+                    }
                     if (!channel) {
                         const byline = bar?.querySelector(YTM_SEL.PLAYER_BAR.BYLINE)?.textContent?.trim() || '';
                         channel = byline.split('•')[0]?.trim() || '';
                     }
                     return { isMusic: true, title, channel };
                 },
-                args: [YTM_SELECTORS]
+                args: [uid, YTM_SELECTORS]
             });
             return results?.[0]?.result || { isMusic: true, title: '', channel: '' };
         } catch (e) {

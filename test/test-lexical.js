@@ -52,4 +52,24 @@ const scoreDiff = calculateLexicalScore(
 console.log('Score Diff (Taken for a Fool vs Reptilia):', scoreDiff);
 assert(scoreDiff < 0.6, `Score should be < 0.6, got ${scoreDiff}`);
 
+// Test 6: Single-word title must NOT match longer candidate containing that word with different artist
+const scoreNever = calculateLexicalScore(
+    'NEVER',
+    'JID',
+    'I Was Never There - The Weeknd',
+    ''
+);
+console.log('Score Never vs I Was Never There:', scoreNever);
+assert(scoreNever === 0, `Score should be 0, got ${scoreNever}`);
+
+// Test 7: Songs by different artists must NEVER match even with similar words
+const scoreDiffArtist = calculateLexicalScore(
+    'Heart-Shaped Box',
+    'Nirvana',
+    'Heart-Shaped Box',
+    'Some Other Artist'
+);
+console.log('Score Diff Artist:', scoreDiffArtist);
+assert(scoreDiffArtist === 0, `Score should be 0, got ${scoreDiffArtist}`);
+
 console.log('\nAll lexical unit tests passed successfully!');

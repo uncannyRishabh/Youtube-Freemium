@@ -977,7 +977,7 @@ export function normalizeSongTitle(str) {
 		.toLowerCase()
 		.replace(/[\u2010-\u2015\u2212]/g, '-')
 		.replace(/\[[^\]]*\]/g, ' ')
-		.replace(/\((?:official\s*(?:video|audio|music\s*video|lyric\s*video)?|lyrics?|visualizer|remaster(?:ed)?(?:\s*\d+)?|audio|hd|4k)[^\)]*\)/gi, ' ')
+		.replace(/\((?:(?:\d{4}\s*)?remaster(?:ed)?(?:\s*(?:version|\d+))?|official\s*(?:video|audio|music\s*video|lyric\s*video)?|lyrics?|visualizer|audio|hd|4k)[^\)]*\)/gi, ' ')
 		.replace(/\b(official\s*(?:music\s*)?video|official\s*audio|lyric\s*video|remastered|remaster)\b/gi, ' ')
 		.replace(/\b(feat|ft)\b\.?[^\s-]+/gi, ' ')
 		.replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -1004,8 +1004,28 @@ export function normalizeArtistName(str) {
  * Returns a value between 0.0 and 1.0.
  */
 export function calculateLexicalScore(targetTitle, targetArtist, candidateTitle, candidateArtist) {
-	const normTTitle = normalizeSongTitle(targetTitle);
-	const normCTitle = normalizeSongTitle(candidateTitle);
+	let tTitle = targetTitle || '';
+	let tArtist = targetArtist || '';
+	if (!tArtist && tTitle.includes(' - ')) {
+		const parts = tTitle.split(/\s+-\s+/);
+		if (parts.length >= 2) {
+			tTitle = parts[0];
+			tArtist = parts.slice(1).join(' - ');
+		}
+	}
+
+	let cTitle = candidateTitle || '';
+	let cArtist = candidateArtist || '';
+	if (!cArtist && cTitle.includes(' - ')) {
+		const parts = cTitle.split(/\s+-\s+/);
+		if (parts.length >= 2) {
+			cTitle = parts[0];
+			cArtist = parts.slice(1).join(' - ');
+		}
+	}
+
+	const normTTitle = normalizeSongTitle(tTitle);
+	const normCTitle = normalizeSongTitle(cTitle);
 	if (!normTTitle || !normCTitle) return 0;
 
 	// Title word token matching
@@ -1016,8 +1036,14 @@ export function calculateLexicalScore(targetTitle, targetArtist, candidateTitle,
 	if (normTTitle === normCTitle) {
 		titleScore = 1.0;
 	} else if (normTTitle.includes(normCTitle) || normCTitle.includes(normTTitle)) {
-		titleScore = 0.9;
-	} else if (tTokens.size > 0 && cTokens.size > 0) {
+		const shorterLen = Math.min(normTTitle.length, normCTitle.length);
+		const longerLen = Math.max(normTTitle.length, normCTitle.length);
+		if (shorterLen / longerLen >= 0.75) {
+			titleScore = 0.9;
+		}
+	}
+
+	if (titleScore === 0 && tTokens.size > 0 && cTokens.size > 0) {
 		let intersection = 0;
 		for (const tok of tTokens) {
 			if (cTokens.has(tok)) intersection++;
@@ -1029,10 +1055,10 @@ export function calculateLexicalScore(targetTitle, targetArtist, candidateTitle,
 	if (titleScore < 0.6) return 0;
 
 	// Artist matching
-	const normTArtist = normalizeArtistName(targetArtist);
-	const normCArtist = normalizeArtistName(candidateArtist);
+	const normTArtist = normalizeArtistName(tArtist);
+	const normCArtist = normalizeArtistName(cArtist);
 
-	let artistScore = 0.5; // Default neutral if artist info is missing
+	let artistScore = 0.5; // Neutral if artist info is missing
 	if (normTArtist && normCArtist) {
 		if (normTArtist === normCArtist || normTArtist.includes(normCArtist) || normCArtist.includes(normTArtist)) {
 			artistScore = 1.0;
@@ -1046,11 +1072,12 @@ export function calculateLexicalScore(targetTitle, targetArtist, candidateTitle,
 			if (tArtTokens.size > 0 && artInter > 0) {
 				artistScore = artInter / Math.min(tArtTokens.size, cArtTokens.size);
 			} else {
-				artistScore = 0.1;
+				// Artists are known and completely different: never match!
+				return 0;
 			}
 		}
 	} else if (!normTArtist || !normCArtist) {
-		artistScore = 0.8;
+		artistScore = 0.5;
 	}
 
 	return (titleScore * 0.7) + (artistScore * 0.3);
@@ -1086,7 +1113,7 @@ export async function findSavedLyricsByLexicalSearch(targetTitle, targetArtist) 
 				const candidateArtist = record.channel || record.artist || '';
 
 				const score = calculateLexicalScore(targetTitle, targetArtist, candidateTitle, candidateArtist);
-				if (score >= 0.75 && score > highestScore) {
+				if (score >= 0.85 && score > highestScore) {
 					highestScore = score;
 					bestMatch = { ...record, originalUid: key };
 				}
