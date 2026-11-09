@@ -453,6 +453,123 @@ export function timestampToSeconds(ts) {
 }
 
 /**
+ * Determines the synchronization tier of a search result item.
+ * Tier 2: Word-level synced lyrics (hasWordSync: true or wordSynced: true)
+ * Tier 1: Line-by-line synced lyrics (syncedLyrics exists or synced: true)
+ * Tier 0: Plain lyrics or instrumental
+ */
+export function getSyncTier(item) {
+	if (!item) return 0;
+	if (item.hasWordSync === true || item.wordSynced === true) return 2;
+	if (typeof item.syncedLyrics === 'string' && item.syncedLyrics.trim().length > 0) return 1;
+	if (item.synced === true) return 1;
+	return 0;
+}
+
+/**
+ * Sorts lyrics search results with wordSynced at the very top of the list,
+ * followed by duration closeness to the video, synced lyrics, and plain lyrics.
+ */
+export function sortResultsByDuration(results, videoDuration = 0) {
+	if (!Array.isArray(results)) return [];
+	return results.sort((a, b) => {
+		// Priority 1: Sync Tier (Tier 2: Word-synced > Tier 1: Synced > Tier 0: Plain)
+		const aTier = getSyncTier(a);
+		const bTier = getSyncTier(b);
+		if (aTier !== bTier) {
+			return bTier - aTier;
+		}
+
+		// Priority 2: Within the same tier, sort by duration difference to video length
+		const aDur = typeof a.duration === 'number' && !isNaN(a.duration) ? a.duration : 0;
+		const bDur = typeof b.duration === 'number' && !isNaN(b.duration) ? b.duration : 0;
+
+		if (videoDuration > 0) {
+			const aDiff = aDur > 0 ? Math.abs(aDur - videoDuration) : 999999;
+			const bDiff = bDur > 0 ? Math.abs(bDur - videoDuration) : 999999;
+
+			if (Math.abs(aDiff - bDiff) > 2) {
+				return aDiff - bDiff;
+			}
+		}
+
+		// Priority 3: Fallback within same tier - prefer non-empty plain lyrics
+		const aHasPlain = !!(a.plainLyrics && a.plainLyrics.trim());
+		const bHasPlain = !!(b.plainLyrics && b.plainLyrics.trim());
+		if (aHasPlain && !bHasPlain) return -1;
+		if (!aHasPlain && bHasPlain) return 1;
+
+		return 0;
+	});
+}
+
+/**
+ * In-memory search results cache with TTL and LRU eviction.
+ * Does NOT use localStorage or persistent storage.
+ */
+export class SearchMemoryCache {
+	constructor(maxEntries = 100, defaultTtlMs = 240000) {
+		this.cache = new Map();
+		this.maxEntries = maxEntries;
+		this.defaultTtlMs = defaultTtlMs; // 4 minutes default (standard song length)
+	}
+
+	_normalizeKey(query) {
+		return typeof query === 'string'
+			? query.trim().toLowerCase().replace(/\s+/g, ' ')
+			: '';
+	}
+
+	get(query) {
+		const key = this._normalizeKey(query);
+		if (!key) return null;
+
+		const entry = this.cache.get(key);
+		if (!entry) return null;
+
+		if (Date.now() > entry.expiry) {
+			this.cache.delete(key);
+			return null;
+		}
+
+		// Refresh position in Map for LRU
+		this.cache.delete(key);
+		this.cache.set(key, entry);
+		return entry.results;
+	}
+
+	set(query, results, ttlMs) {
+		const key = this._normalizeKey(query);
+		if (!key || !Array.isArray(results)) return;
+
+		const ttl = typeof ttlMs === 'number' && ttlMs > 0 ? ttlMs : this.defaultTtlMs;
+		const expiry = Date.now() + ttl;
+
+		// Evict oldest entry if at capacity
+		if (this.cache.size >= this.maxEntries && !this.cache.has(key)) {
+			const oldestKey = this.cache.keys().next().value;
+			this.cache.delete(oldestKey);
+		}
+
+		this.cache.set(key, {
+			results,
+			expiry,
+			createdAt: Date.now()
+		});
+	}
+
+	has(query) {
+		return this.get(query) !== null;
+	}
+
+	clear() {
+		this.cache.clear();
+	}
+}
+
+export const searchMemoryCache = new SearchMemoryCache(100, 240000);
+
+/**
  * Normalizes and consolidates word-sync lyrics.
  * If raw lyrics contain full lines followed by individual fragmented word lines (e.g. from LRCLIB YAML misparsing),
  * this detects the fragmentation and collapses the word lines into wordsArray on the parent line.

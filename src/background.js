@@ -1,4 +1,4 @@
-import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml, normalizeWordSyncLyrics, findSavedLyricsByLexicalSearch } from './utils.js';
+import { saveObject, getFromStorage, isEmpty, getVideoID, queryBuilder, getDefaultUserPrefs, fuzzyProfanityDictionary, findLyricsfromSources, searchLrclibRecords, searchA2ZRecords, fetchLrclibRecordById, parseLyricsfileYaml, normalizeWordSyncLyrics, searchMemoryCache } from './utils.js';
 import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
 (() => {
@@ -224,6 +224,13 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
             case 'SEARCH_LRCLIB': {
                 const query = val || obj.query;
                 const tabId = sender.tab?.id;
+
+                const cached = searchMemoryCache.get(query);
+                if (cached) {
+                    sendResponse({ success: true, rateLimited: false, results: cached, fromCache: true });
+                    return true;
+                }
+
                 Promise.allSettled([
                     searchLrclibRecords(query),
                     searchA2ZRecords(tabId, query)
@@ -236,6 +243,8 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     if (lrcRes && lrcRes.rateLimited && combined.length === 0) {
                         sendResponse({ success: false, rateLimited: true, retryAfter: lrcRes.retryAfter, results: [] });
                     } else {
+                        // Cache search results in memory for the duration of a song (4 min / 240s)
+                        searchMemoryCache.set(query, combined, 240000);
                         sendResponse({ success: true, rateLimited: false, results: combined });
                     }
                 }).catch((err) => {
@@ -566,36 +575,11 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
             if (!hasUserSelection && ((!isEmpty(obj) && obj[uid]?.title && obj[uid]?.title != val && obj[uid]?.title != displayTitle) || (isEmpty(obj) && val))) {
                 await injectSearchingState(tabId, displayTitle, platform, uid);
 
-                // 1. Lexical search against all saved lyrics in local database to reuse cross-platform
-                let lexicalMatch = await findSavedLyricsByLexicalSearch(val, channel);
-                if (lexicalMatch && lexicalMatch.lyrics && lexicalMatch.message === 'OK') {
-                    lyrics = normalizeWordSyncLyrics(lexicalMatch.lyrics);
-                    message = 'OK';
-                    title = lexicalMatch.title || displayTitle || val;
-                    source = lexicalMatch.source || 'Saved';
-                    synced = lexicalMatch.synced ?? false;
-                    offset = parseOffset(lexicalMatch.offset, 0.0);
-                    const timeCreated = Date.now();
-                    saveObject(uid, {
-                        lyrics,
-                        message,
-                        scroll: 0,
-                        timeCreated,
-                        lastAccessed: timeCreated,
-                        title,
-                        channel,
-                        artist: channel,
-                        source,
-                        synced,
-                        offset,
-                        reusedFromUid: lexicalMatch.originalUid
-                    });
-                } else {
-                    // 2. Local cache miss: search external lyric providers
-                    let result = await findLyricsfromSources(tabId, "", val, channel, searchSignal);
-                    if (searchSignal.aborted || session.uid !== uid) {
-                        return;
-                    }
+                // Local cache miss for this video: search external lyric providers directly
+                let result = await findLyricsfromSources(tabId, "", val, channel, searchSignal);
+                if (searchSignal.aborted || session.uid !== uid) {
+                    return;
+                }
 
                     let resultObject = JSON.parse(result[0]?.result || '{}');
                     const existingSavedOffset = (obj && obj[uid] && obj[uid].offset !== undefined && obj[uid].offset !== null)
@@ -625,7 +609,6 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     if (message === 'OK' && lyrics && lyrics.length > 0 && !searchSignal.aborted && session.uid === uid) {
                         saveObject(uid, { lyrics, message, scroll: 0, timeCreated, lastAccessed: timeCreated, title, channel, artist: channel, source, synced, offset });
                     }
-                }
             } else if (!isEmpty(obj)) {
                 lyrics = normalizeWordSyncLyrics(obj[uid]?.lyrics || '');
                 message = obj[uid]?.message || "NOK";
@@ -713,6 +696,58 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                 var intermediateContainer = container?.querySelector(YTF_SEL.CONTAINER.INTERMEDIATE);
                 var lyricElements = [];
                 const mediaElem = document.querySelector('video');
+
+                // Ensure live gradient-opacity & progressive blur styles apply immediately even without a full extension reload
+                let liveBlurStyle = document.getElementById('ytf-live-blur-style');
+                if (!liveBlurStyle) {
+                    liveBlurStyle = document.createElement('style');
+                    liveBlurStyle.id = 'ytf-live-blur-style';
+                    document.head.appendChild(liveBlurStyle);
+                }
+                liveBlurStyle.textContent = `
+                    .yf-blur-overlay { display: none !important; }
+                    .intermediateContainer::before,
+                    .intermediateContainer::after {
+                        content: '' !important;
+                        position: absolute !important;
+                        left: 0 !important;
+                        right: 0 !important;
+                        pointer-events: none !important;
+                        z-index: 6 !important;
+                        -webkit-backdrop-filter: none !important;
+                        backdrop-filter: none !important;
+                        -webkit-mask-image: none !important;
+                        mask-image: none !important;
+                    }
+                    .intermediateContainer::before {
+                        top: 0 !important;
+                        height: 110px !important;
+                        background: linear-gradient(to top, rgba(11, 7, 20, 0) 0%, rgba(11, 7, 20, 0.06) 25%, rgba(11, 7, 20, 0.18) 55%, rgba(11, 7, 20, 0.34) 80%, rgba(11, 7, 20, 0.5) 100%) !important;
+                    }
+                    .intermediateContainer::after {
+                        bottom: 0 !important;
+                        height: 140px !important;
+                        background: linear-gradient(to bottom, rgba(11, 7, 20, 0) 0%, rgba(11, 7, 20, 0.06) 25%, rgba(11, 7, 20, 0.18) 55%, rgba(11, 7, 20, 0.34) 80%, rgba(11, 7, 20, 0.5) 100%) !important;
+                    }
+                    .lyricContainer:not(.unsynced-lyrics) {
+                        -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0px, rgba(0, 0, 0, 0.45) 30px, rgba(0, 0, 0, 0.72) 65px, rgba(0, 0, 0, 0.92) 95px, #000 120px, #000 calc(100% - 145px), rgba(0, 0, 0, 0.92) calc(100% - 115px), rgba(0, 0, 0, 0.72) calc(100% - 80px), rgba(0, 0, 0, 0.45) calc(100% - 40px), rgba(0, 0, 0, 0.2) 100%) !important;
+                        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0px, rgba(0, 0, 0, 0.45) 30px, rgba(0, 0, 0, 0.72) 65px, rgba(0, 0, 0, 0.92) 95px, #000 120px, #000 calc(100% - 145px), rgba(0, 0, 0, 0.92) calc(100% - 115px), rgba(0, 0, 0, 0.72) calc(100% - 80px), rgba(0, 0, 0, 0.45) calc(100% - 40px), rgba(0, 0, 0, 0.2) 100%) !important;
+                    }
+                    @keyframes yfEdgeProgressiveBlur {
+                        0% { filter: blur(4px); }
+                        8% { filter: blur(2px); }
+                        18%, 80% { filter: blur(0px); }
+                        91% { filter: blur(2px); }
+                        100% { filter: blur(4px); }
+                    }
+                    @supports (animation-timeline: view()) {
+                        .lyricContainer:not(.unsynced-lyrics) .lyric-line:not(.active-lyric) {
+                            animation: yfEdgeProgressiveBlur linear both !important;
+                            animation-timeline: view(block) !important;
+                            animation-range: cover 8% cover 92% !important;
+                        }
+                    }
+                `;
 
                 if (container && isYtMusic) {
                     container.setAttribute('data-platform', 'ytmusic');
@@ -1735,13 +1770,27 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     return sortedLyrics;
                 }
 
+                function getSyncTier(item) {
+                    if (!item) return 0;
+                    if (item.hasWordSync === true || item.wordSynced === true) return 2;
+                    if (typeof item.syncedLyrics === 'string' && item.syncedLyrics.trim().length > 0) return 1;
+                    if (item.synced === true) return 1;
+                    return 0;
+                }
+
                 function sortResultsByDuration(results, videoDuration) {
                     return results.sort((a, b) => {
+                        // Priority 1: Sync Tier (Tier 2: Word-synced > Tier 1: Synced > Tier 0: Plain)
+                        const aTier = getSyncTier(a);
+                        const bTier = getSyncTier(b);
+                        if (aTier !== bTier) {
+                            return bTier - aTier;
+                        }
+
+                        // Priority 2: Within the same tier, sort by duration difference to video length
                         const aDur = typeof a.duration === 'number' && !isNaN(a.duration) ? a.duration : 0;
                         const bDur = typeof b.duration === 'number' && !isNaN(b.duration) ? b.duration : 0;
 
-                        // If videoDuration is available and valid (> 0):
-                        // Even when duration is < 59s, compare duration difference to video length
                         if (videoDuration > 0) {
                             const aDiff = aDur > 0 ? Math.abs(aDur - videoDuration) : 999999;
                             const bDiff = bDur > 0 ? Math.abs(bDur - videoDuration) : 999999;
@@ -1751,17 +1800,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                             }
                         }
 
-                        // Secondary priority: prefer tracks with word sync
-                        if (a.hasWordSync && !b.hasWordSync) return -1;
-                        if (!a.hasWordSync && b.hasWordSync) return 1;
-
-                        // Tertiary priority: prefer tracks with synced lyrics
-                        const aHasSynced = !!(a.syncedLyrics && a.syncedLyrics.trim());
-                        const bHasSynced = !!(b.syncedLyrics && b.syncedLyrics.trim());
-                        if (aHasSynced && !bHasSynced) return -1;
-                        if (!aHasSynced && bHasSynced) return 1;
-
-                        // Quaternary priority: prefer tracks with plain lyrics
+                        // Priority 3: Fallback within same tier - prefer non-empty plain lyrics
                         const aHasPlain = !!(a.plainLyrics && a.plainLyrics.trim());
                         const bHasPlain = !!(b.plainLyrics && b.plainLyrics.trim());
                         if (aHasPlain && !bHasPlain) return -1;
@@ -2014,7 +2053,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                                 a2zBadge.title = 'Plain lyrics from AZLyrics';
                                 a2zBadge.textContent = 'A2Z';
                                 metaDiv.appendChild(a2zBadge);
-                            } else if (item.hasWordSync) {
+                            } else if (item.hasWordSync === true || item.wordSynced === true) {
                                 var wsBadge = document.createElement('span');
                                 wsBadge.className = 'yf-wordsync-badge';
                                 wsBadge.title = 'Word-by-word synced lyrics';
@@ -2091,6 +2130,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                                     title: chosenTitle,
                                     synced: isSynced,
                                     hasWordSync: isWordSync,
+                                    wordSynced: isWordSync,
                                     source: selectedSource,
                                     offset: currentOffset
                                 }
@@ -2136,7 +2176,8 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         }
                     }
 
-                    if (item.hasWordSync) {
+                    const isWordSync = Boolean(item.hasWordSync === true || item.wordSynced === true);
+                    if (isWordSync) {
                         if (item.lyricsfile) {
                             const parsed = parseLyricsfileYaml(item.lyricsfile);
                             applySelectedLyrics(parsed.length > 0 ? parsed : parseLrc(item.syncedLyrics), true, parsed.length > 0);
@@ -2172,6 +2213,7 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                 }
 
                 let clientRateLimitUntil = 0;
+                container._tabSearchCache = container._tabSearchCache || new Map();
 
                 function performSearch(query) {
                     if (!query) return;
@@ -2183,12 +2225,27 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                         return;
                     }
 
+                    const videoElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
+                    const videoDuration = (videoElem && !isNaN(videoElem.duration) && videoElem.duration > 0)
+                        ? videoElem.duration
+                        : 0;
+
+                    const cacheKey = (query || '').trim().toLowerCase().replace(/\s+/g, ' ');
+                    const cachedEntry = container._tabSearchCache.get(cacheKey);
+
                     container.removeAttribute('data-manually-closed-uid');
                     try {
                         sessionStorage.removeItem('ytf-manually-closed-uid');
                     } catch (e) {}
 
                     openContainer();
+
+                    // Check in-memory tab search cache (valid for duration of the song, min 240s)
+                    if (cachedEntry && now < cachedEntry.expiry) {
+                        const sorted = sortResultsByDuration([...cachedEntry.results], videoDuration);
+                        renderFloatingSearchDropdown(sorted, query, videoDuration);
+                        return;
+                    }
 
                     var progressbar = container.querySelector(YTF_SEL.HEADER.PROGRESS_BAR);
                     if (progressbar) {
@@ -2233,11 +2290,12 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
 
                         clientRateLimitUntil = 0;
 
-                        // Fetch video duration from DOM (consider even when < 59s)
-                        const videoElem = document.querySelector(YT_SEL.PLAYER.VIDEO);
-                        const videoDuration = (videoElem && !isNaN(videoElem.duration) && videoElem.duration > 0)
-                            ? videoElem.duration
-                            : 0;
+                        // Cache search results in memory for the duration of the song (at least 240s / 4 minutes)
+                        const songTtlMs = Math.max(videoDuration * 1000, 240000);
+                        container._tabSearchCache.set(cacheKey, {
+                            results: response.results,
+                            expiry: Date.now() + songTtlMs
+                        });
 
                         const sorted = sortResultsByDuration(response.results, videoDuration);
                         renderFloatingSearchDropdown(sorted, query, videoDuration);
@@ -2440,15 +2498,28 @@ import { YT_SELECTORS, YTF_SELECTORS, YTM_SELECTORS } from './ytf-constants.js';
                     }
 
                     if (currentLyricIndex !== activeIdx || immediate) {
+                        // Ensure all words on lines prior to activeIdx remain permanently highlighted in white
+                        if (lyricElements) {
+                            for (let l = 0; l < lyricElements.length; l++) {
+                                const lineEl = lyricElements[l];
+                                if (!lineEl || !lineEl.classList.contains('has-word-sync') || l === activeIdx) continue;
+                                const words = lineEl.querySelectorAll('.yf-word');
+                                if (l < activeIdx) {
+                                    for (let w = 0; w < words.length; w++) {
+                                        if (words[w].className !== 'yf-word yf-word-sung') words[w].className = 'yf-word yf-word-sung';
+                                    }
+                                } else {
+                                    for (let w = 0; w < words.length; w++) {
+                                        if (words[w].className !== 'yf-word yf-word-upcoming') words[w].className = 'yf-word yf-word-upcoming';
+                                    }
+                                }
+                            }
+                        }
+
                         if (currentActiveElement && currentActiveElement !== el) {
                             currentActiveElement.classList.remove('active-lyric');
                             const oldDots = currentActiveElement.querySelectorAll('.am-interlude-dot');
                             oldDots.forEach(d => d.classList.remove('lit'));
-                            const oldWords = currentActiveElement.querySelectorAll('.yf-word');
-                            oldWords.forEach(w => {
-                                const wEnd = parseFloat(w.getAttribute('data-end')) - offset;
-                                w.className = (currentTime >= wEnd) ? 'yf-word yf-word-sung' : 'yf-word yf-word-upcoming';
-                            });
                         }
                         if (immediate && el?.parentElement) {
                             const prevActives = el.parentElement.querySelectorAll('.active-lyric');

@@ -48,6 +48,77 @@
 	width: 100%;
 }
 
+/* ==========================================================================
+   GRADIENT OPACITY & PROGRESSIVE EDGE BLUR (0% at Start -> 50% Max at End)
+   1. ::before (top) and ::after (bottom) apply a pure 0% -> 50% gradient tint
+      with NO backdrop-filter rectangle (eliminating the hard horizontal cut line
+      that slices glyphs in half at the overlay boundary in Chromium).
+   2. .lyricContainer applies a matching 0% -> 50% gradient opacity mask.
+   3. .lyric-line uses native CSS view() scroll-driven animation to gradually
+      ramp filter: blur() from 0px (0%) to 4px (50% max) in the top/bottom zones.
+   ========================================================================== */
+.intermediateContainer::before,
+.intermediateContainer::after {
+	content: '';
+	position: absolute;
+	left: 0;
+	right: 0;
+	pointer-events: none;
+	z-index: 6;
+}
+
+/* Top Gradient Div: 0% opacity where zone starts (bottom) -> 50% max where it ends (top) */
+.intermediateContainer::before {
+	top: 0;
+	height: 110px;
+	background: linear-gradient(
+		to top,
+		rgba(11, 7, 20, 0) 0%,
+		rgba(11, 7, 20, 0.06) 25%,
+		rgba(11, 7, 20, 0.18) 55%,
+		rgba(11, 7, 20, 0.34) 80%,
+		rgba(11, 7, 20, 0.5) 100%
+	);
+}
+
+/* Bottom Gradient Div: 0% opacity where zone starts (top) -> 50% max where it ends (bottom) */
+.intermediateContainer::after {
+	bottom: 0;
+	height: 140px;
+	background: linear-gradient(
+		to bottom,
+		rgba(11, 7, 20, 0) 0%,
+		rgba(11, 7, 20, 0.06) 25%,
+		rgba(11, 7, 20, 0.18) 55%,
+		rgba(11, 7, 20, 0.34) 80%,
+		rgba(11, 7, 20, 0.5) 100%
+	);
+}
+
+html:not([dark]) .intermediateContainer::before,
+.yf-container[data-theme="light"] .intermediateContainer::before {
+	background: linear-gradient(
+		to top,
+		rgba(245, 246, 251, 0) 0%,
+		rgba(245, 246, 251, 0.06) 25%,
+		rgba(245, 246, 251, 0.18) 55%,
+		rgba(245, 246, 251, 0.34) 80%,
+		rgba(245, 246, 251, 0.5) 100%
+	);
+}
+
+html:not([dark]) .intermediateContainer::after,
+.yf-container[data-theme="light"] .intermediateContainer::after {
+	background: linear-gradient(
+		to bottom,
+		rgba(245, 246, 251, 0) 0%,
+		rgba(245, 246, 251, 0.06) 25%,
+		rgba(245, 246, 251, 0.18) 55%,
+		rgba(245, 246, 251, 0.34) 80%,
+		rgba(245, 246, 251, 0.5) 100%
+	);
+}
+
 html:not([dark]) .intermediateContainer,
 .yf-container[data-theme="light"] .intermediateContainer {
 	color: var(--yt-spec-text-primary, #0f0f0f);
@@ -65,7 +136,7 @@ html[dark] .yf-container[data-theme="dark"] .intermediateContainer {
 	align-items: center;
 	box-sizing: border-box;
 	width: 100%;
-	padding: 72px 28px 180px 28px;
+	padding: 80px 28px 120px 28px;
 	gap: 2.1rem;
 	overflow-y: scroll;
 	overflow-x: hidden;
@@ -75,20 +146,58 @@ html[dark] .yf-container[data-theme="dark"] .intermediateContainer {
 	scroll-behavior: smooth !important;
 	position: relative;
 	z-index: 2;
-	-webkit-mask-image: linear-gradient(to bottom,
-			transparent 0%,
-			rgba(0, 0, 0, 0.85) 10%,
-			#000 22%,
-			#000 82%,
-			rgba(0, 0, 0, 0.6) 93%,
-			transparent 100%);
-	mask-image: linear-gradient(to bottom,
-			transparent 0%,
-			rgba(0, 0, 0, 0.85) 10%,
-			#000 22%,
-			#000 82%,
-			rgba(0, 0, 0, 0.6) 93%,
-			transparent 100%);
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		rgba(0, 0, 0, 0.2) 0px,
+		rgba(0, 0, 0, 0.45) 30px,
+		rgba(0, 0, 0, 0.72) 65px,
+		rgba(0, 0, 0, 0.92) 95px,
+		#000 120px,
+		#000 calc(100% - 145px),
+		rgba(0, 0, 0, 0.92) calc(100% - 115px),
+		rgba(0, 0, 0, 0.72) calc(100% - 80px),
+		rgba(0, 0, 0, 0.45) calc(100% - 40px),
+		rgba(0, 0, 0, 0.2) 100%
+	);
+	mask-image: linear-gradient(
+		to bottom,
+		rgba(0, 0, 0, 0.2) 0px,
+		rgba(0, 0, 0, 0.45) 30px,
+		rgba(0, 0, 0, 0.72) 65px,
+		rgba(0, 0, 0, 0.92) 95px,
+		#000 120px,
+		#000 calc(100% - 145px),
+		rgba(0, 0, 0, 0.92) calc(100% - 115px),
+		rgba(0, 0, 0, 0.72) calc(100% - 80px),
+		rgba(0, 0, 0, 0.45) calc(100% - 40px),
+		rgba(0, 0, 0, 0.2) 100%
+	);
+}
+
+@keyframes yfEdgeProgressiveBlur {
+	0% {
+		filter: blur(4px);
+	}
+	8% {
+		filter: blur(2px);
+	}
+	18%, 80% {
+		filter: blur(0px);
+	}
+	91% {
+		filter: blur(2px);
+	}
+	100% {
+		filter: blur(4px);
+	}
+}
+
+@supports (animation-timeline: view()) {
+	.lyricContainer:not(.unsynced-lyrics) .lyric-line:not(.active-lyric) {
+		animation: yfEdgeProgressiveBlur linear both;
+		animation-timeline: view(block);
+		animation-range: cover 8% cover 92%;
+	}
 }
 
 .lyricContainer>span,
@@ -450,16 +559,16 @@ ytmusic-player-page .yf-container[data-platform="ytmusic"] .intermediateContaine
 	max-height: 100%;
 	border: none;
 	border-radius: 0;
-	padding-top: 56px;
-	padding-bottom: 84px;
+	padding: 0 !important;
 	box-sizing: border-box;
 	background: transparent;
-	overflow-y: auto;
+	overflow: hidden !important;
 }
 
 ytmusic-player-page .yf-container[data-platform="ytmusic"] .lyricContainer {
 	height: 100%;
 	max-height: 100%;
+	padding: 80px 24px 120px 24px !important;
 }
 
 /* --- Top-Right Floating 3-Dot Context Button --- */
@@ -1331,8 +1440,9 @@ html:not([dark]) .yf-search-spinner,
 /* --- Word-Level Synchronization Styles --- */
 .lyric-line.has-word-sync {
 	cursor: pointer;
-	column-gap: 0.28em;
+	column-gap: 0;
 	row-gap: 0.15em;
+	opacity: 1 !important;
 }
 
 .yf-word {
@@ -1341,39 +1451,39 @@ html:not([dark]) .yf-search-spinner,
 	white-space: pre;
 }
 
-.active-lyric .yf-word-upcoming {
+.yf-word-upcoming {
 	color: rgba(255, 255, 255, 0.45);
-	opacity: 0.6;
+	opacity: 0.55;
 }
 
-.active-lyric .yf-word-sung {
-	color: #ffffff;
-	opacity: 1;
+.yf-word-sung {
+	color: #ffffff !important;
+	opacity: 1 !important;
 }
 
-.active-lyric .yf-word-current {
-	color: #ffffff;
-	opacity: 1;
+.yf-word-current {
+	color: #ffffff !important;
+	opacity: 1 !important;
 	text-shadow: 0 0 10px rgba(255, 255, 255, 0.85);
 	font-weight: 600;
 }
 
-html:not([dark]) .active-lyric .yf-word-upcoming,
-.yf-container[data-theme="light"] .active-lyric .yf-word-upcoming {
+html:not([dark]) .yf-word-upcoming,
+.yf-container[data-theme="light"] .yf-word-upcoming {
 	color: var(--yt-spec-text-secondary, #606060);
 	opacity: 0.55;
 }
 
-html:not([dark]) .active-lyric .yf-word-sung,
-.yf-container[data-theme="light"] .active-lyric .yf-word-sung {
-	color: var(--yt-spec-text-primary, #0f0f0f);
-	opacity: 1;
+html:not([dark]) .yf-word-sung,
+.yf-container[data-theme="light"] .yf-word-sung {
+	color: var(--yt-spec-text-primary, #0f0f0f) !important;
+	opacity: 1 !important;
 }
 
-html:not([dark]) .active-lyric .yf-word-current,
-.yf-container[data-theme="light"] .active-lyric .yf-word-current {
-	color: var(--yt-spec-text-primary, #0f0f0f);
-	opacity: 1;
+html:not([dark]) .yf-word-current,
+.yf-container[data-theme="light"] .yf-word-current {
+	color: var(--yt-spec-text-primary, #0f0f0f) !important;
+	opacity: 1 !important;
 	text-shadow: 0 0 8px rgba(0, 0, 0, 0.22);
 	font-weight: 600;
 }
